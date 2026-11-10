@@ -1,0 +1,115 @@
+name: Build iOS for sideloading
+
+# Manual while we establish iPhone playback. No automatic builds on every push.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-sideload-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unsigned iPhone and iPad release
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/client
+    env:
+      FLUTTER_VERSION: '3.47.9'
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      CI: 'true'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Check build tools
+        run: |
+          flutter config --no-analytics
+          flutter --version
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Restore locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - name: Analyze and test
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+
+      - name: Build for physical iPhones and iPads
+        # Release mode supports launching from the home screen without a debugger.
+        # Flutter manages this project's Swift Package Manager dependencies.
+        run: |
+          mkdir -p build/ci
+          flutter build ios --release --no-codesign --no-pub \
+            --build-number="$GITHUB_RUN_NUMBER" 2>&1 | tee build/ci/ios-build.log
+
+      - name: Package unsigned IPA
+        run: |
+          bash ../../tools/package_ios.sh \
+            build/ios/iphoneos/Runner.app \
+            build/ci/hyperstream-ios-unsigned.ipa
+          {
+            printf 'Commit: %s\n' "$GITHUB_SHA"
+            printf 'Run: %s/actions/runs/%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'Attempt: %s\n' "$GITHUB_RUN_ATTEMPT"
+            flutter --version
+            xcodebuild -version
+          } > build/ci/build-info.txt
+
+      - name: Upload sideload package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: hyperstream-ios-unsigned-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            apps/client/build/ci/hyperstream-ios-unsigned.ipa
+            apps/client/build/ci/hyperstream-ios-unsigned.ipa.sha256
+            apps/client/build/ci/build-info.txt
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload native build log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ios-build-log-${{ github.run_number }}-${{ github.run_attempt }}
+          path: apps/client/build/ci/ios-build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Explain the artifact
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### iOS sideload build
+
+          Download the `hyperstream-ios-unsigned` artifact and extract its ZIP.
+          Import the `.ipa` inside into AltStore Classic/AltServer for signing
+          and installation. This artifact is unsigned and cannot install directly.
+
+          Use a server address reachable from your phone; `localhost` refers to
+          the phone itself. No Navidrome address or credentials are baked in.
+
+          Build success verifies compilation and packaging, not iPhone playback.
+          See `docs/ios-github-actions.md` for installation and device checks.
+          SUMMARY

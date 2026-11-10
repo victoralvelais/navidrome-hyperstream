@@ -1,0 +1,7 @@
+*
+!hyperstream/
+!hyperstream/**
+!tests/
+!tests/**
+!Dockerfile.prototype
+**/__pycache__/

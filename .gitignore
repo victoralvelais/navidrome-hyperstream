@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.sandbox/
+.env
+.env.*
+!.env.example
+
+# Local tooling and iOS signing/build artifacts.
+.tools/
+*.ipa
+*.p12
+*.p8
+*.mobileprovision

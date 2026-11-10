@@ -1,0 +1,33 @@
+# Flutter's package.json equivalent. Commit this file and pubspec.lock together.
+name: hyperstream_client
+description: "A native Navidrome library player for iPhone, iPad, and Windows."
+# Prevent accidental publishing to the pub.dev package registry.
+publish_to: 'none'
+# App version + build number. CI supplies its run number for iOS builds.
+version: 0.1.0+1
+
+environment:
+  # Dart SDK constraint. The tested Flutter SDK is 3.47.9 (also pinned in CI).
+  sdk: ^3.13.7
+
+# Packages used by the running app, including their native platform plugins.
+dependencies:
+  audio_service: ^0.18.19
+  audio_session: ^0.2.4
+  crypto: ^3.0.8
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  just_audio: ^0.10.6
+  just_audio_windows: ^0.2.3
+
+# Development and test tools, similar to npm devDependencies.
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

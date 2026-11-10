@@ -1,0 +1,14 @@
+# Keep scripts and source portable between Windows editing and macOS builds.
+* text=auto eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.dart text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.pbxproj text eol=lf
+*.xcconfig text eol=lf
+*.plist text eol=lf
+*.swift text eol=lf
+*.png binary
+*.ico binary

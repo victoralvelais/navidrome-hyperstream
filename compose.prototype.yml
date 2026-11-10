@@ -1,0 +1,8 @@
+services:
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.prototype
+    network_mode: none
+    # Verification generates its own audio and uses disposable container storage.
+    # No host music directories or existing Navidrome containers are mounted.

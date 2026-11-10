@@ -1,0 +1,8 @@
+FROM python:3.13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY hyperstream ./hyperstream
+COPY tests ./tests
+CMD ["python", "-m", "unittest", "discover", "-v"]
