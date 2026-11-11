@@ -17,18 +17,26 @@ class AppPreferences extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   String? notice;
 
-  static Future<AppPreferences> load() async {
-    final storage = SharedPreferencesAsync();
-    final preferences = AppPreferences(
-      save: (json) => storage.setString(storageKey, json),
-    );
+  static Future<AppPreferences> load({
+    SharedPreferencesAsync? storage,
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
     try {
-      final json = await storage.getString(storageKey);
+      // Construct inside the guard too: missing plugin registration may throw
+      // before the first platform call. A stalled read must not block listening.
+      final backend = storage ?? SharedPreferencesAsync();
+      final json = await backend.getString(storageKey).timeout(timeout);
+      final preferences = AppPreferences(
+        save: (json) => backend.setString(storageKey, json),
+      );
       if (json != null) preferences.restore(json);
+      return preferences;
     } on Object {
-      preferences.notice = 'Saved settings could not be read. Using defaults.';
+      // Do not write defaults over unread settings or retry a stalled backend.
+      return AppPreferences()
+        ..notice =
+            'Saved settings are unavailable. Using temporary settings for this session.';
     }
-    return preferences;
   }
 
   void restore(String json) {
@@ -71,10 +79,11 @@ class AppPreferences extends ChangeNotifier {
       'theme': themeMode.name,
     });
     notifyListeners();
+    if (_save == null) return Future.value();
     // Serial writes prevent a slow older slider change from replacing a newer one.
     _pending = _pending.then((_) async {
       try {
-        await _save?.call(json);
+        await _save(json);
         notice = null;
       } on Object {
         notice = 'Settings changed for this session but could not be saved.';

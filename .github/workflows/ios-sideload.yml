@@ -64,6 +64,10 @@ jobs:
           flutter build ios --release --no-codesign --no-pub \
             --build-number="$GITHUB_RUN_NUMBER" 2>&1 | tee build/ci/ios-build.log
 
+      - name: Launch app in iOS simulator
+        timeout-minutes: 12
+        run: bash ../../tools/check_ios_startup.sh
+
       - name: Package unsigned IPA
         run: |
           bash ../../tools/package_ios.sh \
@@ -94,7 +98,9 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ios-build-log-${{ github.run_number }}-${{ github.run_attempt }}
-          path: apps/client/build/ci/ios-build.log
+          path: |
+            apps/client/build/ci/ios-build.log
+            apps/client/build/ci/ios-startup.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -110,6 +116,7 @@ jobs:
           Use a server address reachable from your phone; `localhost` refers to
           the phone itself. No Navidrome address or credentials are baked in.
 
-          Build success verifies compilation and packaging, not iPhone playback.
+          Build success verifies compilation, simulator startup, and packaging.
+          Physical-device playback and LiveContainer compatibility need device checks.
           See `docs/ios-github-actions.md` for installation and device checks.
           SUMMARY

@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import '../models/library.dart';
 import 'app_preferences.dart';
 import 'navidrome_client.dart';
+import 'startup_stage.dart';
 
 /// One instance for the application, independent of navigation and widgets.
 /// just_audio owns the native queue, including transitions while backgrounded.
@@ -31,7 +32,9 @@ class PlaybackService extends BaseAudioHandler {
 
   static Future<PlaybackService> initialize({
     AppPreferences? preferences,
+    ValueChanged<StartupStage>? onStage,
   }) async {
+    onStage?.call(StartupStage.player);
     PlaybackService build() => PlaybackService(preferences: preferences);
     final handler = Platform.isIOS
         ? await AudioService.init<PlaybackService>(builder: build)
@@ -40,9 +43,11 @@ class PlaybackService extends BaseAudioHandler {
       // Configure before the first play on every platform. just_audio also
       // consults this shared session on Windows; lazy first-play setup can race
       // with WinRT's initial paused-state notification and cancel playback.
+      onStage?.call(StartupStage.audioSession);
       await handler._configureSession(
         sessionConfiguration(handler.preferences.mixWithOthers),
       );
+      onStage?.call(StartupStage.volume);
       await handler._player.setVolume(handler.preferences.volume);
     } on Object {
       await handler.dispose();

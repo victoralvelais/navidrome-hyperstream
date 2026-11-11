@@ -112,6 +112,7 @@ accepts the installed Visual Studio Build Tools 2019 and Windows 10 SDK.
 | Change | File |
 | --- | --- |
 | App startup and session lifetime | `lib/main.dart` |
+| Startup progress and slow-start message | `lib/features/startup/startup_screen.dart` |
 | Colors, typography, component styles | `lib/app_theme.dart` |
 | Saved appearance and audio preferences | `lib/services/app_preferences.dart` |
 | Settings sheet | `lib/features/settings/settings_sheet.dart` |
@@ -167,6 +168,7 @@ and HTTP playback, including automatic transition to a second track.
 & D:/Tools/flutter/bin/flutter.bat analyze
 & D:/Tools/flutter/bin/flutter.bat test
 & D:/Tools/flutter/bin/flutter.bat test integration_test/playback_smoke_test.dart -d windows
+& D:/Tools/flutter/bin/flutter.bat test integration_test/startup_smoke_test.dart -d windows
 ```
 
 Unit/widget tests cover authentication, URL encoding, malformed responses,
@@ -174,6 +176,10 @@ sign-in retries, queue replacement, pause during loading, reset, and errors.
 They also check volume/mute ordering and recovery, preference persistence,
 mixing configuration and failures, and the library/player/settings flows at
 393px, 320px with larger text, and 1280px widths.
+Startup tests cover rendering before initialization, stage reporting, slow startup,
+retry, disposal after closing, and unavailable or stalled preference storage.
+The native startup test uses the real preferences/audio plugins and reaches the
+sign-in screen without connecting to Navidrome or changing saved settings.
 The native integration test opens a test window and runs a temporary loopback
 HTTP server with generated silent WAV audio. It checks decoding, advancing
 playback, volume/mute, pause, seek, automatic album transition, and reset. It never connects
@@ -201,6 +207,9 @@ credentials in CI are needed for this route. The
 successfully compiled and packaged the IPA, and the downloaded archive and
 checksum were verified. The user has since confirmed that the sideloaded iPhone
 app works; the new volume/mixing controls still need their own device check.
+Build 3 subsequently showed a black screen in LiveContainer. See the
+[LiveContainer diagnostic notes](../../docs/ios-github-actions.md#investigating-a-livecontainer-black-screen);
+the cause has not been confirmed.
 
 The user reports working library playback on both Windows and the sideloaded
 iPhone build. Broader device acceptance remains open.

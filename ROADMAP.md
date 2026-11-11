@@ -325,3 +325,10 @@ continue directly through Navidrome even if that companion is unavailable.
 
 Next slice: secure saved server sign-in and library search, followed by an
 authenticated companion job API and a provider-to-library import proof.
+
+Current reliability issue: build 3 opens to a black screen in the user's
+LiveContainer setup. Native build/IPA checks pass; comparison with build 2 found
+the same Flutter engine, SDK/scene configuration, and packaging method. Saved
+preferences are the new native dependency, but no cause has been confirmed.
+Startup now reports progress and falls back from stalled preference reads; verify
+the diagnostic build on the device before treating the launch issue as resolved.
