@@ -5,9 +5,15 @@ import 'package:flutter/material.dart';
 import '../../services/navidrome_client.dart';
 
 class CoverArt extends StatefulWidget {
-  const CoverArt({super.key, required this.client, required this.id});
+  const CoverArt({
+    super.key,
+    required this.client,
+    required this.id,
+    this.radius = 16,
+  });
   final NavidromeClient client;
   final String? id;
+  final double radius;
 
   @override
   State<CoverArt> createState() => _CoverArtState();
@@ -43,7 +49,7 @@ class _CoverArtState extends State<CoverArt> {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(widget.radius),
     child: AspectRatio(
       aspectRatio: 1,
       child: FutureBuilder<Uint8List>(

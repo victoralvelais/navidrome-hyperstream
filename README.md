@@ -19,7 +19,9 @@ Own playlists support creation, renaming, and adding/removing songs. Disconnect 
 in Settings. It has iOS and Windows hosts, layouts for narrow and wide windows,
 and secure saved sign-in with automatic reconnection. It includes independent app volume,
 mute with level restoration, saved light/dark/system appearance, an expanded Now
-Playing view, and an optional iOS audio-mixing setting. Unit/widget tests cover
+Playing view, and an optional iOS audio-mixing setting. The player, navigation,
+and album pages combine artwork-colored backdrops with Apple-style glass controls,
+with a saved opaque-surface option and accessibility fallbacks. Unit/widget tests cover
 audio commands, preferences, and responsive UI; a native Windows test checks
 HTTP playback, volume/mute, pause, seeking, track transition, and reset with
 generated audio. Comprehensive codec/interruption and new iOS mixing checks remain.

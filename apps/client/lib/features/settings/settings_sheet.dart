@@ -77,6 +77,16 @@ class SettingsSheet extends StatelessWidget {
                   if (value != null) preferences.setThemeMode(value);
                 },
               ),
+              const SizedBox(height: 16),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Glass effects'),
+                subtitle: const Text(
+                  'Soft blur and translucent controls. Turn off for solid surfaces.',
+                ),
+                value: preferences.glassEffects,
+                onChanged: preferences.setGlassEffects,
+              ),
               const SizedBox(height: 28),
               Text(
                 'Music volume',

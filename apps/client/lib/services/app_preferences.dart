@@ -14,6 +14,7 @@ class AppPreferences extends ChangeNotifier {
   double volume = 1;
   double audibleVolume = 1;
   bool mixWithOthers = false;
+  bool glassEffects = true;
   ThemeMode themeMode = ThemeMode.system;
   String? notice;
 
@@ -49,6 +50,7 @@ class AppPreferences extends ChangeNotifier {
     audibleVolume = level(data['audibleVolume'], 1);
     if (audibleVolume == 0) audibleVolume = 1;
     mixWithOthers = data['mixWithOthers'] == true;
+    glassEffects = data['glassEffects'] != false;
     themeMode = ThemeMode.values.firstWhere(
       (mode) => mode.name == data['theme'],
       orElse: () => ThemeMode.system,
@@ -71,11 +73,17 @@ class AppPreferences extends ChangeNotifier {
     return _persist();
   }
 
+  Future<void> setGlassEffects(bool value) {
+    glassEffects = value;
+    return _persist();
+  }
+
   Future<void> _persist() {
     final json = jsonEncode({
       'volume': volume,
       'audibleVolume': audibleVolume,
       'mixWithOthers': mixWithOthers,
+      'glassEffects': glassEffects,
       'theme': themeMode.name,
     });
     notifyListeners();

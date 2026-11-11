@@ -70,11 +70,13 @@ void main() {
       await preferences.setVolume(0);
       await preferences.setMixWithOthers(true);
       await preferences.setThemeMode(ThemeMode.dark);
+      await preferences.setGlassEffects(false);
       final restored = AppPreferences()..restore(saved!);
       expect(restored.volume, 0);
       expect(restored.audibleVolume, .35);
       expect(restored.mixWithOthers, isTrue);
       expect(restored.themeMode, ThemeMode.dark);
+      expect(restored.glassEffects, isFalse);
       preferences.dispose();
       restored.dispose();
     },

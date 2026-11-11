@@ -12,6 +12,7 @@ import '../search/library_search.dart';
 import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
 import 'cover_art.dart';
+import '../../widgets/glass_surface.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -302,110 +303,142 @@ class _LibraryScreenState extends State<LibraryScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: AbsorbPointer(
-          absorbing: _disconnecting,
-          child: Column(
-            children: [
-              if (_disconnecting) const LinearProgressIndicator(),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth >= 850) {
-                      return Row(
-                        children: [
-                          Expanded(child: _browsePane()),
-                          const VerticalDivider(width: 1),
-                          SizedBox(
-                            width: 370,
-                            child: Material(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainer,
-                              child: !_hasSelection
-                                  ? const Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.all(32),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.album_outlined,
-                                              size: 64,
-                                            ),
-                                            SizedBox(height: 20),
-                                            Text(
-                                              'Choose something to play',
-                                              textAlign: TextAlign.center,
-                                            ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              'Your next listen starts here.',
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                  : _trackPane(),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Offstage(offstage: _hasSelection, child: _browsePane()),
-                        if (_hasSelection) _trackPane(),
-                      ],
-                    );
-                  },
-                ),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(1, -.9),
+            radius: 1.5,
+            colors: [
+              Color.alphaBlend(
+                Theme.of(context).colorScheme.primary.withValues(alpha: .055),
+                Theme.of(context).colorScheme.surface,
               ),
-              PlayerControls(
-                playback: widget.playback,
-                client: widget.client,
-                collections: _collections,
-              ),
+              Theme.of(context).colorScheme.surface,
             ],
           ),
         ),
+        child: SafeArea(
+          child: AbsorbPointer(
+            absorbing: _disconnecting,
+            child: Column(
+              children: [
+                if (_disconnecting) const LinearProgressIndicator(),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth >= 850) {
+                        return Row(
+                          children: [
+                            Expanded(child: _browsePane()),
+                            const VerticalDivider(width: 1),
+                            SizedBox(
+                              width: 370,
+                              child: Material(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainer,
+                                child: !_hasSelection
+                                    ? const Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(32),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.album_outlined,
+                                                size: 64,
+                                              ),
+                                              SizedBox(height: 20),
+                                              Text(
+                                                'Choose something to play',
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'Your next listen starts here.',
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                    : _trackPane(),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Offstage(
+                            offstage: _hasSelection,
+                            child: _browsePane(),
+                          ),
+                          if (_hasSelection) _trackPane(),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                PlayerControls(
+                  playback: widget.playback,
+                  client: widget.client,
+                  collections: _collections,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _section,
-        onDestinationSelected: _disconnecting
-            ? null
-            : (index) {
-                FocusScope.of(context).unfocus();
-                setState(() {
-                  _section = index;
-                  _selected = null;
-                  _playlistId = null;
-                });
-                if (index == 2) _collections.refreshPlaylists();
-                if (index == 3) _collections.refreshFavorites();
-              },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.library_music_outlined),
-            selectedIcon: Icon(Icons.library_music_rounded),
-            label: 'Library',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: GlassSurface(
+            radius: 32,
+            child: NavigationBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              height: 72,
+              indicatorColor: Theme.of(context).colorScheme.primary
+                  .withValues(alpha: .16),
+              selectedIndex: _section,
+              onDestinationSelected: _disconnecting
+                  ? null
+                  : (index) {
+                      FocusScope.of(context).unfocus();
+                      setState(() {
+                        _section = index;
+                        _selected = null;
+                        _playlistId = null;
+                      });
+                      if (index == 2) _collections.refreshPlaylists();
+                      if (index == 3) _collections.refreshFavorites();
+                    },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.library_music_outlined),
+                  selectedIcon: Icon(Icons.library_music_rounded),
+                  label: 'Library',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.search_rounded),
+                  label: 'Search',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.queue_music_rounded),
+                  label: 'Playlists',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.favorite_border_rounded),
+                  selectedIcon: Icon(Icons.favorite_rounded),
+                  label: 'Favorites',
+                ),
+              ],
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.search_rounded),
-            label: 'Search',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.queue_music_rounded),
-            label: 'Playlists',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_border_rounded),
-            selectedIcon: Icon(Icons.favorite_rounded),
-            label: 'Favorites',
-          ),
-        ],
+        ),
       ),
     ),
   );

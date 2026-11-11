@@ -1,7 +1,7 @@
 # Navidrome Hyperstream: draft roadmap
 
 Status: server import prototype and first Flutter client slice; feasibility validation ongoing.
-Updated: November 10, 2026.
+Updated: November 11, 2026.
 
 ## Product direction
 
@@ -46,6 +46,47 @@ Proposed MVP boundaries:
 - No device download feature in the initial MVP. Transient playback buffering is
   separate from permanent downloads. Optional offline copies of Navidrome music
   can be discussed later.
+
+## Visual direction: Kanade reference
+
+Reference: [Kanade gallery by u/KayJune001](https://www.reddit.com/r/UI_Design/comments/1wrj8d5/how_can_i_improve_the_uiux_of_my_app_more/),
+supplied by the user on November 11. All 11 screenshots were downloaded and
+visually reviewed. Local originals and their source manifest are in
+`.tools/design-references/kanade-reddit-1wrj8d5/` (ignored by Git).
+
+Apply these patterns to Hyperstream's existing Apple Music-inspired direction:
+
+- **Now Playing:** large square artwork, soft artwork-colored background, clear
+  title/artist hierarchy, generous transport spacing, and circular favorite/menu
+  controls. Keep the independent app-volume toggle and label its expanded control
+  so it is visually distinct from seeking.
+- **Album and playlist pages:** prominent cover and title, one clear Play action,
+  compact secondary controls, and readable track rows. Preserve existing favorites
+  and playlist editing while refining their presentation.
+- **Mini player and navigation:** a compact floating player with artwork,
+  play/pause, next, and subtle progress. Keep navigation labels and reserve enough
+  content padding that neither floating surface obscures the last item.
+- **Library:** stronger headings, spacious cover grids, and easy access to favorite
+  songs and playlists. Recently played requires real listening-history support.
+- **iPad and Windows:** adapt navigation to a sidebar and make use of the existing
+  split layout; give playback and the queue space alongside browsing.
+- **Appearance:** retain Hyperstream's rose accent, refine dark surfaces using
+  these references, and carry the same hierarchy into light mode. Check contrast,
+  large text, focus/keyboard operation, and reduced motion/transparency behavior.
+  Add Apple-style glass to controls and navigation, with opaque accessibility
+  fallbacks and a saved user switch. Use shared Flutter rendering across platforms.
+
+First implementation pass is in place: Now Playing and album detail use larger
+covers and artwork-colored backdrops; the mini player, navigation, and playback
+controls use rounded glass surfaces. Independent music volume remains separately
+labeled and collapsible. Glass effects can be disabled; high contrast and iOS
+Reduce Transparency use opaque surfaces. Phone, tablet, and desktop widget checks
+cover light/dark layouts and enlarged text. Native iOS appearance and performance
+still need device acceptance. Follow with library/sidebar and playlist refinements.
+The gallery also shows artists,
+lyrics, casting, queue editing, and additional playback modes; those require
+separate functional work before exposing their controls. Use the screenshots as
+design references, with Hyperstream rendering the user's own artwork and data.
 
 ## Proposed architecture
 
@@ -330,5 +371,7 @@ but no general-purpose library upload endpoint. Both Flutter and a PWA would cal
 the same authenticated companion API for imports. Normal library listening should
 continue directly through Navidrome even if that companion is unavailable.
 
-Secure saved server sign-in is implemented. Next slice: an authenticated
+Secure saved server sign-in and the first glass visual pass are implemented.
+Next client slice: device acceptance, then library/sidebar and playlist refinements.
+The next server slice remains an authenticated
 companion job API and a provider-to-library import proof.

@@ -10,6 +10,7 @@ import 'services/account_session.dart';
 import 'services/app_preferences.dart';
 import 'services/playback_service.dart';
 import 'services/startup_stage.dart';
+import 'widgets/glass_settings.dart';
 
 typedef AppInitializer = Future<PlaybackService> Function(
   ValueChanged<StartupStage> onStage,
@@ -124,6 +125,8 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
         themeMode: _playback?.preferences.themeMode ?? ThemeMode.system,
         theme: hyperstreamTheme(Brightness.light),
         darkTheme: hyperstreamTheme(Brightness.dark),
+        builder: (context, child) =>
+            GlassSettings(preferences: _playback?.preferences, child: child!),
         home: FutureBuilder<PlaybackService>(
           future: _initialization,
           builder: (context, snapshot) {

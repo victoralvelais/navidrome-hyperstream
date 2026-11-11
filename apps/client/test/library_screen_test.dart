@@ -11,10 +11,13 @@ import 'package:hyperstream_client/features/library/library_screen.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
+import 'package:hyperstream_client/widgets/glass_settings.dart';
 
 import 'support/fake_player.dart';
+import 'support/preview_artwork.dart';
 
 Future<void> main() async {
+  if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) _PreviewBinding();
   // Optional local font for readable preview images; CI needs no external files.
   const previewFont = String.fromEnvironment('PREVIEW_FONT');
   if (previewFont.isNotEmpty) {
@@ -26,6 +29,9 @@ Future<void> main() async {
       ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
     await icons.load();
   }
+  final covers = const bool.fromEnvironment('CAPTURE_PREVIEWS')
+      ? await Future.wait(List.generate(4, previewArtwork))
+      : <List<int>>[];
   for (final viewport in [
     (
       name: 'phone-dark',
@@ -38,6 +44,18 @@ Future<void> main() async {
       size: const Size(320, 640),
       theme: ThemeMode.light,
       scale: 1.4,
+    ),
+    (
+      name: 'phone-light',
+      size: const Size(393, 852),
+      theme: ThemeMode.light,
+      scale: 1.0,
+    ),
+    (
+      name: 'tablet-light',
+      size: const Size(1024, 1366),
+      theme: ThemeMode.light,
+      scale: 1.0,
     ),
     (
       name: 'desktop-dark',
@@ -59,8 +77,22 @@ Future<void> main() async {
         serverUrl: 'https://music.example.com',
         username: 'test',
         password: 'test',
-        httpClient: MockClient(
-          (request) async => http.Response(
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('getCoverArt.view') &&
+              covers.isNotEmpty) {
+            final index = [
+              'one',
+              'two',
+              'three',
+              'four',
+            ].indexOf(request.url.queryParameters['id'] ?? 'one');
+            return http.Response.bytes(
+              covers[index < 0 ? 0 : index],
+              200,
+              headers: {'content-type': 'image/png'},
+            );
+          }
+          return http.Response(
             jsonEncode({
               'subsonic-response': {
                 'status': 'ok',
@@ -69,21 +101,25 @@ Future<void> main() async {
                     'album': [
                       {
                         'id': 'one',
+                        if (covers.isNotEmpty) 'coverArt': 'one',
                         'name': 'After Hours',
                         'artist': 'The Night Ensemble',
                       },
                       {
                         'id': 'two',
+                        if (covers.isNotEmpty) 'coverArt': 'two',
                         'name': 'Soft Focus',
                         'artist': 'Still Life',
                       },
                       {
                         'id': 'three',
+                        if (covers.isNotEmpty) 'coverArt': 'three',
                         'name': 'Blue Room',
                         'artist': 'Sunday Sessions',
                       },
                       {
                         'id': 'four',
+                        if (covers.isNotEmpty) 'coverArt': 'four',
                         'name': 'Out of the City',
                         'artist': 'New Horizons',
                       },
@@ -122,8 +158,8 @@ Future<void> main() async {
             }),
             200,
             headers: {'content-type': 'application/json'},
-          ),
-        ),
+          );
+        }),
       );
       addTearDown(() async {
         final disposing = playback.dispose();
@@ -133,15 +169,20 @@ Future<void> main() async {
         client.close();
       });
       await playback.preferences.setThemeMode(viewport.theme);
-      await playback.playAlbum(client, const [
-        Track(
-          id: 'track',
-          title: 'A quiet place to start again',
-          artist: 'The Night Ensemble',
-          album: 'After Hours',
-          duration: Duration(minutes: 3),
-        ),
-      ], 0);
+      await playback.playAlbum(
+        client,
+        const [
+          Track(
+            id: 'track',
+            title: 'A quiet place to start again',
+            artist: 'The Night Ensemble',
+            album: 'After Hours',
+            duration: Duration(minutes: 3),
+          ),
+        ],
+        0,
+        coverArtId: covers.isNotEmpty ? 'one' : null,
+      );
       await tester.pumpWidget(
         ListenableBuilder(
           listenable: playback.preferences,
@@ -153,7 +194,10 @@ Future<void> main() async {
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context)
                   .copyWith(textScaler: TextScaler.linear(viewport.scale)),
-              child: child!,
+              child: GlassSettings(
+                preferences: playback.preferences,
+                child: child!,
+              ),
             ),
             home: LibraryScreen(
               client: client,
@@ -167,12 +211,7 @@ Future<void> main() async {
       expect(find.text('Library'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
       // Optional visual review artifacts, excluded from normal CI/golden checks.
-      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('../build/previews/${viewport.name}.png'),
-        );
-      }
+      await _capturePreview(tester, viewport.name);
 
       await tester.tap(find.byTooltip('Show music volume'));
       await tester.pumpAndSettle();
@@ -193,12 +232,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('../build/previews/${viewport.name}-player.png'),
-        );
-      }
+      await _capturePreview(tester, '${viewport.name}-player');
       // A drag previews position; only releasing it asks the native player to seek.
       final seekSlider = tester.widget<Slider>(find.byType(Slider).first);
       seekSlider.onChanged!(45000);
@@ -215,6 +249,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(find.text('Play album'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await _capturePreview(tester, '${viewport.name}-album');
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Appearance'), findsOneWidget);
@@ -236,12 +271,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(find.text('Search song'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('../build/previews/${viewport.name}-search.png'),
-        );
-      }
+      await _capturePreview(tester, '${viewport.name}-search');
       tester.view.physicalSize = viewport.size.width < 850
           ? const Size(1280, 800)
           : const Size(393, 852);
@@ -271,4 +301,26 @@ Future<void> main() async {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+}
+
+class _PreviewBinding extends AutomatedTestWidgetsFlutterBinding {
+  @override
+  bool get disableShadows => false;
+}
+
+Future<void> _capturePreview(WidgetTester tester, String name) async {
+  if (!const bool.fromEnvironment('CAPTURE_PREVIEWS')) return;
+  final context = tester.element(find.byType(MaterialApp));
+  final images = tester.widgetList<Image>(find.byType(Image)).toList();
+  // Codec work runs outside the simulated clock; wait for actual decoded covers.
+  await tester.runAsync(() async {
+    await Future.wait(
+      images.map((image) => precacheImage(image.image, context)),
+    );
+  });
+  await tester.pumpAndSettle();
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile('../build/previews/$name.png'),
+  );
 }

@@ -6,6 +6,11 @@ It includes play/pause, previous/next, seeking, connection errors, and disconnec
 Wide windows show albums and tracks side by side; narrow windows use one pane.
 The library uses an artwork-first layout with a floating mini player and an
 expanded Now Playing sheet. Light, dark, and system appearance are available.
+The current visual pass draws on the user-supplied
+[Kanade gallery](https://www.reddit.com/r/UI_Design/comments/1wrj8d5/how_can_i_improve_the_uiux_of_my_app_more/)
+and Apple's [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
+Glass controls and navigation are implemented in shared Flutter code; they are
+Liquid Glass-inspired surfaces, not Apple's native Liquid Glass renderer.
 
 The Search tab finds albums and songs across the entire Navidrome library using
 [OpenSubsonic search3](https://opensubsonic.netlify.app/docs/endpoints/search3/).
@@ -48,10 +53,17 @@ acceptance for these new features remains open.
 - Tap the mini player's speaker button to show the independent music volume
   slider. Mute restores the previous audible level when toggled again.
 - Tap the track title or artwork to open Now Playing, with a larger cover,
-  transport controls, seek bar, and volume. Seeking commits when a drag ends.
+  artwork-colored backdrop, transport controls, and seek bar. Seeking commits
+  when a drag ends. **Music volume** expands its separate volume control.
 - Open the toolbar's Settings button for light/dark/system appearance and audio
   preferences. Volume (including mute), its restore level, mixing, and appearance
   are saved locally with `shared_preferences`. Credentials use separate secure storage.
+- **Settings → Glass effects** switches between translucent and solid controls.
+  High contrast and iOS **Reduce Transparency** automatically use solid surfaces.
+  The iOS setting is read through a small native bridge, updates while running,
+  and is checked again on resume. An unavailable bridge defaults to solid surfaces.
+  Artwork backdrops are static, with no looping animation. Device performance and
+  real iOS accessibility behavior still need hands-on acceptance.
 - On iPhone/iPad, **Mix with other audio** enables the native audio session's
   `mixWithOthers` option. It is off by default. This lets Hyperstream share audio
   with other apps where iOS permits; it cannot guarantee playback through calls.
@@ -240,9 +252,10 @@ on each platform; a future transcoding fallback is separate from server imports.
 
 ## Checks
 
-Verified on this PC: clean formatting and analyzer, 18 unit/widget tests, and the
-native Windows integration test. The native test uses the actual WinRT decoder
-and HTTP playback, including automatic transition to a second track.
+The glass interface pass passes formatting, analysis, and 75 unit/widget tests.
+Earlier native Windows playback checks used the actual WinRT decoder and HTTP
+playback, including automatic transition to a second track. Hosted release builds
+also run the native Windows secure-account storage check.
 
 ```powershell
 & D:/Tools/flutter/bin/dart.bat format --output=none --set-exit-if-changed lib test integration_test test_driver
@@ -256,7 +269,9 @@ Unit/widget tests cover authentication, URL encoding, malformed responses,
 sign-in retries, queue replacement, pause during loading, reset, and errors.
 They also check volume/mute ordering and recovery, preference persistence,
 mixing configuration and failures, and the library/player/settings flows at
-393px, 320px with larger text, and 1280px widths.
+393px, 320px with larger text, 1024px tablet, and 1280px desktop widths.
+Glass checks cover preference persistence, high-contrast fallback, and simulated
+iOS Reduce Transparency events and native-channel failure.
 Search checks cover query encoding, empty and malformed responses, stale requests,
 clearing/debouncing, page retries, result playback, and preserving results across
 album navigation and window resizing.
@@ -264,6 +279,17 @@ Startup tests cover rendering before initialization, stage reporting, slow start
 retry, disposal after closing, and unavailable or stalled preference storage.
 The native startup test uses the real preferences/audio plugins and reaches the
 sign-in screen without connecting to Navidrome or changing saved settings.
+
+To render local UI previews with generated sample artwork and a local font:
+
+```powershell
+& D:/Tools/flutter/bin/flutter.bat test test/library_screen_test.dart --update-goldens --dart-define=CAPTURE_PREVIEWS=true --dart-define=PREVIEW_FONT=C:/Windows/Fonts/segoeui.ttf
+```
+
+Images go to `build/previews/` (ignored by Git). They are optional visual-review
+artifacts, not platform-dependent golden baselines in CI. Dark/light phone,
+enlarged-text phone, tablet, and desktop previews were visually reviewed.
+
 The native integration test opens a test window and runs a temporary loopback
 HTTP server with generated silent WAV audio. It checks decoding, advancing
 playback, volume/mute, pause, seek, automatic album transition, and reset. It never connects

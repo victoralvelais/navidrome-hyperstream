@@ -10,7 +10,7 @@ ThemeData hyperstreamTheme(Brightness brightness) {
       ).copyWith(
         primary: dark ? const Color(0xffff526f) : const Color(0xffd92048),
         onPrimary: Colors.white,
-        surface: dark ? const Color(0xff111114) : const Color(0xfffaf9fb),
+        surface: dark ? const Color(0xff0b0b10) : const Color(0xfffaf9fc),
         surfaceContainer: dark ? const Color(0xff212125) : Colors.white,
         surfaceContainerHighest: dark
             ? const Color(0xff303036)
@@ -61,6 +61,9 @@ ThemeData hyperstreamTheme(Brightness brightness) {
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: scheme.surface,
       showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
     ),
   );
 }
