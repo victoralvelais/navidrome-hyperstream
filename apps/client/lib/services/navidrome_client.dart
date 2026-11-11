@@ -19,6 +19,13 @@ class NavidromeException implements Exception {
   String toString() => message;
 }
 
+/// A qualified local listen, independent of acknowledgement by the server.
+class LocalListen {
+  const LocalListen(this.track, this.startedAt);
+  final Track track;
+  final DateTime startedAt;
+}
+
 class NavidromeClient {
   NavidromeClient({
     required String serverUrl,
@@ -33,12 +40,16 @@ class NavidromeClient {
   final String _password;
   final http.Client _http;
   final Random _random = Random.secure();
-  final _listens = StreamController<void>.broadcast();
+  final _listens = StreamController<LocalListen>.broadcast();
   bool _closed = false;
   String? serverType;
   String? serverVersion;
   bool openSubsonic = false;
-  Stream<void> get listens => _listens.stream;
+  Stream<LocalListen> get localListens => _listens.stream;
+
+  void recordLocalListen(Track track, DateTime startedAt) {
+    if (!_closed) _listens.add(LocalListen(track, startedAt.toUtc()));
+  }
 
   static Uri parseServerUrl(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -158,7 +169,6 @@ class NavidromeClient {
       'time': '${startedAt.toUtc().millisecondsSinceEpoch}',
       'submission': 'true',
     });
-    if (!_closed) _listens.add(null);
   }
 
   Future<Track> song(String id) async {

@@ -319,6 +319,10 @@ class PlaybackService extends BaseAudioHandler {
     final client = _listeningClient;
     final generation = _listeningGeneration;
     if (client == null || _disposed || !preferences.reportListens) return;
+    // The tracker can finish the previous item during a native transition.
+    // Look up its ID instead of using the player's already advanced index.
+    final track = _listeningTracks.firstWhere((track) => track.id == trackId);
+    client.recordLocalListen(track, startedAt);
     unawaited(() async {
       try {
         await client.scrobble(trackId, startedAt);

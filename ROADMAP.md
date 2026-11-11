@@ -1,8 +1,10 @@
 # Navidrome Hyperstream: draft roadmap
 
-Status: UI/multiple-server release complete at 0.1.0+14; Recent Radio preview and
-counted listening implemented for the next test release. Server imports remain
-an isolated prototype; custom mixing and provider architecture remain later work.
+Status: UI/multiple-server release complete at 0.1.0+14; counted listening and
+Recent Radio shipped at 0.1.0+15. The follow-up keeps Recent Radio fixed at 30 days,
+updates it immediately from local listens, and syncs on refresh/every 30 minutes
+while active. A general smart-playlist editor and custom mixing remain unimplemented.
+Server imports remain an isolated prototype; addons remain later work.
 Updated: November 11, 2026.
 
 Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).

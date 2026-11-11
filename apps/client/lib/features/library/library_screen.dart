@@ -39,7 +39,8 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen>
+    with WidgetsBindingObserver {
   final _albums = <Album>[];
   final _browseKey = GlobalKey();
   final _settingsKey = GlobalKey<SettingsPageState>();
@@ -65,15 +66,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.initState();
     _collections = LibraryCollections(widget.client);
     _radio = RecentRadioService(widget.client);
+    WidgetsBinding.instance.addObserver(this);
+    _radio.setAppActive(
+      WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    );
     _collections.refreshFavorites();
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _collections.dispose();
     _radio.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _radio.setAppActive(state == AppLifecycleState.resumed);
   }
 
   void _selectAlbum(Album album) => setState(() {
@@ -282,7 +294,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     'Recent Radio' => RecentRadioScreen(
       radio: _radio,
       playback: widget.playback,
-      active: _section == _Section.library && !_hasSelection,
     ),
     'Playlists' => PlaylistsScreen(
       collections: _collections,

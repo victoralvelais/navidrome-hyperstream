@@ -34,13 +34,15 @@ and Now Playing groups output selection with volume. iOS uses the native route
 picker; Windows selects this app's audio device. External charts and network
 casting integrations remain future work.
 
-Recent Radio now provides a playable preview of songs added or played within a
-chosen day window, ordered by the latest of those dates. Its settings are saved
-per server/account on this device. Qualified Hyperstream listens are reported to
+Recent Radio is a fixed built-in radio of songs added or played within 30 days,
+ordered by the latest of those dates. Counted listens update its list locally
+without a library scan. After the first load, pull-to-refresh/F5 or a 30-minute
+foreground schedule syncs the catalog. Qualified listens are also reported to
 Navidrome, with a toggle under Home > Playback. See the
 [device test guide](docs/RECENT_RADIO_TESTING.md) and
 [smart playlists and optional providers](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
-Managed Navidrome playlist saving, custom mixing and addons remain future work.
+A general smart-playlist editor, custom mixing, managed Navidrome playlist saving,
+and addons remain future work.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
+import 'package:hyperstream_client/services/recent_radio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'support/fake_player.dart';
@@ -17,6 +18,16 @@ class RecordingClient extends NavidromeClient {
       );
   final submitted = <(String, DateTime)>[];
   Completer<void>? gate;
+  int scans = 0;
+  @override
+  Future<List<Track>> radioTracks({
+    required bool Function() cancelled,
+    void Function(int)? onProgress,
+  }) async {
+    scans++;
+    return [];
+  }
+
   @override
   Future<void> scrobble(String trackId, DateTime startedAt) async {
     submitted.add((trackId, startedAt));
@@ -138,9 +149,19 @@ void main() {
   test(
     'an uncertain submission is not retried or allowed to break playback',
     () async {
+      final radio = RecentRadioService(client, now: () => start.add(clock));
+      addTearDown(radio.dispose);
       client.gate = Completer<void>();
       await playback.playAlbum(client, tracks, 0);
-      listen(90);
+      listen(89);
+      await Future<void>.delayed(Duration.zero);
+      expect(radio.preview, isNull);
+      listen(1);
+      await Future<void>.delayed(Duration.zero);
+      // Local activity arrives before the network response, without a scan.
+      expect(radio.preview!.matches.single.track.id, 'one');
+      expect(radio.preview!.matches.single.track.lastPlayedAt, start);
+      expect(client.scans, 0);
       client.gate!.completeError(StateError('private transport error'));
       await Future<void>.delayed(Duration.zero);
       listen(100);
@@ -148,6 +169,8 @@ void main() {
       expect(playback.listeningNotice.value, contains('not retried'));
       expect(playback.error.value, isNull);
       expect(player.playing, isTrue);
+      expect(radio.preview!.matches.single.track.id, 'one');
+      expect(client.scans, 0);
     },
   );
   test('switching accounts isolates pending submission results and identical song IDs', () async {

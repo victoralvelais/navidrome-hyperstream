@@ -1,36 +1,10 @@
 import 'library.dart';
 
+/// Fixed built-in preset. A future smart-playlist editor owns separate rules.
 class RecentRadioDefinition {
-  const RecentRadioDefinition({this.name = 'Recent Radio', this.days = 30});
-  final String name;
-  final int days;
-
-  factory RecentRadioDefinition.fromJson(Map<String, dynamic> json) {
-    if (json['schemaVersion'] != 1 ||
-        json['preset'] != 'recentRadio' ||
-        json['order'] != 'recentActivity') {
-      throw const FormatException('Unsupported Recent Radio definition.');
-    }
-    final name = json['name'];
-    final days = json['days'];
-    if (name is! String ||
-        name.trim().isEmpty ||
-        name.length > 120 ||
-        days is! int ||
-        days < 1 ||
-        days > 3650) {
-      throw const FormatException('Invalid Recent Radio definition.');
-    }
-    return RecentRadioDefinition(name: name.trim(), days: days);
-  }
-
-  Map<String, dynamic> toJson() => {
-    'schemaVersion': 1,
-    'preset': 'recentRadio',
-    'order': 'recentActivity',
-    'name': name,
-    'days': days,
-  };
+  const RecentRadioDefinition();
+  final String name = 'Recent Radio';
+  final int days = 30;
 }
 
 class RadioMatch {

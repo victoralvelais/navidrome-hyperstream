@@ -1,64 +1,68 @@
 # Recent Radio: sideload and device acceptance
 
-This milestone adds counted listening and a playable Recent Radio preview. The
-Home page now contains settings directly; navigation is Home, Library, Search.
-Use the new matched IPA/Windows pair in the directory referenced by
-`releases/latest.json`. Keep older releases available for comparison. The IPA
-still needs signing through the existing sideload workflow; Windows needs the
-whole extracted bundle, not only its EXE.
+Recent Radio stays a fixed built-in radio. This update adds immediate local
+listening updates and a separate 30-minute catalog sync schedule. It does not
+implement the general smart-playlist editor or custom mixing.
 
-## Try the radio
+Use the matched IPA/Windows pair referenced by `releases/latest.json`. The IPA
+still needs the existing sideload signing workflow; Windows needs the complete
+extracted bundle. Older releases remain available for comparison.
 
-1. Open Library > Playlists > Recent Radio, or choose Recent Radio from the plus
-   menu. The first load reads the entire song catalog; progress shows the count.
-2. With the initial 30-day window, compare several tracks against their added and
-   last-played dates in Navidrome. A song qualifies if either date is recent.
-   Its position uses the later date. Equal dates are ordered by track ID.
-3. Change the day window and name, then tap Update preview. Reopen the radio and
-   restart the app to check that its settings persist for this account.
-4. Tap Play radio or a song. Pull to refresh while it plays: the current queue
-   should retain its original order. New history is reflected when you refresh,
-   reopen the radio, or return to the app, without rearranging an open preview
-   on every reported listen.
-5. Try another saved account. Its rule and preview should be separate. Return to
-   Home's Servers page to switch back. Opening an unsupported/incomplete server
-   response must show an error instead of publishing a partial result.
+## Try local activity and sync
+
+1. Open Library > Playlists > Recent Radio (also available from the plus menu).
+   The first visit loads the full catalog. There is no name/window editor: the
+   rule is added OR played within 30 days, newest activity first, ties by track ID.
+2. Play an older song from Search, an album, or a playlist. For a three-minute
+   song, listen for at least 90 seconds. Open Recent Radio without refreshing:
+   it should now include the song near the top. The library sync time stays the
+   same. Repeated listens reorder the existing song instead of duplicating it.
+3. Tap Play radio. Let a song qualify while viewing the list: its row can move,
+   but the current playing queue keeps its original order.
+4. Pull down to refresh (F5 on the focused list on Windows). Newly added server
+   music and listens from other clients should appear. The library sync time
+   advances after a successful complete sync.
+5. Leave the app active for 30 minutes after a sync, including on other app pages.
+   The next scheduled sync should happen without reopening Recent Radio.
+6. Background briefly and return before the interval: no extra sync. Return
+   after more than 30 minutes: one overdue sync, without replaying missed intervals.
+   The app does not promise scheduled syncs while suspended or closed.
+7. Switch saved accounts: previews, local activity and timers must stay separate.
+   Restarting the app clears the session cache; first open loads from the server.
+   The old release's name/window preferences are untouched but no longer used.
 
 ## Verify listening history on the actual server
 
-1. Check Home > Playback > Report listening history. It starts enabled; existing
-   server settings may also forward these listens to external scrobbling services.
-2. Note a track's play count in Navidrome. Play a track longer than 30 seconds for
-   half its duration or four minutes, whichever is shorter. For a three-minute
-   track, listen for at least 90 seconds, then refresh Navidrome and Recent Radio.
-   Expect one new play and a current last-played date for the signed-in user.
-3. Pause for part of that interval, buffer on a poor connection, or seek near the
-   end after a short listen. Those intervals/jumps should not earn listening time.
-4. Repeat a qualifying listen with the iPhone locked/backgrounded. Check the lock
-   screen controls and server result. This is an outstanding device acceptance
-   check, not something the fixture tests establish.
-5. Disable reporting and listen again: no new Hyperstream submission should occur.
-   Re-enable it to start collecting fresh listening time. Switch accounts mid-song
-   and verify that the old track does not count against the new account.
+1. Home > Playback > Report listening history starts enabled. Tracks longer than
+   30 seconds count after half their duration or four minutes, whichever is shorter.
+   This existing qualification threshold also triggers local radio updates.
+2. Compare Navidrome's play count and last-played timestamp before/after a qualified
+   listen. Server-configured external scrobblers may also receive these submissions.
+   The radio should update before acknowledgement, without refreshing it.
+3. Pause, buffer, or seek near the end after a short listen. These actions should
+   not earn listening credit. A playback instance should count only once.
+4. Repeat with the iPhone locked and use lock-screen controls. Physical-device
+   background counting and installed-server compatibility still need acceptance.
+5. Disable reporting: local listen tracking and server submissions both stop.
+   Re-enable it to start fresh. Switch accounts mid-song and verify isolation.
 
-## Recovery and current boundaries
+## Recovery and boundaries
 
-- Lose the network after a successful preview and refresh. The old preview remains
-  labeled as the last successful result, with Retry. Failed pages are never
-  accepted as a complete new preview.
-- A server may accept a listen even if its response is lost. The app attempts each
-  listen once and reports uncertainty under Playback; it does not automatically
-  retry, avoiding duplicate counts. There is no offline history queue yet.
-- Unobserved runtime gaps over five seconds are conservatively excluded. Long
-  system suspension can undercount a listen; device testing will guide refinement.
-- Radio settings live on this device. This release has one configurable Recent
-  Radio preset, not a general rule editor or a generated Navidrome playlist.
-  Managed saving/conflict handling and custom mixing are the next increments.
-- No new provider, acquisition integration, companion service, or addon is included.
+- Lose the network after a successful sync. The current list and last-sync time
+  remain visible with an error. Local qualified listens still update that list.
+- A slow sync must preserve newer listens made while it was reading pages. A
+  subsequent complete sync honors server deletions. Failed/partial scans never
+  replace the catalog; failed scheduled attempts wait another 30 minutes or an
+  explicit refresh before retrying.
+- An uncertain scrobble response is not retried, avoiding duplicate server plays.
+  It does not undo the local radio update. Local events are session-only: they
+  are not a durable offline history queue or a promise of server acknowledgement.
+- Unobserved runtime gaps over five seconds are conservatively excluded and can
+  undercount during system suspension. Device testing will guide refinement.
+- A general smart-playlist editor, custom mixing, managed Navidrome playlist saves,
+  provider imports, and addons remain future work.
 
-Automated coverage uses API fixtures and fake native audio to verify window
-boundaries, date parsing, full pagination, stable ordering, account isolation,
-pause/seek/buffer counting, uncertain submissions, persistence and responsive UI.
-No usable saved desktop account was available for an authenticated live API check.
-Installed-server compatibility and physical-device background behavior remain
-explicit acceptance items for this release.
+Automated tests cover local updates without catalog requests, pending/failed
+submissions, sync races, timing/resume/coalescing, account disposal, date rules,
+pagination, queue stability and responsive UI. API fixtures and fake native audio
+cannot replace testing on the actual Navidrome server and sideloaded iPhone.

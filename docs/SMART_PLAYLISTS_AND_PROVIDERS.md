@@ -1,39 +1,46 @@
 # Smart playlists and optional providers
 
 Design exploration, November 11, 2026. Baseline: released client **0.1.0+14**.
-The Recent Radio preview/Play milestone and qualified listen reporting are now
-implemented. Its name/day-window settings persist locally per server/user.
-Managed playlist saves, custom mixing, and provider connections below remain
-proposals. Grouped settings live directly on Home, with navigation ordered
+Recent Radio and qualified listen reporting shipped in **0.1.0+15**. That is a
+built-in radio, not the requested general smart-playlist system. The follow-up
+keeps it hardcoded and separates it from the future editor and custom mixing.
+Grouped settings live directly on Home, with navigation ordered
 **Home / Library / Search**. The previous handoff remains a historical snapshot.
 See the [device test guide](RECENT_RADIO_TESTING.md) for acceptance and limits.
 
-## Smallest useful milestone: Recent Radio preview and playback
+## Built-in Recent Radio: local updates and periodic sync
 
-Build one preset under **Library > Playlists > + > Recent Radio**. Its screen
-has a name, an editable day window (initially 30), a preview, and Play. The
-preview shows the match count and why each song qualified: added, played, or
-both. Selecting Play creates a queue from that preview. Recomputing a preview
-never changes an already playing queue.
+Recent Radio always uses a 30-day window and recent-activity ordering. Remove
+its name/day editor; existing local preference records remain untouched but are
+not read or overwritten. Play uses the displayed order; an active queue remains
+unchanged when the radio updates.
 
-Implement listening-history reporting in the same milestone so Hyperstream
-listens can influence the next preview. Refresh on opening the preset, pulling
-to refresh, and returning to it after a successful listen submission. Coalesce
-these triggers; keep the displayed preview stable while the listener reads it.
-Display its last successful refresh time and retain it with a stale indicator
-if a refresh fails. Client refresh works while the app is active. Scheduling
-with the app closed belongs to the later optional companion.
+A qualified listen emits the track and its original start time through the
+playback client's local event stream before the scrobble request completes.
+Merge it into an account-scoped in-memory catalog and re-evaluate immediately.
+This requires no catalog read or per-song request. Local activity can therefore
+appear before the server confirms it; the existing Playback notice still reports
+uncertain submissions. Local activity is session-only, not an offline outbox.
 
-Do not require native Navidrome smart-rule creation, an acquisition provider,
-or a companion for this milestone. Save/automatic updates of a generated
-Navidrome playlist are the next increment, after the preview is trustworthy.
+The first open loads the complete catalog. Later visits reuse it. Pull-to-refresh
+and F5 sync explicitly; after each attempt, schedule the next attempt 30 minutes
+later while the app is active. The schedule belongs to the account session, so
+it continues on other app pages. Pause scheduling in the background; resume
+with one sync if overdue. Neither reopening the page nor a short background trip
+forces a new scan. Closed-app scheduling belongs to the later companion.
+
+Coalesce concurrent syncs and retain local events that arrive during a scan.
+Overlay more recent local history until server history catches up. A subsequent
+complete scan owns catalog membership, including deletions. Incomplete/failed
+scans retain the current list and its actual last-sync timestamp. Stop timers and
+subscriptions on account disposal. List re-evaluation also removes expired dates.
 
 ### Exact preset semantics
 
 The source is the user's `../navidrome-music/recentRadio.py`, inspected without
 executing or modifying it. Preserve its intention, not its SQL coupling:
 
-- Take one UTC evaluation time. The window is a rolling `N * 24 hours`.
+- Take one UTC evaluation time. The window is a rolling `30 * 24 hours`.
 - Include a track when added **or** last played is at or after the cutoff.
 - Sort descending by `max(addedAt, lastPlayedAt)` over valid timestamps.
 - Break equal timestamps by stable Navidrome track ID. Deduplicate by track ID
@@ -92,7 +99,7 @@ submissions update play counts and last-played timestamps and may also reach a
 server-configured external scrobbler. Send the original listen time as Unix
 milliseconds. [OpenSubsonic scrobble](https://opensubsonic.netlify.app/docs/endpoints/scrobble/).
 
-Proposed initial counting policy: for tracks longer than 30 seconds, submit after
+Current counting policy: for tracks longer than 30 seconds, submit after
 listening to half the duration or four minutes, whichever is shorter. This is a
 product default to evaluate, not a protocol requirement or a settled preference.
 Count actual playing time using a monotonic clock; pauses, buffering and forward
@@ -116,29 +123,36 @@ discards unobserved gaps longer than five seconds. It excludes time waiting for
 native seeks and cancels sampling on reset/disposal. No now-playing notification
 is submitted by this milestone.
 
-### Definition and acceptance
+### Acceptance
 
-Keep rules separate from UI and network access. A versioned declarative definition
-contains `id`, `schemaVersion`, `preset`, `days`, `order`, optional `limit`, and
-later `mix`/`variety`. Store it under `(serverIdentity, userIdentity, definitionId)`.
-Supply the evaluator with a scoped snapshot and explicit UTC `now`; return ordered
-track IDs plus match reasons and input-completeness information. Never store
-credentials in the definition. Reject unknown schema versions without rewriting them.
-
-Acceptance before calling milestone 1 complete:
-
-- An eligible Hyperstream listen changes that user's server history and the next
-  Recent Radio preview; short skips, pauses and seeking do not inflate plays.
+- An eligible Hyperstream listen updates Recent Radio immediately without a
+  library request, including while its server submission is pending or uncertain.
+- The 30-minute timer, explicit refresh, resume-after-overdue behavior, and
+  duplicate-trigger coalescing are covered by controllable-clock tests.
 - Tests cover cutoff equality, missing/invalid dates, timezone normalization,
   ties, deduplication, complete pagination, and failed/ambiguous submissions.
-- Switching accounts mid-load or mid-listen cannot leak events, previews or caches.
-- Preview ordering matches the example and Play uses that exact snapshot.
-- API fixtures pass and an authorized live test confirms installed-server behavior.
-  Fixtures alone do not establish compatibility with the user's deployment.
+- Switching accounts mid-load or mid-listen cannot leak events, lists or caches.
+- Syncs cannot undo newer local activity; Play uses the exact displayed snapshot
+  without later radio updates mutating the playing queue.
+- API fixtures pass; installed-server and locked-device behavior still require
+  device acceptance. Fixtures alone do not establish deployment compatibility.
 
-## Next increments: saving and custom mixing
+## Next real smart-playlist milestone: rules and custom mixing
 
-First add **Save to Navidrome**, creating an owned ordinary playlist with the
+Keep the fixed radio as its own entry. A separate **New smart playlist** editor
+must create multiple named, saved definitions, with independent added/played
+windows, an include combination (either/both), and selectable recent-activity or
+weighted added/played ordering. Preview results before saving; reopening a saved
+definition must retain its rules and mixing settings. This is the smallest useful
+builder to implement next. A renamed radio or exported static snapshot alone does
+not meet this milestone. Favorites/genres/exclusions and artist spacing can follow.
+
+Keep rules separate from UI and network access. Version each declarative definition
+and store it under server/user/definition identity. Reject unknown schema versions
+without overwriting them. Reuse scoped catalog snapshots and local listen updates;
+keep the fixed radio independent. No companion is required for the editor.
+
+After that, add **Save to Navidrome**, creating an owned ordinary playlist with the
 preview's ordered IDs. Persist its ID and the ordered sequence last written
 alongside the definition. Show that it is generated and when it was refreshed.
 On refresh, read the remote sequence and ownership before writing. If another
@@ -150,7 +164,7 @@ between checking and writing remains a documented limitation. A missing playlist
 or changed owner needs explicit recovery. A failed refresh preserves the last
 successful result and must not publish a partial or error-induced empty list.
 
-Then add a second Order choice, **Custom mix**, alongside **Recent activity**:
+The editor's **Custom mix**, alongside **Recent activity**, should use:
 
 | Control | Proposed behavior |
 | --- | --- |

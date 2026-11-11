@@ -92,24 +92,4 @@ void main() {
       DateTime.utc(2024, 2, 29, 16, 0, 0, 123, 456),
     );
   });
-
-  test(
-    'definition is versioned and rejects unknown versions and invalid windows',
-    () {
-      final json = definition.toJson();
-      expect(RecentRadioDefinition.fromJson(json).days, 30);
-      for (final change in [
-        {'schemaVersion': 2},
-        {'days': 0},
-        {'days': 3651},
-        {'order': 'unknown'},
-        {'name': ' '},
-      ]) {
-        expect(
-          () => RecentRadioDefinition.fromJson({...json, ...change}),
-          throwsFormatException,
-        );
-      }
-    },
-  );
 }

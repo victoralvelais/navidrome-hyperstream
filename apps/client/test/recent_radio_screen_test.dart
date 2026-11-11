@@ -31,7 +31,7 @@ Future<void> main() async {
     const Size(1280, 800),
   ]) {
     testWidgets(
-      'Recent Radio preview, play, rules and stale results at ${size.width}',
+      'Recent Radio play, local updates, refresh and stale results at ${size.width}',
       (tester) async {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1;
@@ -39,12 +39,14 @@ Future<void> main() async {
         addTearDown(tester.view.resetDevicePixelRatio);
         var fail = false;
         var reversed = false;
-        final now = DateTime.utc(2026, 11, 11, 18);
+        var now = DateTime.utc(2026, 11, 11, 18);
+        var scans = 0;
         final client = NavidromeClient(
           serverUrl: 'https://music.example.com',
           username: 'test',
           password: 'synthetic',
           httpClient: MockClient((request) async {
+            if (request.url.queryParameters['songOffset'] == '0') scans++;
             if (fail) return http.Response('private', 500);
             final songs = request.url.queryParameters['songOffset'] == '0'
                 ? [
@@ -81,18 +83,12 @@ Future<void> main() async {
             );
           }),
         );
-        final radio = RecentRadioService(
-          client,
-          read: (_) async => null,
-          write: (_, _) async {},
-          now: () => now,
-        );
+        final radio = RecentRadioService(client, now: () => now);
         final playback = PlaybackService(player: FakePlayer());
         addTearDown(() async {
           final disposing = playback.dispose();
           await tester.pump();
           await disposing;
-          radio.dispose();
           client.close();
         });
         await tester.pumpWidget(
@@ -104,21 +100,15 @@ Future<void> main() async {
                   size: size,
                   textScaler: TextScaler.linear(size.width == 320 ? 1.4 : 1),
                 ),
-                child: RecentRadioScreen(
-                  radio: radio,
-                  playback: playback,
-                  active: true,
-                ),
+                child: RecentRadioScreen(radio: radio, playback: playback),
               ),
             ),
           ),
         );
         await tester.pumpAndSettle();
-        expect(
-          find.text('2 matches · 30 days · 2 library songs'),
-          findsOneWidget,
-        );
+        expect(find.text('2 songs · 30 days'), findsOneWidget);
         expect(radio.preview!.matches.first.track.id, 'played');
+        expect(scans, 1);
         if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
           await expectLater(
             find.byType(MaterialApp),
@@ -133,29 +123,27 @@ Future<void> main() async {
         await tester.pumpAndSettle();
         expect(playback.queue.value.map((t) => t.id), ['played', 'added']);
         reversed = true;
-        final refreshed = radio.refresh();
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
         await tester.pumpAndSettle();
-        await refreshed;
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, 400));
+        await tester.pumpAndSettle();
+        expect(scans, 2);
         expect(radio.preview!.matches.first.track.id, 'added');
         expect(playback.queue.value.map((t) => t.id), ['played', 'added']);
-        final days = find.widgetWithText(
-          TextFormField,
-          'Added or played within',
-        );
-        await tester.ensureVisible(days);
+        expect(find.byType(TextFormField), findsNothing);
+        final played = radio.preview!.matches.last.track;
+        now = now.add(const Duration(seconds: 1));
+        client.recordLocalListen(played, now);
         await tester.pumpAndSettle();
-        await tester.enterText(days, '0');
-        await tester.ensureVisible(find.text('Update preview'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Update preview'));
-        await tester.pumpAndSettle();
-        expect(find.text('Choose 1 to 3650 days.'), findsOneWidget);
-        await tester.enterText(days, '7');
-        await tester.ensureVisible(find.text('Update preview'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Update preview'));
-        await tester.pumpAndSettle();
-        expect(radio.preview!.definition.days, 7);
+        expect(radio.preview!.matches.map((m) => m.track.id), [
+          'played',
+          'added',
+        ]);
+        expect(scans, 2);
+        expect(playback.queue.value.map((t) => t.id), ['played', 'added']);
         fail = true;
         final preview = radio.preview;
         final failed = radio.refresh();
@@ -163,12 +151,15 @@ Future<void> main() async {
         await failed;
         expect(identical(radio.preview, preview), isTrue);
         expect(
-          find.text('Showing the last successful preview.'),
+          find.text(
+            'Showing the last synced library with local listening updates.',
+          ),
           findsOneWidget,
         );
         expect(tester.takeException(), isNull);
         await playback.pause();
         await tester.pumpWidget(const SizedBox.shrink());
+        radio.dispose();
       },
     );
   }

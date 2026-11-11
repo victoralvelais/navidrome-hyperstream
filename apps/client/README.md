@@ -18,7 +18,7 @@ an adjacent detail pane. Home contains grouped settings directly, with Appearanc
 Playback, Servers, and account controls. It uses the full content pane on wide
 windows. Discover reads server history. Hyperstream reports qualified listens
 to Navidrome, and [Recent Radio](../../docs/RECENT_RADIO_TESTING.md) provides a
-playable, per-user activity preview with a configurable day window.
+playable, per-user radio with a fixed 30-day window and immediate local updates.
 
 The Search tab finds artists, albums and songs across the entire Navidrome library using
 [OpenSubsonic search3](https://opensubsonic.netlify.app/docs/endpoints/search3/).
@@ -60,12 +60,19 @@ and server imports are not connected to this UI yet.
 ## Playlists and favorites
 
 **Library → Playlists → Recent Radio** (also available from the plus menu) reads
-the complete song catalog and includes songs added or played within the chosen
-window, initially 30 days. It sorts by the later timestamp and explains each
-match. Edit the name/window and select Update preview; settings are saved locally
-under the current server/user. Play radio uses the displayed order. Refreshing
-never replaces an active queue. A failed load retains the last successful preview
-with an error. This milestone does not create a managed Navidrome playlist yet.
+the complete song catalog on first open and includes songs added or played within
+30 days. It sorts by the later timestamp and explains each match. A counted listen
+updates the list locally before the server acknowledges the report, without any
+catalog request. Further visits reuse the account's session cache. Pull-to-refresh
+or F5 syncs it; a 30-minute timer also syncs while the app is active, even on another
+page. Returning after an overdue interval runs one sync. Play radio uses the
+displayed order, and later list updates leave that playing queue unchanged. Failed
+syncs retain local updates and the last synced library with an error.
+
+Recent Radio is a fixed built-in feature, separate from the future smart-playlist
+editor and custom mixing. The earlier editable name/window preferences are left
+untouched but no longer used. Neither the cache nor unconfirmed local activity is
+persisted across app restarts; there is no managed Navidrome playlist yet.
 
 **Home → Playback → Report listening history** is enabled by default. Tracks
 longer than 30 seconds count after half their duration or four minutes of actual
