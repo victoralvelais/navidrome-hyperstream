@@ -20,6 +20,11 @@ commit, versions, checksums, and bundle contents before publishing them locally.
 It does not commit or push source for you. Python 3.11+ and Git are enough on the
 downloading PC; Flutter, Xcode, and Visual Studio run on the hosted builders.
 
+Windows uses `windows-2022` with Visual Studio 2022. The current audio plugin's
+C++17 coroutine implementation fails with the newer Visual Studio 2026 toolchain
+on `windows-2025`; update and validate that native dependency before changing the
+runner. See the [Windows runner inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md).
+
 Both apps use the version in `apps/client/pubspec.yaml` and the Actions run number
 as their build number. For example:
 
