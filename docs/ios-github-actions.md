@@ -25,6 +25,11 @@ C++17 coroutine implementation fails with the newer Visual Studio 2026 toolchain
 on `windows-2025`; update and validate that native dependency before changing the
 runner. See the [Windows runner inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md).
 
+Windows runs `integration_test/account_storage_test.dart` against the native
+secure-storage plugin before the release build. It uses a separate synthetic key,
+checks a protected save/read/delete, and never uses a real Navidrome account.
+Local builds also need the C++ ATL component required by this plugin.
+
 Both apps use the version in `apps/client/pubspec.yaml` and the Actions run number
 as their build number. For example:
 

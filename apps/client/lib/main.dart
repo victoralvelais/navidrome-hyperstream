@@ -6,7 +6,7 @@ import 'app_theme.dart';
 import 'features/connect/connection_screen.dart';
 import 'features/library/library_screen.dart';
 import 'features/startup/startup_screen.dart';
-import 'services/navidrome_client.dart';
+import 'services/account_session.dart';
 import 'services/app_preferences.dart';
 import 'services/playback_service.dart';
 import 'services/startup_stage.dart';
@@ -29,8 +29,13 @@ void main() {
 }
 
 class HyperstreamApp extends StatefulWidget {
-  const HyperstreamApp({super.key, this.initialize = initializeHyperstream});
+  const HyperstreamApp({
+    super.key,
+    this.initialize = initializeHyperstream,
+    this.accountSession,
+  });
   final AppInitializer initialize;
+  final AccountSession? accountSession;
 
   @override
   State<HyperstreamApp> createState() => _HyperstreamAppState();
@@ -39,7 +44,8 @@ class HyperstreamApp extends StatefulWidget {
 class _HyperstreamAppState extends State<HyperstreamApp> {
   Future<PlaybackService>? _initialization;
   PlaybackService? _playback;
-  NavidromeClient? _client;
+  late final AccountSession _account =
+      widget.accountSession ?? AccountSession();
   StartupStage _stage = StartupStage.opening;
   Timer? _startupTimer;
   bool _takingLonger = false;
@@ -82,6 +88,8 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
         await service.dispose();
       } else {
         setState(() => _playback = service);
+        _setStage(StartupStage.account);
+        await _account.restore();
       }
       return service;
     } finally {
@@ -91,14 +99,13 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
 
   Future<void> _disconnect() async {
     await _playback!.reset();
-    _client?.close();
-    if (mounted) setState(() => _client = null);
+    await _account.disconnect();
   }
 
   @override
   void dispose() {
     _startupTimer?.cancel();
-    _client?.close();
+    _account.dispose();
     final playback = _playback;
     if (playback != null) unawaited(playback.dispose());
     super.dispose();
@@ -107,7 +114,10 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _playback?.preferences ?? const AlwaysStoppedAnimation(0),
+      listenable: Listenable.merge([
+        _account,
+        if (_playback != null) _playback!.preferences,
+      ]),
       builder: (context, _) => MaterialApp(
         title: 'Hyperstream',
         debugShowCheckedModeBanner: false,
@@ -123,11 +133,9 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
             if (!snapshot.hasData) {
               return StartupScreen(stage: _stage, takingLonger: _takingLonger);
             }
-            final client = _client;
+            final client = _account.client;
             return client == null
-                ? ConnectionScreen(
-                    onConnected: (client) => setState(() => _client = client),
-                  )
+                ? ConnectionScreen(session: _account)
                 : LibraryScreen(
                     client: client,
                     playback: snapshot.data!,

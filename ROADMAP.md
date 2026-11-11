@@ -62,9 +62,10 @@ flowchart LR
 
 The app connects directly to Navidrome for normal library use. An unavailable
 companion must not prevent existing library playback. Provider credentials and
-download jobs belong on the companion. The production client will store its own
-server access credentials in platform secure storage. The initial client
-prototype keeps credentials in memory only.
+download jobs belong on the companion. The client stores its own server account
+in iOS Keychain or Windows DPAPI-protected storage and restores the connection
+on launch. Temporary network failures keep the saved account; explicit disconnect
+removes it. A session-only sign-in option is also available.
 
 Deploy the companion alongside Navidrome in Docker on the Windows PC. Bind-mount
 the intended host library folder into the import worker, and keep downloads and
@@ -329,5 +330,5 @@ but no general-purpose library upload endpoint. Both Flutter and a PWA would cal
 the same authenticated companion API for imports. Normal library listening should
 continue directly through Navidrome even if that companion is unavailable.
 
-Next slice: secure saved server sign-in, followed by an
-authenticated companion job API and a provider-to-library import proof.
+Secure saved server sign-in is implemented. Next slice: an authenticated
+companion job API and a provider-to-library import proof.

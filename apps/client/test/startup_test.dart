@@ -7,8 +7,11 @@ import 'package:hyperstream_client/features/startup/startup_screen.dart';
 import 'package:hyperstream_client/main.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/startup_stage.dart';
+import 'package:hyperstream_client/services/account_session.dart';
+import 'package:hyperstream_client/features/library/library_screen.dart';
 
 import 'support/fake_player.dart';
+import 'support/account_fakes.dart';
 
 class ObservedPlayback extends PlaybackService {
   ObservedPlayback() : super(player: FakePlayer());
@@ -28,6 +31,7 @@ void main() {
       var calls = 0;
       await tester.pumpWidget(
         HyperstreamApp(
+          accountSession: AccountSession(store: MemoryAccountStore()),
           initialize: (onStage) {
             calls++;
             expect(find.byType(StartupScreen), findsOneWidget);
@@ -62,6 +66,7 @@ void main() {
       final playback = ObservedPlayback();
       await tester.pumpWidget(
         HyperstreamApp(
+          accountSession: AccountSession(store: MemoryAccountStore()),
           initialize: (onStage) async {
             calls++;
             onStage(StartupStage.player);
@@ -95,6 +100,7 @@ void main() {
       late ValueChanged<StartupStage> report;
       await tester.pumpWidget(
         HyperstreamApp(
+          accountSession: AccountSession(store: MemoryAccountStore()),
           initialize: (onStage) {
             report = onStage;
             return gate.future;
@@ -107,6 +113,43 @@ void main() {
       await tester.pump();
       expect(playback.disposed, isTrue);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'cold start restores account and disconnect prevents next restoration',
+    (tester) async {
+      final store = MemoryAccountStore()..account = exampleAccount();
+      AccountSession session() =>
+          AccountSession(store: store, createClient: AccountClient.new);
+      final first = session();
+      await tester.pumpWidget(
+        HyperstreamApp(
+          accountSession: first,
+          initialize: (_) async => ObservedPlayback(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LibraryScreen), findsOneWidget);
+      expect(find.byType(ConnectionScreen), findsNothing);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Disconnect from server'));
+      await tester.tap(find.text('Disconnect from server'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ConnectionScreen), findsOneWidget);
+      expect(store.account, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        HyperstreamApp(
+          accountSession: session(),
+          initialize: (_) async => ObservedPlayback(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ConnectionScreen), findsOneWidget);
+      expect(find.text('Connect'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 }

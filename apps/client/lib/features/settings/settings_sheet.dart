@@ -115,7 +115,9 @@ class SettingsSheet extends StatelessWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Disconnect from server'),
-                  subtitle: const Text('Stop playback and return to sign-in.'),
+                  subtitle: const Text(
+                    'Stop playback and remove the saved account from this device.',
+                  ),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () {
                     Navigator.pop(context);

@@ -11,8 +11,9 @@ import '../models/library.dart';
 /// User-facing failures deliberately exclude request URLs and server messages:
 /// OpenSubsonic URLs contain replayable authentication tokens.
 class NavidromeException implements Exception {
-  const NavidromeException(this.message);
+  const NavidromeException(this.message, {this.authenticationRejected = false});
   final String message;
+  final bool authenticationRejected;
 
   @override
   String toString() => message;
@@ -85,7 +86,10 @@ class NavidromeClient {
         );
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
-        throw const NavidromeException('Check your username and password.');
+        throw const NavidromeException(
+          'Check your username and password.',
+          authenticationRejected: true,
+        );
       }
       if (response.statusCode != 200) {
         throw NavidromeException(
@@ -123,7 +127,7 @@ class NavidromeClient {
           50 => 'Your account does not have permission for this action.',
           70 => 'This item is no longer available on the server.',
           _ => 'Navidrome could not complete the request.',
-        });
+        }, authenticationRejected: code == 40 || code == 41 || code == 44);
       }
       return envelope;
     } on NavidromeException {

@@ -208,11 +208,17 @@ void main() {
     await expectLater(
       client.ping(),
       throwsA(
-        isA<NavidromeException>().having(
-          (e) => e.message,
-          'message',
-          'Check your username and password.',
-        ),
+        isA<NavidromeException>()
+            .having(
+              (e) => e.message,
+              'message',
+              'Check your username and password.',
+            )
+            .having(
+              (e) => e.authenticationRejected,
+              'authentication rejected',
+              isTrue,
+            ),
       ),
     );
   });

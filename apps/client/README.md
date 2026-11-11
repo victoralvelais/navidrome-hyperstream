@@ -33,7 +33,8 @@ and server imports are not connected to this UI yet.
   entry checks the latest song order first, including duplicate songs. The API has
   no atomic version check, so simultaneous edits in other clients can still race.
 - Disconnect is under **Settings → Disconnect from server**. It stops playback
-  and returns to sign-in; there is no logout button in the main toolbar.
+  removes the saved account and returns to sign-in; there is no logout button
+  in the main toolbar. A failed removal is shown and can be retried.
 
 These features use [getPlaylists](https://opensubsonic.netlify.app/docs/endpoints/getplaylists/),
 [updatePlaylist](https://opensubsonic.netlify.app/docs/endpoints/updateplaylist/),
@@ -50,7 +51,7 @@ acceptance for these new features remains open.
   transport controls, seek bar, and volume. Seeking commits when a drag ends.
 - Open the toolbar's Settings button for light/dark/system appearance and audio
   preferences. Volume (including mute), its restore level, mixing, and appearance
-  are saved locally with `shared_preferences`. Credentials remain in memory only.
+  are saved locally with `shared_preferences`. Credentials use separate secure storage.
 - On iPhone/iPad, **Mix with other audio** enables the native audio session's
   `mixWithOthers` option. It is off by default. This lets Hyperstream share audio
   with other apps where iOS permits; it cannot guarantee playback through calls.
@@ -111,6 +112,15 @@ workflow pins Flutter and Xcode versions. Downloaded packages, SDKs, build outpu
 generated machine-specific files, and signing credentials are excluded from Git.
 
 ## Run on Windows
+
+Install Visual Studio 2022 Build Tools with **Desktop development with C++**,
+including **MSVC v143**, **C++ CMake tools for Windows**, a Windows SDK, and
+**C++ ATL for latest v143 build tools (x86 & x64)**. The secure-storage plugin
+requires ATL (`atlstr.h`); the local VS 2019 installation currently lacks it.
+The GitHub `windows-2022` builder supplies this toolchain and runs the native
+secure-storage check before packaging the release. After changing local compiler
+versions, run `flutter clean` and `flutter pub get` before rebuilding so CMake
+does not reuse the old toolchain cache.
 
 This workspace uses Flutter **3.47.9 / Dart 3.13.7**, installed at
 `D:\Tools\flutter`. Its directory has not been added to your system PATH.
@@ -177,8 +187,37 @@ are not wired yet. The adapter has an injectable player for command/queue tests.
 
 ## Credentials and audio
 
-Credentials stay in memory until disconnect or app exit. Password persistence
-will require platform secure storage in a later slice. In the Dart constructor,
+**Keep me signed in** is on by default. After Navidrome verifies the sign-in,
+the server address, username, and password are saved together using
+[`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage):
+iOS Keychain with device-only access after the first unlock following a reboot
+(no iCloud synchronization), and Windows DPAPI-protected storage under the user's
+application support directory. There is no plaintext preference/file fallback.
+The password is needed to generate fresh OpenSubsonic authentication tokens.
+
+Startup restores the account and checks the server. A server outage offers Retry
+and Edit connection while retaining the saved account. A rejected sign-in keeps
+the address and username but requires password re-entry. Unreadable secure storage
+offers Retry or Forget; it is never treated as an empty account. Saves and removals
+are read back to verify success. Disabling **Keep me signed in** clears any older
+saved account after successful authentication and keeps only the current session.
+**Settings → Disconnect from server** removes the saved record and stops playback.
+
+Windows account storage is independent of the versioned release folder. Keep the
+Windows product/company identifiers and iOS bundle identifier/signing identity
+stable across upgrades so the OS can find the same protected account. Sideloading
+under a different identity may require signing in again. The iOS entitlements file
+is applied to Debug, Profile, and Release; the final signed app must retain valid
+Keychain access. Device acceptance: sign in, force-close/reopen, test a temporary
+server outage, then disconnect and confirm the next launch asks for sign-in.
+
+The native secure-storage integration test uses a separate synthetic account key:
+`flutter test integration_test/account_storage_test.dart -d windows`.
+It checks protected write/read with a new store instance and verified deletion,
+without using the saved Navidrome account. Unit/widget tests cover cold startup,
+network/authentication failures, rejected writes, and disconnect persistence.
+
+In the Dart constructor,
 `this._password` is a private field formal whose public named argument is
 `password` (supported by the pinned Dart SDK).
 
@@ -264,5 +303,6 @@ First manual acceptance checks: connect to the real server, play and seek MP3,
 FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and
 restore network access, and resize the window. On iPhone also check screen lock,
 Control Center, track transitions while locked, headphone removal, interruptions,
-and background recovery. Saved credentials, queue
-restoration, system artwork, offline mode, and Mornye integration come later.
+and background recovery. Check saved sign-in across app restarts and signed iOS
+updates. Queue restoration, system artwork, offline mode, and Mornye integration
+come later.

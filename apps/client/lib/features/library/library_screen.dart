@@ -87,8 +87,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _disconnect() async {
+    if (_disconnecting) return;
     setState(() => _disconnecting = true);
-    await widget.onDisconnect();
+    try {
+      await widget.onDisconnect();
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not finish disconnecting or remove your saved account. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _disconnecting = false);
+    }
   }
 
   Widget _albumGrid() => CustomScrollView(
