@@ -7,19 +7,21 @@ import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../../services/account_session.dart';
+import '../../services/recent_radio_service.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
 import '../favorites/favorites_screen.dart';
 import '../player/player_controls.dart';
 import '../playlists/playlist_tracks.dart';
 import '../playlists/playlists_screen.dart';
+import '../playlists/recent_radio_screen.dart';
 import '../search/library_search.dart';
 import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
 import 'artwork_backdrop.dart';
 import 'catalog_widgets.dart';
-import 'collection_actions.dart';
-import 'cover_art.dart';
+
+enum _Section { home, library, search }
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -41,19 +43,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _albums = <Album>[];
   final _browseKey = GlobalKey();
   final _settingsKey = GlobalKey<SettingsPageState>();
-  final _homeScroll = ScrollController();
   ScrollDirection _scrollDirection = ScrollDirection.idle;
   late final LibraryCollections _collections;
-  late Future<List<Album>> _recent;
+  late final RecentRadioService _radio;
   Album? _selected;
   Artist? _artist;
   String? _playlistId;
   String? _libraryPage;
-  int _section = 0;
+  _Section _section = _Section.home;
   bool _busy = false;
   bool _more = true;
   bool _disconnecting = false;
-  bool _settings = false;
+  bool _homeHasPage = false;
   bool _dockCollapsed = false;
   String? _error;
   bool get _hasSelection =>
@@ -63,15 +64,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _collections = LibraryCollections(widget.client);
-    _recent = widget.client.albums(recent: true, size: 12);
+    _radio = RecentRadioService(widget.client);
     _collections.refreshFavorites();
     _load();
   }
 
   @override
   void dispose() {
-    _homeScroll.dispose();
     _collections.dispose();
+    _radio.dispose();
     super.dispose();
   }
 
@@ -85,40 +86,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _playlistId = null;
   });
   void _back() => setState(() {
-    if (_settings) {
-      _settings = false;
-    } else if (_selected != null || _playlistId != null) {
+    if (_selected != null || _playlistId != null) {
       _selected = null;
       _playlistId = null;
     } else if (_artist != null) {
       _artist = null;
     } else {
-      _libraryPage = null;
+      _libraryPage = _libraryPage == 'Recent Radio' ? 'Playlists' : null;
     }
   });
 
   void _tab(int index) {
     FocusScope.of(context).unfocus();
+    if (index == _Section.home.index) _settingsKey.currentState?.back();
     setState(() {
-      _section = index;
-      _settings = false;
+      _section = _Section.values[index];
       _dockCollapsed = false;
+      _scrollDirection = ScrollDirection.idle;
       _selected = null;
       _playlistId = null;
       _artist = null;
-      if (index == 2) _libraryPage = null;
+      _libraryPage = null;
     });
-    if (index == 0) _collections.refreshFavorites();
-    if (index == 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _homeScroll.hasClients) _homeScroll.jumpTo(0);
-      });
-    }
   }
 
   void _openCategory(String page) {
     setState(() {
-      _section = 2;
+      _section = _Section.library;
       _libraryPage = page;
       _selected = null;
       _playlistId = null;
@@ -152,12 +146,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _recent = widget.client.albums(recent: true, size: 12));
-    await Future.wait([
-      _collections.refreshFavorites(),
-      _load(refresh: true),
-      _recent.then<void>((_) {}).catchError((Object _) {}),
-    ]);
+    await Future.wait([_collections.refreshFavorites(), _load(refresh: true)]);
   }
 
   Future<void> _disconnect() async {
@@ -216,157 +205,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ),
   );
 
-  Widget _home() => PullToRefresh(
-    onRefresh: _refresh,
-    child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      key: const PageStorageKey('home'),
-      controller: _homeScroll,
-      slivers: [
-        SliverToBoxAdapter(child: _heading('Home', large: true)),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-            child: ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              tileColor: Theme.of(context).colorScheme.surfaceContainer,
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Settings'),
-              subtitle: const Text('Servers, appearance and playback'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => setState(() {
-                _settings = true;
-                _dockCollapsed = false;
-              }),
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: FutureBuilder<List<Album>>(
-            future: _recent,
-            builder: (context, snapshot) {
-              final recent = snapshot.data ?? [];
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const SizedBox(height: 8);
-              }
-              if (snapshot.hasError) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: TextButton(
-                    onPressed: _refresh,
-                    child: const Text('Retry recently played'),
-                  ),
-                );
-              }
-              if (recent.isEmpty) return const SizedBox.shrink();
-              final scale = MediaQuery.textScalerOf(context).scale(1);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _heading('Recently played'),
-                  SizedBox(
-                    height: 176 + 60 * scale,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: recent.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 16),
-                      itemBuilder: (_, index) => SizedBox(
-                        width: 176,
-                        child: AlbumCard(
-                          album: recent[index],
-                          client: widget.client,
-                          onTap: () => _selectAlbum(recent[index]),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: ListenableBuilder(
-            listenable: _collections,
-            builder: (context, _) {
-              final songs = _collections.favoriteSongs.take(4).toList();
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Favorite songs',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => _openCategory('Favorites'),
-                          child: const Text('See all'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (songs.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      child: Text(
-                        _collections.favoritesError != null
-                            ? 'Favorites could not load. Open Favorites to retry.'
-                            : 'Heart a song to find it here.',
-                      ),
-                    ),
-                  for (var i = 0; i < songs.length; i++)
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                      ),
-                      leading: SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: CoverArt(
-                          client: widget.client,
-                          id: songs[i].coverArt,
-                        ),
-                      ),
-                      title: Text(
-                        songs[i].title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(songs[i].artist, maxLines: 1),
-                      trailing: FavoriteButton(
-                        collections: _collections,
-                        song: songs[i],
-                      ),
-                      onTap: () =>
-                          widget.playback.playAlbum(widget.client, songs, i),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        SliverToBoxAdapter(child: _heading('Recently added')),
-        AlbumGrid(
-          albums: _albums,
-          client: widget.client,
-          onSelected: _selectAlbum,
-        ),
-        _albumStatus(),
-        const SliverToBoxAdapter(child: DockSpacer()),
-      ],
-    ),
+  Widget _home() => SettingsPage(
+    key: _settingsKey,
+    playback: widget.playback,
+    session: widget.accountSession,
+    onDisconnect: _disconnect,
+    onPageChanged: (hasPage) => setState(() {
+      _homeHasPage = hasPage;
+      _dockCollapsed = false;
+      _scrollDirection = ScrollDirection.idle;
+    }),
   );
 
   Widget _libraryHub() => PullToRefresh(
@@ -431,8 +279,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
   );
 
   Widget _library() => switch (_libraryPage) {
+    'Recent Radio' => RecentRadioScreen(
+      radio: _radio,
+      playback: widget.playback,
+      active: _section == _Section.library && !_hasSelection,
+    ),
     'Playlists' => PlaylistsScreen(
       collections: _collections,
+      onRecentRadio: () => _openCategory('Recent Radio'),
       onSelected: (playlist) => setState(() {
         _playlistId = playlist.id;
         _selected = null;
@@ -476,9 +330,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _browsePane() => IndexedStack(
     key: _browseKey,
-    index: _section,
+    index: _section.index,
     children: [
       _home(),
+      _library(),
       LibrarySearch(
         discover: true,
         client: widget.client,
@@ -487,30 +342,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
         onAlbumSelected: _selectAlbum,
         onArtistSelected: _selectArtist,
       ),
-      _library(),
     ],
   );
 
   String get _backLabel => _selected != null && _artist != null
       ? 'Back to artist'
       : _hasSelection
-      ? _section == 1
+      ? _section == _Section.search
             ? 'Back to search'
             : _libraryPage == 'Playlists'
             ? 'Back to playlists'
             : _libraryPage == 'Favorites'
             ? 'Back to favorites'
             : 'Back to albums'
+      : _libraryPage == 'Recent Radio'
+      ? 'Back to playlists'
       : 'Back to library';
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 950;
     return PopScope(
-      canPop: !_settings && !_hasSelection && _libraryPage == null,
+      canPop:
+          !(_section == _Section.home && _homeHasPage) &&
+          !_hasSelection &&
+          _libraryPage == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop &&
-            !(_settings && (_settingsKey.currentState?.back() ?? false))) {
+            !(_section == _Section.home &&
+                (_settingsKey.currentState?.back() ?? false))) {
           _back();
         }
       },
@@ -526,13 +386,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             backgroundColor: Colors.transparent,
             appBar: AppBar(
               backgroundColor: Colors.transparent,
-              toolbarHeight:
-                  !_settings && (_hasSelection || _libraryPage != null)
-                  ? 44
-                  : 8,
-              leading: !_settings && (_hasSelection || _libraryPage != null)
+              toolbarHeight: (_hasSelection || _libraryPage != null) ? 44 : 8,
+              leading: (_hasSelection || _libraryPage != null)
                   ? IconButton(
-                      tooltip: _settings ? 'Back to home' : _backLabel,
+                      tooltip: _backLabel,
                       onPressed: _back,
                       icon: const Icon(
                         Icons.arrow_back_ios_new_rounded,
@@ -580,7 +437,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               NavigationRail(
                                 backgroundColor: Colors.transparent,
                                 labelType: NavigationRailLabelType.all,
-                                selectedIndex: _section,
+                                selectedIndex: _section.index,
                                 onDestinationSelected: _tab,
                                 destinations: const [
                                   NavigationRailDestination(
@@ -589,31 +446,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     label: Text('Home'),
                                   ),
                                   NavigationRailDestination(
-                                    icon: Icon(Icons.search_rounded),
-                                    label: Text('Search'),
-                                  ),
-                                  NavigationRailDestination(
                                     icon: Icon(Icons.library_music_outlined),
                                     selectedIcon: Icon(
                                       Icons.library_music_rounded,
                                     ),
                                     label: Text('Library'),
                                   ),
+                                  NavigationRailDestination(
+                                    icon: Icon(Icons.search_rounded),
+                                    label: Text('Search'),
+                                  ),
                                 ],
                               ),
                             Expanded(
                               child: LayoutBuilder(
                                 builder: (context, bounds) {
-                                  if (_settings) {
-                                    return SettingsPage(
-                                      key: _settingsKey,
-                                      playback: widget.playback,
-                                      session: widget.accountSession,
-                                      onDisconnect: _disconnect,
-                                      onBackHome: _back,
-                                    );
-                                  }
-                                  if (wide && bounds.maxWidth >= 760) {
+                                  if (wide &&
+                                      bounds.maxWidth >= 760 &&
+                                      _section != _Section.home &&
+                                      _libraryPage != 'Recent Radio') {
                                     return Row(
                                       children: [
                                         Expanded(child: _browsePane()),
@@ -685,9 +536,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   onPressed: () =>
                                       setState(() => _dockCollapsed = false),
                                   icon: Icon(
-                                    _section == 0
+                                    _section == _Section.home
                                         ? Icons.home_rounded
-                                        : _section == 1
+                                        : _section == _Section.search
                                         ? Icons.explore_rounded
                                         : Icons.library_music_rounded,
                                   ),
@@ -707,7 +558,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 radius: 30,
                                 child: IconButton(
                                   tooltip: 'Search',
-                                  onPressed: () => _tab(1),
+                                  onPressed: () => _tab(_Section.search.index),
                                   icon: const Icon(Icons.search_rounded),
                                 ),
                               ),
@@ -733,7 +584,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     .colorScheme
                                     .onSurface
                                     .withValues(alpha: .12),
-                                selectedIndex: _section,
+                                selectedIndex: _section.index,
                                 onDestinationSelected: _disconnecting
                                     ? null
                                     : _tab,
@@ -744,15 +595,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     label: 'Home',
                                   ),
                                   NavigationDestination(
-                                    icon: Icon(Icons.search_rounded),
-                                    label: 'Search',
-                                  ),
-                                  NavigationDestination(
                                     icon: Icon(Icons.library_music_outlined),
                                     selectedIcon: Icon(
                                       Icons.library_music_rounded,
                                     ),
                                     label: 'Library',
+                                  ),
+                                  NavigationDestination(
+                                    icon: Icon(Icons.search_rounded),
+                                    label: 'Search',
                                   ),
                                 ],
                               ),

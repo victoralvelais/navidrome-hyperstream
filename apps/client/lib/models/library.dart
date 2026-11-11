@@ -54,6 +54,10 @@ class Track {
     this.number,
     this.coverArt,
     this.starred = false,
+    this.addedAt,
+    this.lastPlayedAt,
+    this.playCount = 0,
+    this.invalidActivityDates = false,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -65,6 +69,13 @@ class Track {
     number: (json['track'] as num?)?.toInt(),
     coverArt: json['coverArt'] as String?,
     starred: json['starred'] != null,
+    addedAt: activityDate(json['created']),
+    lastPlayedAt: activityDate(json['played']),
+    playCount: (json['playCount'] as num?)?.toInt() ?? 0,
+    invalidActivityDates: [
+      'created',
+      'played',
+    ].any((key) => json[key] != null && activityDate(json[key]) == null),
   );
 
   final String id;
@@ -75,6 +86,34 @@ class Track {
   final int? number;
   final String? coverArt;
   final bool starred;
+  final DateTime? addedAt;
+  final DateTime? lastPlayedAt;
+  final int playCount;
+  final bool invalidActivityDates;
+}
+
+/// Activity dates must specify a timezone; never interpret server time as local.
+DateTime? activityDate(Object? value) {
+  if (value is! String) return null;
+  final parts = RegExp(
+    r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$',
+  ).firstMatch(value);
+  if (parts == null) return null;
+  final year = int.parse(parts[1]!);
+  final month = int.parse(parts[2]!);
+  final day = int.parse(parts[3]!);
+  if (month < 1 ||
+      month > 12 ||
+      day < 1 ||
+      day > DateTime.utc(year, month + 1, 0).day ||
+      int.parse(parts[4]!) > 23 ||
+      int.parse(parts[5]!) > 59 ||
+      int.parse(parts[6]!) > 59 ||
+      (parts[7] != null && int.parse(parts[7]!) > 23) ||
+      (parts[8] != null && int.parse(parts[8]!) > 59)) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toUtc();
 }
 
 class MusicPlaylist {

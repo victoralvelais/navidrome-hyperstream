@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/account_session.dart';
 import '../../services/playback_service.dart';
+import '../../widgets/pull_to_refresh.dart';
 import '../connect/connection_screen.dart';
 import '../player/volume_controls.dart';
 
@@ -12,12 +13,12 @@ class SettingsPage extends StatefulWidget {
     required this.playback,
     this.session,
     this.onDisconnect,
-    this.onBackHome,
+    this.onPageChanged,
   });
   final PlaybackService playback;
   final AccountSession? session;
   final VoidCallback? onDisconnect;
-  final VoidCallback? onBackHome;
+  final ValueChanged<bool>? onPageChanged;
   @override
   State<SettingsPage> createState() => SettingsPageState();
 }
@@ -27,10 +28,14 @@ class SettingsPageState extends State<SettingsPage> {
   bool back() {
     if (_page == null) return false;
     setState(() => _page = null);
+    widget.onPageChanged?.call(false);
     return true;
   }
 
-  void _open(String page) => setState(() => _page = page);
+  void _open(String page) {
+    setState(() => _page = page);
+    widget.onPageChanged?.call(true);
+  }
 
   Future<void> _remove(String id, String name) async {
     final confirmed = await showDialog<bool>(
@@ -119,6 +124,7 @@ class SettingsPageState extends State<SettingsPage> {
     listenable: Listenable.merge([
       widget.playback.preferences,
       widget.playback.settingsError,
+      widget.playback.listeningNotice,
       if (widget.session != null) widget.session!,
     ]),
     builder: (context, _) {
@@ -135,19 +141,17 @@ class SettingsPageState extends State<SettingsPage> {
         children: [
           Row(
             children: [
-              if (_page != null || widget.onBackHome != null)
+              if (_page != null)
                 IconButton(
-                  tooltip: _page == null ? 'Back to home' : 'Back to settings',
-                  onPressed: _page == null
-                      ? widget.onBackHome
-                      : () => setState(() => _page = null),
+                  tooltip: 'Back to home',
+                  onPressed: back,
                   icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    _page ?? 'Settings',
+                    _page ?? 'Home',
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
                 ),
@@ -228,6 +232,19 @@ class SettingsPageState extends State<SettingsPage> {
               ),
             ]),
           if (_page == 'Playback') ...[
+            _group([
+              SwitchListTile.adaptive(
+                title: const Text('Report listening history'),
+                subtitle: const Text(
+                  'Count qualified listens in Navidrome for Recent Radio and play history. Your server may also send them to its connected scrobbling services.',
+                ),
+                value: preferences.reportListens,
+                onChanged: preferences.setReportListens,
+              ),
+            ]),
+            if (widget.playback.listeningNotice.value case final String notice)
+              Padding(padding: const EdgeInsets.all(16), child: Text(notice)),
+            const SizedBox(height: 20),
             _group([
               Padding(
                 padding: const EdgeInsets.all(20),
@@ -323,6 +340,7 @@ class SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
+          const DockSpacer(),
         ],
       );
     },

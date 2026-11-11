@@ -27,11 +27,20 @@ HTTP playback, volume/mute, pause, seeking, track transition, and reset with
 generated audio. Comprehensive codec/interruption and new iOS mixing checks remain.
 
 Settings lives on Home and supports several securely saved Navidrome servers.
+Home contains the grouped settings directly; navigation is Home, Library, Search.
 Search opens a Discover page for the selected library, with browse cards and genres.
 The mobile glass dock collapses while scrolling, lists support pull-to-refresh,
 and Now Playing groups output selection with volume. iOS uses the native route
 picker; Windows selects this app's audio device. External charts and network
 casting integrations remain future work.
+
+Recent Radio now provides a playable preview of songs added or played within a
+chosen day window, ordered by the latest of those dates. Its settings are saved
+per server/account on this device. Qualified Hyperstream listens are reported to
+Navidrome, with a toggle under Home > Playback. See the
+[device test guide](docs/RECENT_RADIO_TESTING.md) and
+[smart playlists and optional providers](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
+Managed Navidrome playlist saving, custom mixing and addons remain future work.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,

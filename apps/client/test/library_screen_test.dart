@@ -123,6 +123,10 @@ Future<void> main() async {
             jsonEncode({
               'subsonic-response': {
                 'status': 'ok',
+                'type': 'navidrome',
+                'openSubsonic': true,
+                if (request.url.path.endsWith('getPlaylists.view'))
+                  'playlists': {},
                 if (request.url.path.endsWith('getGenres.view'))
                   'genres': {
                     'genre': [
@@ -205,13 +209,17 @@ Future<void> main() async {
                           if (covers.isNotEmpty) 'coverArt': 'three',
                         },
                       ],
-                    if (request.url.queryParameters['songCount'] != '0')
+                    if (request.url.queryParameters['songCount'] != '0' &&
+                        request.url.queryParameters['songOffset'] == '0')
                       'song': [
                         {
                           'id': 'result-song',
                           'title': 'Search song',
                           'artist': 'Search artist',
                           'album': 'Search album',
+                          'created': '2026-11-10T00:00:00Z',
+                          'played': '2026-11-11T00:00:00Z',
+                          'playCount': 1,
                           if (covers.isNotEmpty) 'coverArt': 'four',
                         },
                       ],
@@ -278,7 +286,44 @@ Future<void> main() async {
         ),
         matching: find.text(label),
       );
+      expect(find.text('Appearance'), findsOneWidget);
+      expect(find.text('Recently added'), findsNothing);
+      if (viewport.size.width < 950) {
+        expect(
+          tester
+              .widgetList<NavigationDestination>(
+                find.byType(NavigationDestination),
+              )
+              .map((destination) => destination.label),
+          ['Home', 'Library', 'Search'],
+        );
+      } else {
+        expect(
+          tester
+              .widget<NavigationRail>(find.byType(NavigationRail))
+              .destinations
+              .map((destination) => (destination.label as Text).data),
+          ['Home', 'Library', 'Search'],
+        );
+        expect(
+          find.text('Choose an album or artist to explore.'),
+          findsNothing,
+        );
+      }
       await _capturePreview(tester, '${viewport.name}-home');
+      await tester.tap(nav('Library'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Playlists'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Recent Radio'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Recent Radio'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play radio'), findsOneWidget);
+      expect(find.text('Choose an album or artist to explore.'), findsNothing);
+      await _capturePreview(tester, '${viewport.name}-radio');
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
       await tester.tap(nav('Library'));
       await tester.pumpAndSettle();
       expect(find.text('Artists'), findsOneWidget);
@@ -398,8 +443,6 @@ Future<void> main() async {
       }
       await tester.tap(nav('Home'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Settings'));
-      await tester.pumpAndSettle();
       expect(find.text('Appearance'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-settings');
@@ -410,7 +453,7 @@ Future<void> main() async {
       expect(find.text('Home library'), findsOneWidget);
       expect(find.text('Archive'), findsOneWidget);
       await _capturePreview(tester, '${viewport.name}-servers');
-      await tester.tap(find.byTooltip('Back to settings'));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Appearance'));
       await tester.pumpAndSettle();
@@ -421,8 +464,6 @@ Future<void> main() async {
       expect(playback.preferences.themeMode, ThemeMode.system);
       expect(tester.takeException(), isNull);
       // Return from settings and search using the same persistent player.
-      await tester.tap(find.byTooltip('Back to settings'));
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Back to home'));
       await tester.pumpAndSettle();
       await playback.preferences.setThemeMode(viewport.theme);
@@ -479,6 +520,7 @@ Future<void> main() async {
       expect(playback.mediaItem.value?.id, 'result-song');
       expect(find.text('Search song'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
+      await playback.pause();
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }

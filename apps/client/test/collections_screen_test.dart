@@ -115,6 +115,14 @@ Future<void> main() async {
           await tap(menu);
         }
 
+        await tap(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w is NavigationBar || w is NavigationRail,
+            ),
+            matching: find.text('Library'),
+          ),
+        );
         await tap(find.text('Test album').first);
         await tap(find.byTooltip('Add to favorites'));
         expect(server.favoriteAlbums, {'album'});
@@ -255,7 +263,20 @@ Future<void> main() async {
         await tap(find.byTooltip('Back to playlists'));
         expect(find.text('Evening mix'), findsOneWidget);
 
+        tester
+            .state<ScrollableState>(
+              find
+                  .descendant(
+                    of: find.byType(PlaylistsScreen),
+                    matching: find.byType(Scrollable),
+                  )
+                  .last,
+            )
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
         await tap(find.byTooltip('New playlist'));
+        await tap(find.text('New playlist'));
         if (viewport.name == 'small-phone') {
           tester.view.viewInsets = const FakeViewPadding(bottom: 250);
           await tester.pumpAndSettle();
@@ -298,7 +319,6 @@ Future<void> main() async {
             matching: find.text('Home'),
           ),
         );
-        await tap(find.text('Settings'));
         await tester.ensureVisible(find.text('Disconnect from server'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Disconnect from server'));

@@ -12,11 +12,13 @@ and Apple's [materials guidance](https://developer.apple.com/design/human-interf
 Glass controls and navigation are implemented in shared Flutter code; they are
 Liquid Glass-inspired surfaces, not Apple's native Liquid Glass renderer.
 
-Home, Search, and Library are the main destinations. Library has Artists,
+Home, Library, and Search are the main destinations, in that order. Library has Artists,
 Albums, Songs, Playlists, and Favorites entries; wide windows use a sidebar and
-an adjacent detail pane. Home shows favorite songs, recently added albums, and
-Navidrome's existing recently played albums when available. This reads server
-history; Hyperstream does not yet submit listening-history scrobbles.
+an adjacent detail pane. Home contains grouped settings directly, with Appearance,
+Playback, Servers, and account controls. It uses the full content pane on wide
+windows. Discover reads server history. Hyperstream reports qualified listens
+to Navidrome, and [Recent Radio](../../docs/RECENT_RADIO_TESTING.md) provides a
+playable, per-user activity preview with a configurable day window.
 
 The Search tab finds artists, albums and songs across the entire Navidrome library using
 [OpenSubsonic search3](https://opensubsonic.netlify.app/docs/endpoints/search3/).
@@ -43,7 +45,7 @@ Pull down at the top of library lists to reload, including empty/short lists.
 There are no refresh toolbar buttons. F5 reloads the focused browsing list on
 Windows. Playlist creation is a small plus beside the Playlists heading.
 
-**Home → Settings** uses grouped Appearance, Playback, and Servers pages.
+**Home** uses grouped Appearance, Playback, and Servers pages.
 Servers supports adding named connections, switching, and removing saved servers.
 Credentials and the selected server live together in secure storage. Existing
 single-account records are read automatically and migrate in place on the next
@@ -56,6 +58,23 @@ This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
 
 ## Playlists and favorites
+
+**Library → Playlists → Recent Radio** (also available from the plus menu) reads
+the complete song catalog and includes songs added or played within the chosen
+window, initially 30 days. It sorts by the later timestamp and explains each
+match. Edit the name/window and select Update preview; settings are saved locally
+under the current server/user. Play radio uses the displayed order. Refreshing
+never replaces an active queue. A failed load retains the last successful preview
+with an error. This milestone does not create a managed Navidrome playlist yet.
+
+**Home → Playback → Report listening history** is enabled by default. Tracks
+longer than 30 seconds count after half their duration or four minutes of actual
+listening, whichever is shorter. Pause, buffering and seeking earn no credit.
+Only one submission is attempted per playback instance; uncertain responses are
+not retried. Reporting is best effort, without an offline outbox. Long unobserved
+runtime gaps are conservatively excluded. Navidrome may forward submissions to
+its configured scrobbling services. Verify foreground and locked-device behavior
+using the [test guide](../../docs/RECENT_RADIO_TESTING.md).
 
 - **Library → Playlists** browses your Navidrome playlists and starts native playback
   in their saved order. Create and rename your own playlists; song menus let you
@@ -70,7 +89,8 @@ and server imports are not connected to this UI yet.
 - Editing a saved playlist leaves the current playback queue alone. Removing an
   entry checks the latest song order first, including duplicate songs. The API has
   no atomic version check, so simultaneous edits in other clients can still race.
-- Disconnect is under **Settings → Disconnect from server**. It stops playback
+- Disconnect is under **Home → Disconnect from server**, in the Account group.
+  It stops playback,
   removes the saved account and returns to sign-in; there is no logout button
   in the main toolbar. A failed removal is shown and can be retried.
 
@@ -99,10 +119,10 @@ acceptance for these new features remains open.
   artwork-colored backdrop, transport controls, and seek bar. Seeking commits
   when a drag ends. The queue button shows the actual current queue and lets you
   jump to a track. Volume expands separately, with space reserved beside transport.
-- Open **Home → Settings** for light/dark/system appearance and audio
+- Open **Home** for light/dark/system appearance and audio
   preferences. Volume (including mute), its restore level, mixing, and appearance
   are saved locally with `shared_preferences`. Credentials use separate secure storage.
-- **Settings → Appearance → Glass effects** switches between translucent and solid controls.
+- **Home → Appearance → Glass effects** switches between translucent and solid controls.
   High contrast and iOS **Reduce Transparency** automatically use solid surfaces.
   The iOS setting is read through a small native bridge, updates while running,
   and is checked again on resume. An unavailable bridge defaults to solid surfaces.
@@ -264,7 +284,7 @@ storage offer Retry or Forget; the app does not request deletion on a read failu
 Saves and removals are read back to verify success. Disabling **Keep me signed in**
 removes saved credentials for that same server/account, preserves other connections,
 and disables automatic restoration for the temporary session.
-**Home → Settings → Disconnect from server** removes the active connection and
+**Home → Disconnect from server**, in the Account group, removes the active connection and
 stops playback. Other saved servers remain available from the sign-in screen.
 
 The pinned Windows storage plugin can discard an encrypted container it cannot

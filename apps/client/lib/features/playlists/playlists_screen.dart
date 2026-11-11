@@ -12,9 +12,11 @@ class PlaylistsScreen extends StatelessWidget {
     super.key,
     required this.collections,
     required this.onSelected,
+    this.onRecentRadio,
   });
   final LibraryCollections collections;
   final ValueChanged<MusicPlaylist> onSelected;
+  final VoidCallback? onRecentRadio;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -40,14 +42,31 @@ class PlaylistsScreen extends StatelessWidget {
                             style: Theme.of(context).textTheme.headlineLarge,
                           ),
                         ),
-                        IconButton(
+                        PopupMenuButton<String>(
                           tooltip: 'New playlist',
-                          onPressed: () => editPlaylistName(
-                            context,
-                            onSave: (name) async {
-                              await collections.createPlaylist(name);
-                            },
-                          ),
+                          onSelected: (action) {
+                            if (action == 'radio') {
+                              onRecentRadio?.call();
+                              return;
+                            }
+                            editPlaylistName(
+                              context,
+                              onSave: (name) async {
+                                await collections.createPlaylist(name);
+                              },
+                            );
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'manual',
+                              child: Text('New playlist'),
+                            ),
+                            if (onRecentRadio != null)
+                              const PopupMenuItem(
+                                value: 'radio',
+                                child: Text('Recent Radio'),
+                              ),
+                          ],
                           icon: const Icon(Icons.add_rounded),
                         ),
                       ],
@@ -69,6 +88,22 @@ class PlaylistsScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (onRecentRadio != null)
+              SliverToBoxAdapter(
+                child: ListTile(
+                  leading: const SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Icon(Icons.radio_rounded),
+                  ),
+                  title: const Text('Recent Radio'),
+                  subtitle: const Text(
+                    'Recently added and played · Auto-updating preview',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: onRecentRadio,
+                ),
+              ),
             SliverList.builder(
               itemCount: playlists.length,
               itemBuilder: (context, index) {

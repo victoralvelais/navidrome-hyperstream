@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import '../models/library.dart';
 import 'app_preferences.dart';
 import 'navidrome_client.dart';
+import 'listen_tracker.dart';
 import 'startup_stage.dart';
 
 /// One instance for the application, independent of navigation and widgets.
@@ -18,9 +19,17 @@ class PlaybackService extends BaseAudioHandler {
     AudioPlayer? player,
     AppPreferences? preferences,
     Future<void> Function(AudioSessionConfiguration)? configureSession,
+    Duration Function()? listeningClock,
+    DateTime Function()? listeningTime,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession {
+    _listenTracker = ListenTracker(
+      elapsed: listeningClock ?? () => _listeningClock.elapsed,
+      now: listeningTime ?? DateTime.now,
+      onListen: _submitListen,
+    );
+    this.preferences.addListener(_syncListening);
     _subscriptions.addAll([
       _player.playbackEventStream.listen((_) => _publishState()),
       _player.playerStateStream.listen((_) => _publishState()),
@@ -60,6 +69,16 @@ class PlaybackService extends BaseAudioHandler {
   final AppPreferences preferences;
   final Future<void> Function(AudioSessionConfiguration) _configureSession;
   final ValueNotifier<String?> settingsError = ValueNotifier(null);
+  final ValueNotifier<String?> listeningNotice = ValueNotifier(null);
+  final _listeningClock = Stopwatch()..start();
+  late final ListenTracker _listenTracker;
+  Timer? _listenTimer;
+  NavidromeClient? _listeningClient;
+  List<Track> _listeningTracks = const [];
+  int? _listeningIndex;
+  int _listeningGeneration = 0;
+  bool _seeking = false;
+  bool _disposed = false;
   Future<void> _settingsPending = Future.value();
   bool get supportsMixing => Platform.isIOS;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -130,6 +149,7 @@ class PlaybackService extends BaseAudioHandler {
       return Future.value();
     }
     final revision = ++_revision;
+    _clearListening();
     _loading = true;
     _playWhenReady = true;
     error.value = null;
@@ -171,6 +191,8 @@ class PlaybackService extends BaseAudioHandler {
         );
         if (revision != _revision) return;
         _loading = false;
+        _listeningClient = client;
+        _listeningTracks = List.unmodifiable(tracks);
         _publishItem();
         _publishState();
         if (_playWhenReady) unawaited(play());
@@ -191,9 +213,11 @@ class PlaybackService extends BaseAudioHandler {
       final item = queue.value[index];
       mediaItem.add(item.copyWith(duration: _player.duration ?? item.duration));
     }
+    _syncListening();
   }
 
   void _publishState() {
+    _syncListening();
     final processing = error.value != null
         ? AudioProcessingState.error
         : _loading
@@ -230,6 +254,94 @@ class PlaybackService extends BaseAudioHandler {
     );
   }
 
+  void _clearListening() {
+    _listeningGeneration++;
+    _listenTimer?.cancel();
+    _listenTimer = null;
+    _listenTracker.clear();
+    _listeningClient = null;
+    _listeningTracks = const [];
+    _listeningIndex = null;
+    if (!_disposed) listeningNotice.value = null;
+  }
+
+  void _syncListening() {
+    if (_disposed) return;
+    final index = _player.currentIndex;
+    if (!preferences.reportListens) {
+      _listenTracker.clear();
+      _listeningIndex = null;
+    }
+    if (_loading ||
+        _listeningClient == null ||
+        !preferences.reportListens ||
+        index == null ||
+        index < 0 ||
+        index >= _listeningTracks.length) {
+      _listenTimer?.cancel();
+      _listenTimer = null;
+      return;
+    }
+    if (_listeningIndex != index) {
+      if (_listeningIndex case final int previous) {
+        _listenTracker.update(
+          active: false,
+          duration: _listeningTracks[previous].duration,
+        );
+      }
+      _listeningIndex = index;
+      _listenTracker.begin(
+        _listeningTracks[index].id,
+        _player.duration ?? _listeningTracks[index].duration,
+      );
+    }
+    final active =
+        !_seeking &&
+        error.value == null &&
+        _player.playing &&
+        _player.processingState == ProcessingState.ready;
+    _listenTracker.update(
+      active: active,
+      duration: _player.duration ?? _listeningTracks[index].duration,
+    );
+    if (active && _listenTracker.pending) {
+      _listenTimer ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _syncListening(),
+      );
+    } else {
+      _listenTimer?.cancel();
+      _listenTimer = null;
+    }
+  }
+
+  void _submitListen(String trackId, DateTime startedAt) {
+    final client = _listeningClient;
+    final generation = _listeningGeneration;
+    if (client == null || _disposed || !preferences.reportListens) return;
+    unawaited(() async {
+      try {
+        await client.scrobble(trackId, startedAt);
+      } on Object {
+        if (!_disposed && generation == _listeningGeneration) {
+          listeningNotice.value = 'A listen could not be confirmed. It was not retried to avoid counting it twice.';
+        }
+      }
+    }());
+  }
+
+  Future<void> _seekCommand(Future<void> Function() command) async {
+    _seeking = true;
+    _syncListening();
+    try {
+      await _command(command);
+    } finally {
+      _seeking = false;
+      _publishItem();
+      _publishState();
+    }
+  }
+
   void _reportFailure() {
     _playWhenReady = false;
     error.value =
@@ -255,7 +367,9 @@ class PlaybackService extends BaseAudioHandler {
     if (mediaItem.value == null || error.value != null) return;
     await _command(() async {
       if (_player.processingState == ProcessingState.completed) {
-        await _player.seek(Duration.zero, index: 0);
+        _listenTracker.clear();
+        _listeningIndex = null;
+        await _seekCommand(() => _player.seek(Duration.zero, index: 0));
       }
       // The play future completes only when playback ends or pauses.
       unawaited(_command(_player.play));
@@ -271,18 +385,18 @@ class PlaybackService extends BaseAudioHandler {
 
   @override
   Future<void> seek(Duration position) async {
-    if (!_loading) await _command(() => _player.seek(position));
+    if (!_loading) await _seekCommand(() => _player.seek(position));
   }
 
   @override
   Future<void> skipToNext() async {
-    if (!_loading && _player.hasNext) await _command(_player.seekToNext);
+    if (!_loading && _player.hasNext) await _seekCommand(_player.seekToNext);
   }
 
   @override
   Future<void> skipToPrevious() async {
     if (_loading || mediaItem.value == null || error.value != null) return;
-    await _command(() async {
+    await _seekCommand(() async {
       final index = _player.currentIndex ?? 0;
       final previous =
           _player.position < const Duration(seconds: 3) && index > 0;
@@ -295,7 +409,7 @@ class PlaybackService extends BaseAudioHandler {
   @override
   Future<void> skipToQueueItem(int index) async {
     if (!_loading && index >= 0 && index < queue.value.length) {
-      await _command(() => _player.seek(Duration.zero, index: index));
+      await _seekCommand(() => _player.seek(Duration.zero, index: index));
     }
   }
 
@@ -304,6 +418,7 @@ class PlaybackService extends BaseAudioHandler {
 
   Future<void> reset() {
     ++_revision;
+    _clearListening();
     _playWhenReady = false;
     _pending = _pending.then((_) async {
       await _command(() async {
@@ -320,6 +435,9 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   Future<void> dispose() async {
+    _disposed = true;
+    _clearListening();
+    preferences.removeListener(_syncListening);
     await _settingsPending;
     await preferences.flush();
     await reset();
@@ -329,6 +447,7 @@ class PlaybackService extends BaseAudioHandler {
     await _player.dispose();
     error.dispose();
     settingsError.dispose();
+    listeningNotice.dispose();
     preferences.dispose();
   }
 }

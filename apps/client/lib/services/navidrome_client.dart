@@ -33,6 +33,12 @@ class NavidromeClient {
   final String _password;
   final http.Client _http;
   final Random _random = Random.secure();
+  final _listens = StreamController<void>.broadcast();
+  bool _closed = false;
+  String? serverType;
+  String? serverVersion;
+  bool openSubsonic = false;
+  Stream<void> get listens => _listens.stream;
 
   static Uri parseServerUrl(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -129,6 +135,9 @@ class NavidromeClient {
           _ => 'Navidrome could not complete the request.',
         }, authenticationRejected: code == 40 || code == 41 || code == 44);
       }
+      serverType = envelope['type'] as String? ?? serverType;
+      serverVersion = envelope['serverVersion'] as String? ?? serverVersion;
+      openSubsonic = envelope['openSubsonic'] == true || openSubsonic;
       return envelope;
     } on NavidromeException {
       rethrow;
@@ -140,6 +149,79 @@ class NavidromeClient {
   }
 
   Future<void> ping() async => _request('ping');
+
+  /// No retries: a lost response may follow a successfully recorded listen.
+  Future<void> scrobble(String trackId, DateTime startedAt) async {
+    if (_closed) throw const NavidromeException('This connection has closed.');
+    await _request('scrobble', {
+      'id': trackId,
+      'time': '${startedAt.toUtc().millisecondsSinceEpoch}',
+      'submission': 'true',
+    });
+    if (!_closed) _listens.add(null);
+  }
+
+  Future<Track> song(String id) async {
+    final data = await _request('getSong', {'id': id});
+    try {
+      return Track.fromJson(data['song'] as Map<String, dynamic>);
+    } on Object {
+      throw const NavidromeException('The server returned an invalid song.');
+    }
+  }
+
+  Future<List<Track>> radioTracks({
+    required bool Function() cancelled,
+    void Function(int)? onProgress,
+  }) async {
+    final songs = <String, Track>{};
+    var offset = 0;
+    while (!cancelled()) {
+      final page = await search(
+        '',
+        browse: true,
+        albumCount: 0,
+        songOffset: offset,
+        songCount: 500,
+      );
+      if (cancelled()) return [];
+      if (page.tracks.isEmpty) break;
+      final before = songs.length;
+      for (final track in page.tracks) {
+        songs[track.id] = track;
+      }
+      if (songs.length == before) {
+        throw const NavidromeException(
+          'The server repeated a song page. Recent Radio could not load the complete library.',
+        );
+      }
+      offset += page.tracks.length;
+      onProgress?.call(songs.length);
+      // Continue through short pages: servers may cap the requested page size.
+    }
+    if (cancelled()) return [];
+    if (songs.isNotEmpty && !songs.values.any((s) => s.addedAt != null)) {
+      throw const NavidromeException(
+        'This server did not provide track addition dates for Recent Radio.',
+      );
+    }
+    if (songs.values.any(
+      (s) =>
+          s.playCount > 0 && s.lastPlayedAt == null && !s.invalidActivityDates,
+    )) {
+      throw const NavidromeException(
+        'This server returned play counts without play dates. Recent Radio needs both track addition and listening dates.',
+      );
+    }
+    if (songs.isNotEmpty &&
+        !songs.values.any((s) => s.lastPlayedAt != null) &&
+        !(serverType?.toLowerCase() == 'navidrome' && openSubsonic)) {
+      throw const NavidromeException(
+        'Listening dates could not be verified on this server. Recent Radio needs OpenSubsonic track history.',
+      );
+    }
+    return songs.values.toList();
+  }
 
   Future<List<Album>> albums({
     int offset = 0,
@@ -395,5 +477,9 @@ class NavidromeClient {
       (await _get(_endpoint('getCoverArt', {'id': id, 'size': '400'})))
           .bodyBytes;
 
-  void close() => _http.close();
+  void close() {
+    _closed = true;
+    _http.close();
+    unawaited(_listens.close());
+  }
 }

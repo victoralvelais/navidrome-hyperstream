@@ -1,7 +1,15 @@
 # Navidrome Hyperstream: draft roadmap
 
-Status: server import prototype and first Flutter client slice; feasibility validation ongoing.
+Status: UI/multiple-server release complete at 0.1.0+14; Recent Radio preview and
+counted listening implemented for the next test release. Server imports remain
+an isolated prototype; custom mixing and provider architecture remain later work.
 Updated: November 11, 2026.
+
+Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
+Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
+The follow-up navigation correction puts grouped settings directly on Home,
+with Library in the middle and Search on the right. Continue producing paired
+iOS sideload and Windows releases for user testing as milestones are completed.
 
 ## Product direction
 
@@ -25,9 +33,8 @@ Confirmed decisions:
 - Library output: MP3 at 320 kbps. Discard the downloaded FLAC source after the
   converted file passes validation and is safely published to the library.
   Original files may remain temporarily for recovery from a failed import.
-- Flutter is selected for the first shared-client prototype. The final decision
-  depends on native playback validation, especially on a real iPhone. SwiftUI
-  remains the Apple-first alternative if a separate Windows client is acceptable.
+- Flutter/Dart is the selected shared client, with small native bridges where
+  needed. Continue device validation within this architecture.
 - GitHub Actions is selected for hosted macOS builds. Begin with manually
   triggered unsigned release IPAs and local signing through AltStore Classic/
   AltServer on Windows. Hosted compilation and packaging are verified; device
@@ -37,7 +44,8 @@ Confirmed decisions:
 
 Proposed MVP boundaries:
 
-- One user, one Navidrome server, and a plugin-based acquisition backend. Validate
+- Multiple securely saved Navidrome accounts, one active server at a time, and
+  an optional plugin-based acquisition backend. Validate
   a representative metadata/download provider combination first, then expand the
   tested compatibility list without hardcoding the client to those services.
 - Direct native audio playback from Navidrome through OpenSubsonic.
@@ -67,8 +75,9 @@ Apply these patterns to Hyperstream's existing Apple Music-inspired direction:
   previous/restart, play/pause, next, volume, and subtle progress. Keep navigation labels and reserve enough
   content padding that neither floating surface obscures the last item.
 - **Library:** stronger headings, spacious cover grids, and easy access to favorite
-  songs and playlists. Home reads Navidrome's recently played albums; submission
-  of new listening-history scrobbles remains separate work.
+  songs and playlists. Search/Discover reads server history. Hyperstream now
+  submits qualifying listens, and Recent Radio previews added/played songs.
+  Home houses settings.
 - **iPad and Windows:** adapt navigation to a sidebar and make use of the existing
   split layout; give playback and the queue space alongside browsing.
 - **Appearance:** retain Hyperstream's rose accent, refine dark surfaces using
@@ -83,7 +92,7 @@ The [consolidated concept](design/concepts/2026-11-11/selected-direction-v1.png)
 and [interaction specification](design/concepts/2026-11-11/selected-direction.json)
 record that direction. The first implementation of this selection includes:
 
-- Home/Search/Library navigation, with sidebar navigation on wide windows.
+- Home/Library/Search navigation, with sidebar navigation on wide windows.
 - Library categories, artist albums, grouped search with filters and cover grids.
 - Immersive album, playlist and player backgrounds; unboxed player transport.
 - A persistent previous/restart button: restart at three seconds or later, go
@@ -100,7 +109,7 @@ device acceptance. Lyrics, network casting, queue reordering, shuffle/repeat and
 restoration require separate functional work. Concept artwork/counts are examples;
 the app renders Navidrome content and does not invent library totals.
 
-The follow-up revision uses grouped Settings pages from Home, multiple securely
+The follow-up revision uses grouped settings directly on Home, multiple securely
 saved Navidrome connections, and a Discover landing page inside Search. Discover
 offers server genres, recent additions, most-played albums, and random selections.
 List titles use heavier, tighter typography; pull-to-refresh replaces refresh
@@ -292,8 +301,9 @@ after milestone 0 establishes the difficult integrations.
 
 ## First usable experience
 
-Start with Library, Search, Imports, and Settings, with a persistent mini-player
-and a full Now Playing view. Search identifies whether a result is already in
+Keep Home, Library, and Search, with a persistent mini-player and a full Now
+Playing view. Home contains settings. Future import controls and job progress
+appear when a companion is connected. Search identifies whether a result is already in
 Navidrome or comes from an external service. External results expose Play when
 supported and Add to library for a permanent import. Imports show progress and
 specific recoverable errors.
@@ -340,8 +350,8 @@ actual providers and release features at milestone 6. See
   companion write to a dedicated import destination?
 - Does the phone handle longer listening sessions, interruptions, and mixed audio
   reliably? Basic sideloaded playback is confirmed; paid signing/TestFlight is deferred.
-- Does Flutter's playback/platform spike satisfy reliability and manual
-  maintainability, or is an Apple-native client with a later Windows port preferable?
+- Which remaining native playback/interruption cases need fixes in the shared
+  Flutter client and its platform bridges?
 - Which listening features are release requirements: gapless, AirPlay, CarPlay,
   lossless playback, or others?
 

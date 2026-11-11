@@ -9,6 +9,7 @@ class FakePlayer extends Fake implements AudioPlayer {
   final errors = StreamController<PlayerException>.broadcast(sync: true);
   final loaded = <List<AudioSource>>[];
   Completer<void>? loadGate;
+  Completer<void>? seekGate;
   bool failNextLoad = false;
   bool failVolume = false;
   int playCalls = 0;
@@ -105,6 +106,7 @@ class FakePlayer extends Fake implements AudioPlayer {
   @override
   Future<void> seek(Duration? position, {int? index}) async {
     seekCalls++;
+    if (seekGate != null) await seekGate!.future;
     this.position = position ?? Duration.zero;
     currentIndex = index ?? currentIndex;
     processingState = ProcessingState.ready;
