@@ -2,9 +2,11 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
+import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import 'cover_art.dart';
+import 'collection_actions.dart';
 
 class AlbumTracks extends StatefulWidget {
   const AlbumTracks({
@@ -13,11 +15,13 @@ class AlbumTracks extends StatefulWidget {
     required this.album,
     required this.onPlay,
     required this.playback,
+    this.collections,
   });
   final NavidromeClient client;
   final Album album;
   final void Function(List<Track>, int) onPlay;
   final PlaybackService playback;
+  final LibraryCollections? collections;
 
   @override
   State<AlbumTracks> createState() => _AlbumTracksState();
@@ -114,6 +118,11 @@ class _AlbumTracksState extends State<AlbumTracks> {
                             : 'Play album',
                       ),
                     ),
+                    if (widget.collections != null)
+                      FavoriteButton(
+                        collections: widget.collections!,
+                        album: widget.album,
+                      ),
                   ],
                 ),
               );
@@ -138,8 +147,15 @@ class _AlbumTracksState extends State<AlbumTracks> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              trailing: Text(
-                '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+                  ),
+                  if (widget.collections != null)
+                    SongActions(collections: widget.collections!, song: track),
+                ],
               ),
               onTap: () => widget.onPlay(tracks, index - 1),
             );

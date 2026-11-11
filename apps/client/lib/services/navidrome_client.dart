@@ -206,6 +206,105 @@ class NavidromeClient {
     }
   }
 
+  Future<List<MusicPlaylist>> playlists() async {
+    final data = await _request('getPlaylists');
+    try {
+      final container = data['playlists'] as Map<String, dynamic>;
+      return (container['playlist'] as List<dynamic>? ?? [])
+          .map((item) => MusicPlaylist.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on Object {
+      throw const NavidromeException(
+        'The server returned an invalid playlist list.',
+      );
+    }
+  }
+
+  MusicPlaylist _playlistFrom(Map<String, dynamic> data) {
+    try {
+      return MusicPlaylist.fromJson(data['playlist'] as Map<String, dynamic>);
+    } on Object {
+      throw const NavidromeException(
+        'The server returned an invalid playlist.',
+      );
+    }
+  }
+
+  Future<MusicPlaylist> playlist(String id) async =>
+      _playlistFrom(await _request('getPlaylist', {'id': id}));
+
+  Future<MusicPlaylist> createPlaylist(String name, {String? songId}) async {
+    if (name.trim().isEmpty) {
+      throw const NavidromeException('Enter a playlist name.');
+    }
+    return _playlistFrom(
+      await _request('createPlaylist', {
+        'name': name.trim(),
+        'songId': ?songId,
+      }),
+    );
+  }
+
+  Future<void> renamePlaylist(String id, String name) async {
+    if (name.trim().isEmpty) {
+      throw const NavidromeException('Enter a playlist name.');
+    }
+    await _request('updatePlaylist', {'playlistId': id, 'name': name.trim()});
+  }
+
+  Future<void> addToPlaylist(String id, String songId) async {
+    await _request('updatePlaylist', {'playlistId': id, 'songIdToAdd': songId});
+  }
+
+  Future<void> removeFromPlaylist(MusicPlaylist snapshot, int index) async {
+    if (index < 0 || index >= snapshot.tracks.length) {
+      throw const NavidromeException('This song is no longer in the playlist.');
+    }
+    // Subsonic removes by zero-based position, not song ID. Recheck before
+    // editing so a stale screen does not remove a different song or duplicate.
+    // The protocol offers no atomic compare-and-update across other clients.
+    final current = await playlist(snapshot.id);
+    if (current.tracks.length != snapshot.tracks.length ||
+        current.tracks.indexed.any(
+          (entry) => entry.$2.id != snapshot.tracks[entry.$1].id,
+        )) {
+      throw const NavidromeException(
+        'This playlist changed. Refresh it before removing songs.',
+      );
+    }
+    await _request('updatePlaylist', {
+      'playlistId': snapshot.id,
+      'songIndexToRemove': '$index',
+    });
+  }
+
+  Future<LibrarySearchResults> favorites() async {
+    final data = await _request('getStarred2');
+    try {
+      final container = data['starred2'] as Map<String, dynamic>;
+      return LibrarySearchResults(
+        albums: (container['album'] as List<dynamic>? ?? [])
+            .map((item) => Album.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        tracks: (container['song'] as List<dynamic>? ?? [])
+            .map((item) => Track.fromJson(item as Map<String, dynamic>))
+            .toList(),
+      );
+    } on Object {
+      throw const NavidromeException('The server returned invalid favorites.');
+    }
+  }
+
+  Future<void> setFavorite(
+    String id, {
+    required bool album,
+    required bool favorite,
+  }) async {
+    await _request(favorite ? 'star' : 'unstar', {
+      album ? 'albumId' : 'id': id,
+    });
+  }
+
   // These URLs are passed only to the native player, never persisted or logged.
   // Request the existing file without a second lossy transcode.
   Uri streamUri(String trackId) =>

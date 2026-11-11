@@ -4,9 +4,11 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
+import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../library/cover_art.dart';
+import '../library/collection_actions.dart';
 
 enum _SearchPage { all, albums, songs }
 
@@ -16,11 +18,13 @@ class LibrarySearch extends StatefulWidget {
     required this.client,
     required this.playback,
     required this.onAlbumSelected,
+    this.collections,
   });
 
   final NavidromeClient client;
   final PlaybackService playback;
   final ValueChanged<Album> onAlbumSelected;
+  final LibraryCollections? collections;
 
   @override
   State<LibrarySearch> createState() => _LibrarySearchState();
@@ -215,7 +219,12 @@ class _LibrarySearchState extends State<LibrarySearch> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
+                      trailing: widget.collections == null
+                          ? const Icon(Icons.chevron_right_rounded)
+                          : FavoriteButton(
+                              collections: widget.collections!,
+                              album: album,
+                            ),
                       onTap: () {
                         FocusScope.of(context).unfocus();
                         widget.onAlbumSelected(album);
@@ -259,7 +268,12 @@ class _LibrarySearchState extends State<LibrarySearch> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: const Icon(Icons.play_arrow_rounded),
+                      trailing: widget.collections == null
+                          ? const Icon(Icons.play_arrow_rounded)
+                          : SongActions(
+                              collections: widget.collections!,
+                              song: song,
+                            ),
                       onTap: () {
                         FocusScope.of(context).unfocus();
                         // Snapshot the loaded results so later paging/searching

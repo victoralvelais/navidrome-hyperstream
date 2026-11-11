@@ -19,6 +19,29 @@ Artist browsing and external-provider search remain future work.
 This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
 
+## Playlists and favorites
+
+- The **Playlists** tab browses your Navidrome playlists and starts native playback
+  in their saved order. Create and rename your own playlists; song menus let you
+  add songs or remove entries from a playlist you own. Shared playlists are playable.
+- The **Favorites** tab shows favorite albums and songs, with a play-all action
+  for songs. Use the heart on albums and Now Playing, or a song's menu, to change
+  favorites. Updates are saved in Navidrome and appear only after it confirms them.
+- Song menus are available in albums, search, favorites, playlists, and Now Playing.
+  Adding to a new playlist creates it with the selected song in one request.
+- Editing a saved playlist leaves the current playback queue alone. Removing an
+  entry checks the latest song order first, including duplicate songs. The API has
+  no atomic version check, so simultaneous edits in other clients can still race.
+- Disconnect is under **Settings → Disconnect from server**. It stops playback
+  and returns to sign-in; there is no logout button in the main toolbar.
+
+These features use [getPlaylists](https://opensubsonic.netlify.app/docs/endpoints/getplaylists/),
+[updatePlaylist](https://opensubsonic.netlify.app/docs/endpoints/updateplaylist/),
+and [star](https://opensubsonic.netlify.app/docs/endpoints/star/) through the same
+authenticated Navidrome client. Artist favorites, playlist reordering, and playlist
+deletion are not exposed yet. Tests use a local API fixture; live server/device
+acceptance for these new features remains open.
+
 ## Volume, mixing, and appearance
 
 - Tap the mini player's speaker button to show the independent music volume
@@ -128,6 +151,10 @@ accepts the installed Visual Studio Build Tools 2019 and Windows 10 SDK.
 | Sign-in form and validation | `lib/features/connect/connection_screen.dart` |
 | Album grid, pagination, responsive layout | `lib/features/library/library_screen.dart` |
 | Library search, debounce, result paging | `lib/features/search/library_search.dart` |
+| Shared server-backed playlists and favorites | `lib/services/library_collections.dart` |
+| Playlist browsing, editing, and song picker | `lib/features/playlists/` |
+| Favorite album/song collection | `lib/features/favorites/favorites_screen.dart` |
+| Song menus and favorite buttons | `lib/features/library/collection_actions.dart` |
 | Track list and album selection | `lib/features/library/album_tracks.dart` |
 | Artwork loading | `lib/features/library/cover_art.dart` |
 | Mini player, Now Playing, and seeking | `lib/features/player/player_controls.dart` |
@@ -231,5 +258,5 @@ First manual acceptance checks: connect to the real server, play and seek MP3,
 FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and
 restore network access, and resize the window. On iPhone also check screen lock,
 Control Center, track transitions while locked, headphone removal, interruptions,
-and background recovery. Saved credentials, playlists, favorites, queue
+and background recovery. Saved credentials, queue
 restoration, system artwork, offline mode, and Mornye integration come later.

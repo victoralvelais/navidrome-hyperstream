@@ -1,9 +1,12 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/library.dart';
+import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../library/cover_art.dart';
+import '../library/collection_actions.dart';
 import 'volume_controls.dart';
 
 String _time(Duration value) =>
@@ -14,9 +17,11 @@ class PlayerControls extends StatefulWidget {
     super.key,
     required this.playback,
     required this.client,
+    this.collections,
   });
   final PlaybackService playback;
   final NavidromeClient client;
+  final LibraryCollections? collections;
 
   @override
   State<PlayerControls> createState() => _PlayerControlsState();
@@ -30,8 +35,11 @@ class _PlayerControlsState extends State<PlayerControls> {
     isScrollControlled: true,
     useSafeArea: true,
     constraints: const BoxConstraints(maxWidth: 560),
-    builder: (context) =>
-        _NowPlaying(playback: widget.playback, client: widget.client),
+    builder: (context) => _NowPlaying(
+      playback: widget.playback,
+      client: widget.client,
+      collections: widget.collections,
+    ),
   );
 
   @override
@@ -152,9 +160,24 @@ class _PlayerControlsState extends State<PlayerControls> {
 }
 
 class _NowPlaying extends StatelessWidget {
-  const _NowPlaying({required this.playback, required this.client});
+  const _NowPlaying({
+    required this.playback,
+    required this.client,
+    this.collections,
+  });
   final PlaybackService playback;
   final NavidromeClient client;
+  final LibraryCollections? collections;
+
+  Track _track(MediaItem item) => Track(
+    id: item.id,
+    title: item.title,
+    artist: item.artist ?? 'Unknown artist',
+    album: item.album ?? 'Unknown album',
+    duration: item.duration ?? Duration.zero,
+    coverArt: item.extras?['coverArtId'] as String?,
+    starred: item.extras?['starred'] as bool? ?? false,
+  );
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -179,6 +202,8 @@ class _NowPlaying extends StatelessWidget {
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 ),
+                if (item != null && collections != null)
+                  FavoriteButton(collections: collections!, song: _track(item)),
               ],
             ),
             const SizedBox(height: 24),
@@ -202,9 +227,12 @@ class _NowPlaying extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: _TrackLabels(item: item, large: true),
+            Row(
+              children: [
+                Expanded(child: _TrackLabels(item: item, large: true)),
+                if (item != null && collections != null)
+                  SongActions(collections: collections!, song: _track(item)),
+              ],
             ),
             const SizedBox(height: 16),
             _SeekBar(

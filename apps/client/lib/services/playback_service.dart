@@ -148,7 +148,10 @@ class PlaybackService extends BaseAudioHandler {
                 artist: track.artist,
                 album: track.album,
                 duration: track.duration,
-                extras: {'coverArtId': ?(track.coverArt ?? coverArtId)},
+                extras: {
+                  'coverArtId': ?(track.coverArt ?? coverArtId),
+                  'starred': track.starred,
+                },
               ),
             )
             .toList();

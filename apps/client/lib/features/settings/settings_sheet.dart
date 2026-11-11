@@ -3,18 +3,23 @@ import 'package:flutter/material.dart';
 import '../../services/playback_service.dart';
 import '../player/volume_controls.dart';
 
-Future<void> showSettings(BuildContext context, PlaybackService playback) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      constraints: const BoxConstraints(maxWidth: 560),
-      builder: (context) => SettingsSheet(playback: playback),
-    );
+Future<void> showSettings(
+  BuildContext context,
+  PlaybackService playback, {
+  VoidCallback? onDisconnect,
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  constraints: const BoxConstraints(maxWidth: 560),
+  builder: (context) =>
+      SettingsSheet(playback: playback, onDisconnect: onDisconnect),
+);
 
 class SettingsSheet extends StatelessWidget {
-  const SettingsSheet({super.key, required this.playback});
+  const SettingsSheet({super.key, required this.playback, this.onDisconnect});
   final PlaybackService playback;
+  final VoidCallback? onDisconnect;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -102,6 +107,20 @@ class SettingsSheet extends StatelessWidget {
                 Text(
                   message,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              if (onDisconnect != null) ...[
+                const SizedBox(height: 28),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Disconnect from server'),
+                  subtitle: const Text('Stop playback and return to sign-in.'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onDisconnect!();
+                  },
                 ),
               ],
             ],

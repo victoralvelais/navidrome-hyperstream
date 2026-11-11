@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
+import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../player/player_controls.dart';
+import '../favorites/favorites_screen.dart';
+import '../playlists/playlists_screen.dart';
+import '../playlists/playlist_tracks.dart';
 import '../search/library_search.dart';
 import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
@@ -28,6 +32,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final List<Album> _albums = [];
   final _browseKey = GlobalKey();
   Album? _selected;
+  String? _playlistId;
+  late final LibraryCollections _collections;
+  bool get _hasSelection => _selected != null || _playlistId != null;
   int _section = 0;
   bool _busy = false;
   bool _more = true;
@@ -37,8 +44,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
+    _collections = LibraryCollections(widget.client);
     _load();
   }
+
+  @override
+  void dispose() {
+    _collections.dispose();
+    super.dispose();
+  }
+
+  void _selectAlbum(Album album) => setState(() {
+    _selected = album;
+    _playlistId = null;
+  });
+  void _back() => setState(() {
+    _selected = null;
+    _playlistId = null;
+  });
 
   Future<void> _load({bool refresh = false}) async {
     if (_busy) return;
@@ -112,7 +135,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 final album = _albums[index];
                 return InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => setState(() => _selected = album),
+                  onTap: () => _selectAlbum(album),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -173,18 +196,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ],
   );
 
-  Widget _trackPane() => AlbumTracks(
-    key: ValueKey(_selected!.id),
-    client: widget.client,
-    album: _selected!,
-    playback: widget.playback,
-    onPlay: (tracks, index) => widget.playback.playAlbum(
-      widget.client,
-      tracks,
-      index,
-      coverArtId: _selected!.coverArt,
-    ),
-  );
+  Widget _trackPane() => _playlistId != null
+      ? PlaylistTracks(
+          key: ValueKey('playlist:$_playlistId'),
+          playlistId: _playlistId!,
+          collections: _collections,
+          playback: widget.playback,
+        )
+      : AlbumTracks(
+          key: ValueKey(_selected!.id),
+          client: widget.client,
+          album: _selected!,
+          playback: widget.playback,
+          collections: _collections,
+          onPlay: (tracks, index) => widget.playback.playAlbum(
+            widget.client,
+            tracks,
+            index,
+            coverArtId: _selected!.coverArt,
+          ),
+        );
 
   // Keep browsing/search state alive while opening albums or changing tabs.
   Widget _browsePane() => IndexedStack(
@@ -195,25 +226,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
       LibrarySearch(
         client: widget.client,
         playback: widget.playback,
-        onAlbumSelected: (album) => setState(() => _selected = album),
+        collections: _collections,
+        onAlbumSelected: _selectAlbum,
+      ),
+      PlaylistsScreen(
+        collections: _collections,
+        onSelected: (playlist) => setState(() {
+          _playlistId = playlist.id;
+          _selected = null;
+        }),
+      ),
+      FavoritesScreen(
+        collections: _collections,
+        playback: widget.playback,
+        onAlbumSelected: _selectAlbum,
       ),
     ],
   );
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: _selected == null,
+    canPop: !_hasSelection,
     onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) setState(() => _selected = null);
+      if (!didPop) _back();
     },
     child: Scaffold(
       appBar: AppBar(
-        leading: _selected == null
+        leading: !_hasSelection
             ? null
             : IconButton(
-                tooltip: _section == 0 ? 'Back to albums' : 'Back to search',
+                tooltip: [
+                  'Back to albums',
+                  'Back to search',
+                  'Back to playlists',
+                  'Back to favorites',
+                ][_section],
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _selected = null),
+                onPressed: _back,
               ),
         title: const Text('Hyperstream'),
         actions: [
@@ -222,7 +271,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             icon: const Icon(Icons.tune_rounded),
             onPressed: _disconnecting
                 ? null
-                : () => showSettings(context, widget.playback),
+                : () => showSettings(
+                    context,
+                    widget.playback,
+                    onDisconnect: _disconnect,
+                  ),
           ),
           IconButton(
             tooltip: 'Refresh albums',
@@ -230,11 +283,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: _busy || _disconnecting || _section != 0
                 ? null
                 : () => _load(refresh: true),
-          ),
-          IconButton(
-            tooltip: 'Disconnect',
-            icon: const Icon(Icons.logout),
-            onPressed: _disconnecting ? null : _disconnect,
           ),
           const SizedBox(width: 8),
         ],
@@ -259,7 +307,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .surfaceContainer,
-                              child: _selected == null
+                              child: !_hasSelection
                                   ? const Center(
                                       child: Padding(
                                         padding: EdgeInsets.all(32),
@@ -272,7 +320,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                             ),
                                             SizedBox(height: 20),
                                             Text(
-                                              'Choose an album',
+                                              'Choose something to play',
                                               textAlign: TextAlign.center,
                                             ),
                                             SizedBox(height: 8),
@@ -293,17 +341,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        Offstage(
-                          offstage: _selected != null,
-                          child: _browsePane(),
-                        ),
-                        if (_selected != null) _trackPane(),
+                        Offstage(offstage: _hasSelection, child: _browsePane()),
+                        if (_hasSelection) _trackPane(),
                       ],
                     );
                   },
                 ),
               ),
-              PlayerControls(playback: widget.playback, client: widget.client),
+              PlayerControls(
+                playback: widget.playback,
+                client: widget.client,
+                collections: _collections,
+              ),
             ],
           ),
         ),
@@ -317,7 +366,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 setState(() {
                   _section = index;
                   _selected = null;
+                  _playlistId = null;
                 });
+                if (index == 2) _collections.refreshPlaylists();
+                if (index == 3) _collections.refreshFavorites();
               },
         destinations: const [
           NavigationDestination(
@@ -328,6 +380,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           NavigationDestination(
             icon: Icon(Icons.search_rounded),
             label: 'Search',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.queue_music_rounded),
+            label: 'Playlists',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.favorite_border_rounded),
+            selectedIcon: Icon(Icons.favorite_rounded),
+            label: 'Favorites',
           ),
         ],
       ),

@@ -298,6 +298,12 @@ volume/mute, pause, seek, automatic track transition, and reset. The user report
 working Windows and sideloaded iPhone playback; broader acceptance checks remain.
 See the [client guide](apps/client/README.md) for setup and remaining checks.
 
+Playlists now support browsing, native queue playback, creation, renaming, and
+adding/removing songs from owned playlists. Favorites sync albums and songs with
+Navidrome and are accessible from the library, search, and player. Disconnect is
+available in Settings. API-fixture and widget tests cover these features; live
+Navidrome/device acceptance remains open.
+
 Docker verification was prepared but execution was not approved, so container
 behavior remains unverified. No live provider integration, Navidrome indexing,
 comprehensive real-library acceptance, or new iOS mixing validation is complete.
