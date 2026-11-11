@@ -247,6 +247,12 @@ credentials in CI are needed for this route. The
 successfully compiled and packaged the IPA, and the downloaded archive and
 checksum were verified. The user has since confirmed that the sideloaded iPhone
 app works; the new volume/mixing controls still need their own device check.
+
+From the repository root, `python tools/release.py build` now builds both iOS and
+Windows in GitHub Actions and collects a matching versioned pair in `releases/`.
+`python tools/release.py fetch --latest` downloads an existing successful pair.
+The Windows package is a release build with its required DLLs and data; the iOS
+IPA remains unsigned. See the guide for folder layout, versions, and authentication.
 Startup checks include unit/widget tests and a native Windows startup test.
 The optional iOS simulator check remains experimental after hosted setup/build
 timeouts; it does not yet establish a successful simulator launch.

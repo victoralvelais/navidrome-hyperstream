@@ -8,6 +8,7 @@ __pycache__/
 
 # Local tooling and iOS signing/build artifacts.
 .tools/
+releases/
 *.ipa
 *.p12
 *.p8

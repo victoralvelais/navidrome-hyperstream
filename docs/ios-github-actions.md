@@ -1,9 +1,75 @@
-# Build iPhone/iPad releases from Windows with GitHub Actions
+# Build iPhone/iPad and Windows releases with GitHub Actions
 
 The workflow is [`.github/workflows/ios-sideload.yml`](../.github/workflows/ios-sideload.yml).
-It runs on demand and produces an **unsigned release IPA for physical devices**.
+It runs on demand and produces an **unsigned release IPA for physical devices**
+and a **Windows x64 release bundle** from the same source commit.
 GitHub supplies macOS and Xcode; your Windows PC handles editing and sideloading.
 No Apple account, signing certificate, or Navidrome credential goes into Actions.
+
+## Build and download automatically
+
+After committing and pushing changes, run this from the repository root:
+
+```powershell
+python tools/release.py build
+```
+
+The command checks that local HEAD matches the pushed branch, dispatches **Build
+app releases**, waits for both jobs, downloads their artifacts, and validates their
+commit, versions, checksums, and bundle contents before publishing them locally.
+It does not commit or push source for you. Python 3.11+ and Git are enough on the
+downloading PC; Flutter, Xcode, and Visual Studio run on the hosted builders.
+
+Both apps use the version in `apps/client/pubspec.yaml` and the Actions run number
+as their build number. For example:
+
+```text
+releases/
+  latest.json
+  v0.1.0+7-r1/
+    hyperstream-0.1.0+7-ios-unsigned.ipa
+    hyperstream-0.1.0+7-windows-x64.zip
+    windows/
+      hyperstream_client.exe
+      flutter_windows.dll
+      ...native plugin and C++ runtime DLLs...
+      data/
+    release.json
+    SHA256SUMS.txt
+```
+
+Open the EXE **inside its Windows folder**. The ZIP includes the complete folder
+for copying elsewhere, including the redistributable C++ runtime from Visual Studio.
+Flutter's [Windows distribution guide](https://docs.flutter.dev/platform-integration/windows/building#building-your-own-zip-file-for-windows)
+explains why the EXE needs its DLLs and data alongside it. These are unsigned
+personal-use packages, not an installer or an App Store submission.
+
+`latest.json` contains a `directory` relative to `releases/`; its `ipa`,
+`windows_exe`, and `windows_zip` paths are relative to that version directory.
+Old versions are retained. A failed build or download leaves the previous latest
+pointer alone. Re-downloading the same run verifies existing files and refuses to
+overwrite changed files. `releases/` is ignored by Git.
+
+To collect existing artifacts, including after closing the build command:
+
+```powershell
+python tools/release.py fetch --latest
+python tools/release.py fetch --run-id 123456789
+```
+
+The run-specific command also waits if that run is still building. Fetch selects
+both platforms from the same run attempt. Older iOS-only workflow runs cannot be
+collected as pairs. Artifact expiry on GitHub does not remove local copies.
+
+Authentication uses `GH_TOKEN`/`GITHUB_TOKEN` if set, otherwise the cached GitHub
+credential from Git's credential helper. Fine-grained tokens need Actions write
+to dispatch, Actions read to download, and Contents read to verify the commit.
+Tokens remain in memory and are never forwarded to artifact-storage redirects.
+The [workflow dispatch API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+returns the new run ID; a unique request identifier handles older empty responses.
+
+This command automates collection while it runs. It does not install a background
+service, schedule downloads, build on every push, or publish a GitHub Release.
 
 Status: [hosted run 2](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
 successfully compiled, packaged, and uploaded the unsigned IPA from commit
@@ -67,7 +133,7 @@ the disposable Python library, environment files, and signing credentials. Keep
 ## Run and download
 
 1. Open the repository's **Actions** tab.
-2. Select **Build iOS for sideloading**, then **Run workflow**.
+2. Select **Build app releases**, then **Run workflow**.
 3. Select the branch and start the run. The workflow must first exist on the
    default branch for the manual button to appear.
 4. Follow the job's individual steps. The first run also downloads Flutter and
@@ -76,6 +142,10 @@ the disposable Python library, environment files, and signing credentials. Keep
    **Artifacts** on the run's summary page.
 6. Extract the downloaded ZIP. The installable input is the **`.ipa` inside**;
    the outer GitHub artifact ZIP is not an IPA.
+
+The Windows job uploads `hyperstream-windows-x64-RUN-ATTEMPT`. Its artifact
+contains the Windows application ZIP, checksum, and release manifest. The local
+release command handles both layers of ZIP packaging automatically.
 
 Artifacts expire after seven days to limit retained storage. Start another run
 when needed. Re-running a workflow uses the same source revision; push your fixes

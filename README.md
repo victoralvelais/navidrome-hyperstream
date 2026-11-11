@@ -55,12 +55,25 @@ Enter credentials in the app. See the [client guide](apps/client/README.md) for
 build/test commands, the file map, and iOS requirements. The client does not yet
 connect to the acquisition worker.
 
-## Build for iPhone and iPad
+## Build and collect iPhone, iPad, and Windows releases
 
 The manual [GitHub Actions workflow](.github/workflows/ios-sideload.yml) builds an
-unsigned iOS release on a standard macOS runner and packages it for local signing
-with AltStore Classic/AltServer. It requires no Apple credentials in GitHub.
-See the [setup and sideloading guide](docs/ios-github-actions.md).
+unsigned iOS release on macOS and a Windows x64 release on Windows. From a clean,
+pushed checkout, this command starts both builds, waits, verifies, and downloads:
+
+```powershell
+python tools/release.py build
+```
+
+Packages land in `releases/vVERSION+BUILD-rATTEMPT/`, with the IPA, a Windows ZIP,
+an extracted `windows/hyperstream_client.exe` beside its DLLs/data, checksums, and
+commit/run metadata. `releases/latest.json` points to the newest collected pair.
+Existing versions stay intact and release binaries are ignored by Git. To download
+the latest completed pair without rebuilding, use `python tools/release.py fetch --latest`.
+
+The script uses Python's standard library and your existing GitHub Git login.
+iOS still needs local signing with AltStore Classic/AltServer; no Apple credentials
+go into GitHub. See the [release and sideloading guide](docs/ios-github-actions.md).
 
 The [verified hosted build](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
 compiled, packaged, and uploaded an unsigned iOS release. The downloaded archive

@@ -1,9 +1,14 @@
-name: Build iOS for sideloading
+name: Build app releases
+run-name: Release ${{ github.ref_name }} ${{ inputs.request_id }}
 
 # Manual while we establish iPhone playback. No automatic builds on every push.
 on:
   workflow_dispatch:
     inputs:
+      request_id:
+        description: Optional identifier supplied by the local release command
+        type: string
+        default: ''
       check_simulator:
         description: Run the experimental iOS simulator startup check (slower)
         type: boolean
@@ -82,6 +87,7 @@ jobs:
             flutter --version
             xcodebuild -version
           } > build/ci/build-info.txt
+          python3 ../../tools/release_artifacts.py ios --output build/ci
 
       - name: Launch app in iOS simulator
         id: simulator
@@ -100,6 +106,7 @@ jobs:
             apps/client/build/ci/hyperstream-ios-unsigned.ipa
             apps/client/build/ci/hyperstream-ios-unsigned.ipa.sha256
             apps/client/build/ci/build-info.txt
+            apps/client/build/ci/release-manifest.json
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
@@ -136,3 +143,60 @@ jobs:
           See `docs/ios-github-actions.md` for installation and device checks.
           SUMMARY
           printf '\nSimulator startup check: **%s**.\n' "$SIMULATOR_RESULT" >> "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    name: Windows x64 release
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: apps/client
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - name: Restore locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Check release tooling
+        working-directory: .
+        run: python -m unittest tests.test_release_tools -v
+
+      - name: Build Windows release
+        run: flutter build windows --release --no-pub --build-number="$env:GITHUB_RUN_NUMBER"
+
+      - name: Bundle Windows runtime and package
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = 'build/windows/x64/runner/Release'
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$visualStudio) { throw 'Visual Studio C++ toolchain was not found.' }
+          $runtime = Get-ChildItem -LiteralPath "$visualStudio/VC/Redist/MSVC" -Directory -Recurse |
+            Where-Object { $_.Name -like 'Microsoft.VC*.CRT' -and $_.Parent.Name -eq 'x64' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$runtime) { throw 'Redistributable x64 C++ runtime was not found.' }
+          Get-ChildItem -LiteralPath $runtime.FullName -Filter '*.dll' | Copy-Item -Destination $bundle
+          $exe = Get-Item -LiteralPath "$bundle/hyperstream_client.exe"
+          $env:HYPERSTREAM_WINDOWS_VERSION = $exe.VersionInfo.FileVersion
+          python ../../tools/release_artifacts.py windows --source $bundle --output build/ci/windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: hyperstream-windows-x64-${{ github.run_number }}-${{ github.run_attempt }}
+          path: apps/client/build/ci/windows/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
