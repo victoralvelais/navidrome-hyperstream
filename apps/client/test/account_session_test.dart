@@ -37,6 +37,104 @@ void main() {
   });
   tearDown(() => session.dispose());
 
+  SavedAccount otherAccount() => SavedAccount(
+    serverUrl: 'https://second.example.com',
+    username: 'other',
+    password: 'synthetic-other-password',
+    name: 'Second library',
+  );
+
+  test(
+    'adding and switching preserve both accounts and remember the selection',
+    () async {
+      await session.connect(exampleAccount(), remember: true);
+      final original = session.client;
+      var stops = 0;
+      await session.connect(
+        otherAccount(),
+        remember: true,
+        beforeSwitch: () async {
+          stops++;
+        },
+      );
+      expect(stops, 1);
+      expect(session.savedServers, hasLength(2));
+      expect((original as AccountClient).closed, isTrue);
+      expect(store.servers!.active!.name, 'Second library');
+      await session.switchServer(
+        exampleAccount().id,
+        beforeSwitch: () async {
+          stops++;
+        },
+      );
+      expect(stops, 2);
+      expect(session.client!.username, 'listener');
+      final restored = AccountSession(
+        store: store,
+        createClient: AccountClient.new,
+      );
+      await restored.restore();
+      expect(restored.savedServers, hasLength(2));
+      expect(restored.client!.username, 'listener');
+      restored.dispose();
+    },
+  );
+
+  test('failed switch keeps the current client and saved selection', () async {
+    await session.connect(exampleAccount(), remember: true);
+    final original = session.client;
+    pingError = const NavidromeException('Could not reach the server.');
+    var stopped = false;
+    await session.connect(
+      otherAccount(),
+      remember: true,
+      beforeSwitch: () async {
+        stopped = true;
+      },
+    );
+    expect(stopped, isFalse);
+    expect(session.client, same(original));
+    expect(session.phase, AccountPhase.connected);
+    expect(store.servers!.activeId, exampleAccount().id);
+    pingError = null;
+    store.saveError = const AccountStorageException('Could not save.');
+    await session.connect(
+      otherAccount(),
+      remember: true,
+      beforeSwitch: () async {},
+    );
+    expect(session.client, same(original));
+    expect(session.savedServers, hasLength(1));
+    expect((original as AccountClient).closed, isFalse);
+  });
+
+  test('disconnect removes only the active server and retained servers remain usable', () async {
+    await session.connect(exampleAccount(), remember: true);
+    await session.connect(otherAccount(), remember: true);
+    await session.disconnect();
+    expect(session.client, isNull);
+    expect(session.savedServers.single.id, exampleAccount().id);
+    expect(store.servers!.activeId, isNull);
+    await session.switchServer(exampleAccount().id);
+    expect(session.client!.username, 'listener');
+  });
+
+  test('temporary sign-in does not erase unrelated servers', () async {
+    await session.connect(exampleAccount(), remember: true);
+    await session.connect(otherAccount(), remember: false);
+    expect(session.savedServers.single.id, exampleAccount().id);
+    expect(store.servers!.activeId, isNull);
+    expect(session.hasSavedAccount, isFalse);
+  });
+
+  test('unreadable vault cannot be overwritten by a new account', () async {
+    store.readError = StateError('private detail');
+    await session.connect(exampleAccount(), remember: true);
+    expect(store.saves, 0);
+    expect(session.client, isNull);
+    expect(session.error, isNot(contains('private detail')));
+  });
+
   test(
     'save only after valid authentication and restore without rewriting',
     () async {

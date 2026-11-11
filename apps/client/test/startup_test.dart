@@ -8,6 +8,7 @@ import 'package:hyperstream_client/main.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/startup_stage.dart';
 import 'package:hyperstream_client/services/account_session.dart';
+import 'package:hyperstream_client/services/account_store.dart';
 import 'package:hyperstream_client/features/library/library_screen.dart';
 
 import 'support/fake_player.dart';
@@ -24,6 +25,48 @@ class ObservedPlayback extends PlaybackService {
 }
 
 void main() {
+  testWidgets('Home settings switches saved servers and rebuilds the library', (
+    tester,
+  ) async {
+    final first = exampleAccount();
+    final second = SavedAccount(
+      serverUrl: 'https://second.example.com',
+      username: 'other',
+      password: 'synthetic',
+      name: 'Second library',
+    );
+    final store = MemoryAccountStore()
+      ..servers = SavedServers(accounts: [first, second], activeId: first.id)
+      ..account = first;
+    final session = AccountSession(
+      store: store,
+      createClient: AccountClient.new,
+    );
+    final playback = ObservedPlayback();
+    await tester.pumpWidget(
+      HyperstreamApp(
+        accountSession: session,
+        initialize: (_) async => playback,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final oldScreen = tester.widget<LibraryScreen>(find.byType(LibraryScreen));
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Servers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Second library'), findsOneWidget);
+    await tester.tap(find.text('Second library'));
+    await tester.pumpAndSettle();
+    expect(session.client!.username, 'other');
+    expect(store.servers!.accounts, hasLength(2));
+    final newScreen = tester.widget<LibraryScreen>(find.byType(LibraryScreen));
+    expect(newScreen.key, isNot(oldScreen.key));
+    expect(playback.queue.value, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
   testWidgets(
     'startup screen is built before native initialization and stalled stage remains visible',
     (tester) async {
@@ -132,9 +175,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LibraryScreen), findsOneWidget);
       expect(find.byType(ConnectionScreen), findsNothing);
-      await tester.tap(find.byTooltip('Settings'));
+      await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Disconnect from server'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Disconnect from server'));
       await tester.pumpAndSettle();
       expect(find.byType(ConnectionScreen), findsOneWidget);

@@ -14,6 +14,11 @@ import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/widgets/glass_settings.dart';
 
 import 'support/fake_player.dart';
+import 'support/account_fakes.dart';
+
+import 'package:hyperstream_client/services/account_session.dart';
+import 'package:hyperstream_client/services/account_store.dart';
+
 import 'support/preview_artwork.dart';
 
 Future<void> main() async {
@@ -73,6 +78,28 @@ Future<void> main() async {
       addTearDown(tester.view.resetDevicePixelRatio);
       final player = FakePlayer();
       final playback = PlaybackService(player: player);
+      final homeAccount = SavedAccount(
+        serverUrl: 'https://music.example.com',
+        username: 'listener',
+        password: 'synthetic',
+        name: 'Home library',
+      );
+      final otherAccount = SavedAccount(
+        serverUrl: 'https://archive.example.com',
+        username: 'listener',
+        password: 'synthetic',
+        name: 'Archive',
+      );
+      final accounts = AccountSession(
+        store: MemoryAccountStore()
+          ..servers = SavedServers(
+            accounts: [homeAccount, otherAccount],
+            activeId: homeAccount.id,
+          ),
+        createClient: AccountClient.new,
+      );
+      await accounts.restore();
+      addTearDown(accounts.dispose);
       final client = NavidromeClient(
         serverUrl: 'https://music.example.com',
         username: 'test',
@@ -96,6 +123,15 @@ Future<void> main() async {
             jsonEncode({
               'subsonic-response': {
                 'status': 'ok',
+                if (request.url.path.endsWith('getGenres.view'))
+                  'genres': {
+                    'genre': [
+                      {'value': 'Electronic', 'albumCount': 3},
+                      {'value': 'Jazz', 'albumCount': 2},
+                      {'value': 'Ambient', 'albumCount': 4},
+                      {'value': 'Soul', 'albumCount': 1},
+                    ],
+                  },
                 if (request.url.path.endsWith('getStarred2.view'))
                   'starred2': {},
                 if (request.url.path.endsWith('getArtist.view'))
@@ -226,6 +262,7 @@ Future<void> main() async {
               ),
             ),
             home: LibraryScreen(
+              accountSession: accounts,
               client: client,
               playback: playback,
               onDisconnect: () async {},
@@ -249,6 +286,25 @@ Future<void> main() async {
       expect(tester.takeException(), isNull);
       // Optional visual review artifacts, excluded from normal CI/golden checks.
       await _capturePreview(tester, viewport.name);
+      expect(find.byTooltip('Refresh albums'), findsNothing);
+      expect(find.byTooltip('Settings'), findsNothing);
+      if (viewport.size.width < 950 && viewport.scale <= 1.2) {
+        await tester.drag(
+          find.byKey(const PageStorageKey('library-hub')),
+          const Offset(0, -300),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Expand navigation'), findsOneWidget);
+        expect(find.byTooltip('Previous track'), findsOneWidget);
+        await _capturePreview(tester, '${viewport.name}-collapsed');
+        await tester.tap(find.byTooltip('Expand navigation'));
+        await tester.pumpAndSettle();
+        await tester.drag(
+          find.byKey(const PageStorageKey('library-hub')),
+          const Offset(0, 600),
+        );
+        await tester.pumpAndSettle();
+      }
       await tester.tap(find.text('Artists'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Northline'));
@@ -336,10 +392,28 @@ Future<void> main() async {
       expect(find.text('Play album'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-album');
-      await tester.tap(find.byTooltip('Settings'));
+      if (find.byTooltip('Expand navigation').evaluate().isNotEmpty) {
+        await tester.tap(find.byTooltip('Expand navigation'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(nav('Home'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Appearance'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await _capturePreview(tester, '${viewport.name}-settings');
+      await tester.ensureVisible(find.text('Servers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Servers'));
+      await tester.pumpAndSettle();
+      expect(find.text('Home library'), findsOneWidget);
+      expect(find.text('Archive'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-servers');
+      await tester.tap(find.byTooltip('Back to settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButtonFormField<ThemeMode>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Follow system').last);
@@ -347,11 +421,15 @@ Future<void> main() async {
       expect(playback.preferences.themeMode, ThemeMode.system);
       expect(tester.takeException(), isNull);
       // Return from settings and search using the same persistent player.
-      Navigator.of(tester.element(find.text('Appearance'))).pop();
+      await tester.tap(find.byTooltip('Back to settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Back to home'));
       await tester.pumpAndSettle();
       await playback.preferences.setThemeMode(viewport.theme);
       await tester.tap(nav('Search'));
       await tester.pumpAndSettle();
+      expect(find.text('Browse your library'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-discover');
       await tester.enterText(find.byType(TextField), 'Search');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();

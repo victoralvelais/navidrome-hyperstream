@@ -56,6 +56,31 @@ class ObservedStorage extends FlutterSecureStorage {
 
 void main() {
   test(
+    'legacy login migrates in place and multiple credentials roundtrip',
+    () async {
+      final legacy = exampleAccount();
+      final storage = ObservedStorage()..value = legacy.encode();
+      final store = SecureAccountStore(storage: storage);
+      final restored = await store.readServers();
+      expect(restored.active!.password, legacy.password);
+      expect(storage.value, legacy.encode());
+      final second = SavedAccount(
+        serverUrl: 'https://second.example.com',
+        username: 'test',
+        password: 'private',
+        name: 'Second',
+      );
+      await store.saveServers(
+        SavedServers(accounts: [legacy, second], activeId: second.id),
+      );
+      final all = await store.readServers();
+      expect(all.accounts, hasLength(2));
+      expect(all.active!.name, 'Second');
+      expect(all.accounts.first.password, legacy.password);
+      expect(all.toString(), isNot(contains('private')));
+    },
+  );
+  test(
     'roundtrip normalizes address and username without changing password',
     () async {
       final storage = ObservedStorage();

@@ -28,9 +28,29 @@ the query and results, including across narrow/wide layout changes. Tapping a so
 replaces the player queue with the currently loaded song results, starting at that
 song. Fetching another page does not change a queue that is already playing.
 Artist and song categories use OpenSubsonic's explicit empty-query browse contract;
-an empty search field sends no request. Artist albums use
+an empty search field sends no search request; Discover loads its own categories. Artist albums use
 [getArtist](https://opensubsonic.netlify.app/docs/endpoints/getartist/).
 External-provider search remains future work.
+
+An empty Search tab opens **Discover**, with artwork browse cards for Recently
+added, Most played (server history), Rediscover (random albums), and the server's
+genres. These use [getAlbumList2](https://opensubsonic.netlify.app/docs/endpoints/getalbumlist2/)
+and [getGenres](https://opensubsonic.netlify.app/docs/endpoints/getgenres/), not an
+external charts feed. Genre/newest/frequent collections page independently;
+random picks refresh as a new selection. Type a query to use normal search.
+
+Pull down at the top of library lists to reload, including empty/short lists.
+There are no refresh toolbar buttons. F5 reloads the focused browsing list on
+Windows. Playlist creation is a small plus beside the Playlists heading.
+
+**Home → Settings** uses grouped Appearance, Playback, and Servers pages.
+Servers supports adding named connections, switching, and removing saved servers.
+Credentials and the selected server live together in secure storage. Existing
+single-account records are read automatically and migrate in place on the next
+save. A switch authenticates before stopping the queue and replacing the library;
+failed authentication keeps the current connection. Disconnect removes only the
+current connection, leaving other saved servers available at sign-in. Temporary
+sign-ins preserve unrelated saved connections but do not restore automatically.
 
 This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
@@ -63,7 +83,7 @@ acceptance for these new features remains open.
 
 ## Volume, mixing, and appearance
 
-- The mini player always shows previous/restart, play/pause, next, and a speaker.
+- The mini player always shows previous/restart, play/pause, and next.
   Previous restarts after three seconds; near the beginning it goes back one track.
   On the first track it restarts. Paused playback stays paused.
 - Tap the speaker to expand a vertical volume capsule, or press and drag up/down
@@ -71,14 +91,18 @@ acceptance for these new features remains open.
   The speaker inside the expanded control mutes/restores the prior audible level.
   This changes Hyperstream's independent music volume. Narrow screens and larger
   text use two mini-player rows to keep transport controls accessible.
+- Scrolling down collapses the mobile dock into one floating row with navigation,
+  the mini player, and Search. Scroll up or expand navigation to restore the full
+  dock and its volume button. Enlarged text keeps the full layout. Dock animation
+  respects reduced motion; list content can scroll behind the glass surfaces.
 - Tap the track title or artwork to open Now Playing, with a larger cover,
   artwork-colored backdrop, transport controls, and seek bar. Seeking commits
   when a drag ends. The queue button shows the actual current queue and lets you
   jump to a track. Volume expands separately, with space reserved beside transport.
-- Open the toolbar's Settings button for light/dark/system appearance and audio
+- Open **Home → Settings** for light/dark/system appearance and audio
   preferences. Volume (including mute), its restore level, mixing, and appearance
   are saved locally with `shared_preferences`. Credentials use separate secure storage.
-- **Settings → Glass effects** switches between translucent and solid controls.
+- **Settings → Appearance → Glass effects** switches between translucent and solid controls.
   High contrast and iOS **Reduce Transparency** automatically use solid surfaces.
   The iOS setting is read through a small native bridge, updates while running,
   and is checked again on resume. An unavailable bridge defaults to solid surfaces.
@@ -91,6 +115,12 @@ acceptance for these new features remains open.
 - Windows already mixes ordinary application audio. The app volume is independent
   of other apps, but Windows communication settings can still lower music during
   calls. Device/system volume remains the overall output limit on every platform.
+- Now Playing groups audio output selection beside volume. iOS embeds Apple's
+  [AVRoutePickerView](https://developer.apple.com/documentation/avkit/avroutepickerview)
+  and uses the system route sheet. Windows lists audio render devices and changes
+  Hyperstream's player output through the [local plugin extension](packages/just_audio_windows/README.md).
+  This does not implement Chromecast, Spotify Connect, or remote Hyperstream
+  session handoff. Device routing and AirPlay playback need hands-on acceptance.
 
 See Apple's [mixing option](https://developer.apple.com/documentation/avfaudio/avaudiosession/categoryoptions-swift.struct/mixwithothers)
 and [interruption behavior](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions).
@@ -231,9 +261,11 @@ Startup restores the account and checks the server. A server outage offers Retry
 and Edit connection while retaining the saved account. A rejected sign-in keeps
 the address and username but requires password re-entry. Errors reported by secure
 storage offer Retry or Forget; the app does not request deletion on a read failure.
-Saves and removals are read back to verify success. Disabling **Keep me signed in** clears any older
-saved account after successful authentication and keeps only the current session.
-**Settings → Disconnect from server** removes the saved record and stops playback.
+Saves and removals are read back to verify success. Disabling **Keep me signed in**
+removes saved credentials for that same server/account, preserves other connections,
+and disables automatic restoration for the temporary session.
+**Home → Settings → Disconnect from server** removes the active connection and
+stops playback. Other saved servers remain available from the sign-in screen.
 
 The pinned Windows storage plugin can discard an encrypted container it cannot
 decrypt or parse. In that case, a later launch requires signing in again. Account
@@ -250,7 +282,8 @@ server outage, then disconnect and confirm the next launch asks for sign-in.
 
 The native secure-storage integration test uses a separate synthetic account key:
 `flutter test integration_test/account_storage_test.dart -d windows`.
-It checks protected write/read with a new store instance and verified deletion,
+It checks protected multi-server write/read with a new store instance and verified deletion,
+as well as Windows output enumeration/default selection and missing-device rejection,
 without using the saved Navidrome account. Unit/widget tests cover cold startup,
 network/authentication failures, rejected writes, and disconnect persistence.
 

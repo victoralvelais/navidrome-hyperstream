@@ -20,6 +20,10 @@ class AccountSession extends ChangeNotifier {
 
   final AccountStore store;
   final ClientFactory createClient;
+  SavedServers _servers = SavedServers();
+  List<SavedAccount> get savedServers => _servers.accounts;
+  String? get activeServerId => _client == null ? _servers.activeId : _activeId;
+  String? _activeId;
   AccountPhase phase = AccountPhase.signedOut;
   NavidromeClient? _client;
   NavidromeClient? get client => _client;
@@ -53,7 +57,8 @@ class AccountSession extends ChangeNotifier {
     _changed();
     NavidromeClient? candidate;
     try {
-      final account = await store.read();
+      _servers = await store.readServers();
+      final account = _servers.active;
       if (_disposed) return;
       _storageReadable = true;
       hasSavedAccount = account != null;
@@ -67,6 +72,7 @@ class AccountSession extends ChangeNotifier {
       await candidate.ping();
       if (_disposed) return;
       _client = candidate;
+      _activeId = account.id;
       candidate = null;
       phase = AccountPhase.connected;
     } on NavidromeException catch (failure) {
@@ -93,8 +99,12 @@ class AccountSession extends ChangeNotifier {
     _changed();
   }
 
-  Future<void> connect(SavedAccount account, {required bool remember}) async {
-    if (busy || _disposed || _client != null) return;
+  Future<void> connect(
+    SavedAccount account, {
+    required bool remember,
+    Future<void> Function()? beforeSwitch,
+  }) async {
+    if (busy || _disposed) return;
     phase = AccountPhase.connecting;
     error = null;
     _changed();
@@ -103,15 +113,27 @@ class AccountSession extends ChangeNotifier {
       candidate = _open(account);
       await candidate.ping();
       if (_disposed) return;
-      if (remember) {
-        await store.save(account);
-      } else {
-        // A temporary sign-in must not leave an older account set to restore.
-        await store.clear();
-      }
+      // Read first even for a fresh sign-in so an unreadable vault cannot be
+      // overwritten, and adding a server never loses other saved connections.
+      final previous = await store.readServers();
+      final next = SavedServers(
+        accounts: [
+          ...previous.accounts.where((a) => a.id != account.id),
+          if (remember) account,
+        ],
+        activeId: remember ? account.id : null,
+      );
       if (_disposed) return;
+      if (_client != null) await beforeSwitch?.call();
+      if (_disposed) return;
+      await store.saveServers(next);
+      if (_disposed) return;
+      final old = _client;
       _client = candidate;
       candidate = null;
+      _servers = next;
+      _activeId = account.id;
+      old?.close();
       serverUrl = account.serverUrl;
       username = account.username;
       hasSavedAccount = remember;
@@ -119,15 +141,43 @@ class AccountSession extends ChangeNotifier {
       phase = AccountPhase.connected;
     } on NavidromeException catch (failure) {
       error = failure.message;
-      phase = AccountPhase.signedOut;
+      phase = _client == null ? AccountPhase.signedOut : AccountPhase.connected;
     } on AccountStorageException catch (failure) {
       error = failure.message;
-      phase = AccountPhase.signedOut;
+      phase = _client == null ? AccountPhase.signedOut : AccountPhase.connected;
     } on Object {
       error = 'Could not finish signing in. Please try again.';
-      phase = AccountPhase.signedOut;
+      phase = _client == null ? AccountPhase.signedOut : AccountPhase.connected;
     } finally {
       candidate?.close();
+      _changed();
+    }
+  }
+
+  Future<void> switchServer(
+    String id, {
+    Future<void> Function()? beforeSwitch,
+  }) async {
+    if (id == _activeId && _client != null) return;
+    final account = _servers.accounts.where((a) => a.id == id).firstOrNull;
+    if (account != null) {
+      await connect(account, remember: true, beforeSwitch: beforeSwitch);
+    }
+  }
+
+  Future<void> removeServer(String id) async {
+    if (busy || _disposed || (id == activeServerId && _client != null)) return;
+    _forgetting = true;
+    _changed();
+    try {
+      final next = SavedServers(
+        accounts: _servers.accounts.where((a) => a.id != id).toList(),
+        activeId: _servers.activeId == id ? null : _servers.activeId,
+      );
+      await store.saveServers(next);
+      _servers = next;
+    } finally {
+      _forgetting = false;
       _changed();
     }
   }
@@ -137,9 +187,16 @@ class AccountSession extends ChangeNotifier {
     _forgetting = true;
     _changed();
     try {
-      await store.clear();
+      final current = await store.readServers();
+      final id = activeServerId;
+      final next = SavedServers(
+        accounts: current.accounts.where((a) => a.id != id).toList(),
+      );
+      await store.saveServers(next);
+      _servers = next;
       _client?.close();
       _client = null;
+      _activeId = null;
       serverUrl = null;
       username = null;
       hasSavedAccount = false;

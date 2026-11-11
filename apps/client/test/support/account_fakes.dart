@@ -12,12 +12,34 @@ SavedAccount exampleAccount() => SavedAccount(
 
 class MemoryAccountStore implements AccountStore {
   SavedAccount? account;
+  SavedServers? servers;
   Object? readError;
   Object? saveError;
   Object? clearError;
   int saves = 0;
   int clears = 0;
   Completer<void>? saveGate;
+
+  @override
+  Future<SavedServers> readServers() async {
+    final active = await read();
+    return servers ??
+        SavedServers(
+          accounts: active == null ? [] : [active],
+          activeId: active?.id,
+        );
+  }
+
+  @override
+  Future<void> saveServers(SavedServers value) async {
+    if (value.accounts.isEmpty) {
+      await clear();
+    } else {
+      await save(value.active ?? value.accounts.first);
+      account = value.active;
+    }
+    servers = value;
+  }
 
   @override
   Future<SavedAccount?> read() async {

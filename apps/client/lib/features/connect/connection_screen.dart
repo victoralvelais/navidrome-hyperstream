@@ -54,6 +54,19 @@ class ConnectionScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 28),
+                  if (session.savedServers.isNotEmpty &&
+                      session.phase != AccountPhase.restoring) ...[
+                    for (final server in session.savedServers)
+                      ListTile(
+                        title: Text(server.displayName),
+                        subtitle: Text(server.username),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: session.busy
+                            ? null
+                            : () => session.switchServer(server.id),
+                      ),
+                    const SizedBox(height: 16),
+                  ],
                   if (session.phase == AccountPhase.restoring) ...[
                     const Center(child: CircularProgressIndicator()),
                     const SizedBox(height: 20),
@@ -88,7 +101,7 @@ class ConnectionScreen extends StatelessWidget {
                       child: const Text('Forget saved account'),
                     ),
                   ] else ...[
-                    _SignInForm(
+                    ServerSignInForm(
                       key: ValueKey((session.serverUrl, session.username)),
                       session: session,
                     ),
@@ -108,22 +121,30 @@ class ConnectionScreen extends StatelessWidget {
   );
 }
 
-class _SignInForm extends StatefulWidget {
-  const _SignInForm({super.key, required this.session});
+class ServerSignInForm extends StatefulWidget {
+  const ServerSignInForm({
+    super.key,
+    required this.session,
+    this.adding = false,
+    this.beforeSwitch,
+  });
   final AccountSession session;
+  final bool adding;
+  final Future<void> Function()? beforeSwitch;
   @override
-  State<_SignInForm> createState() => _SignInFormState();
+  State<ServerSignInForm> createState() => _SignInFormState();
 }
 
-class _SignInFormState extends State<_SignInForm> {
+class _SignInFormState extends State<ServerSignInForm> {
   final _form = GlobalKey<FormState>();
+  final _name = TextEditingController();
   late final _server = TextEditingController(
     text:
-        widget.session.serverUrl ??
+        (widget.adding ? '' : widget.session.serverUrl) ??
         const String.fromEnvironment('NAVIDROME_URL'),
   );
   late final _username = TextEditingController(
-    text: widget.session.username ?? '',
+    text: widget.adding ? '' : widget.session.username ?? '',
   );
   final _password = TextEditingController();
   bool _remember = true;
@@ -135,8 +156,10 @@ class _SignInFormState extends State<_SignInForm> {
         serverUrl: _server.text,
         username: _username.text,
         password: _password.text,
+        name: _name.text.trim(),
       ),
       remember: _remember,
+      beforeSwitch: widget.beforeSwitch,
     );
     if (mounted && widget.session.client != null) _password.clear();
   }
@@ -144,6 +167,7 @@ class _SignInFormState extends State<_SignInForm> {
   @override
   void dispose() {
     _server.dispose();
+    _name.dispose();
     _username.dispose();
     _password.dispose();
     super.dispose();
@@ -157,6 +181,18 @@ class _SignInFormState extends State<_SignInForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.adding) ...[
+            TextFormField(
+              controller: _name,
+              enabled: !session.busy,
+              decoration: const InputDecoration(
+                labelText: 'Server name',
+                hintText: 'Home library',
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+          ],
           TextFormField(
             controller: _server,
             enabled: !session.busy,

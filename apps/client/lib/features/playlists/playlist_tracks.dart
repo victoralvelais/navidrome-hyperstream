@@ -1,6 +1,8 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/pull_to_refresh.dart';
+
 import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
@@ -141,111 +143,125 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
         return ArtworkBackdrop(
           client: widget.collections.client,
           coverArt: playlist?.coverArt,
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            itemCount: (playlist?.tracks.length ?? 0) + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: Column(
-                    children: [
-                      if (playlist != null) ...[
-                        SizedBox(
-                          width: 280,
-                          child: CoverArt(
-                            client: widget.collections.client,
-                            id: playlist.coverArt,
+          child: PullToRefresh(
+            onRefresh: () async {
+              if (!_editing) await _load();
+            },
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                top: 16,
+                bottom: MediaQuery.paddingOf(context).bottom + 16,
+              ),
+              itemCount: (playlist?.tracks.length ?? 0) + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                    child: Column(
+                      children: [
+                        if (playlist != null) ...[
+                          SizedBox(
+                            width: 280,
+                            child: CoverArt(
+                              client: widget.collections.client,
+                              id: playlist.coverArt,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          playlist.name,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                          textAlign: TextAlign.center,
-                        ),
-                        Text('${playlist.tracks.length} songs'),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .onSurface,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .surface,
-                            shape: const StadiumBorder(),
+                          const SizedBox(height: 16),
+                          Text(
+                            playlist.name,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                            textAlign: TextAlign.center,
                           ),
-                          onPressed: playlist.tracks.isEmpty
-                              ? null
-                              : () => widget.playback.playAlbum(
-                                  widget.collections.client,
-                                  playlist.tracks,
-                                  0,
-                                ),
-                          icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('Play playlist'),
-                        ),
-                        if (editable)
-                          TextButton.icon(
-                            onPressed: _editing || _loading ? null : _addSongs,
-                            icon: const Icon(Icons.add_circle_outline_rounded),
-                            label: const Text('Add songs'),
-                          ),
-                        if (editable)
-                          TextButton(
-                            onPressed: _editing || _loading
+                          Text('${playlist.tracks.length} songs'),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface,
+                              foregroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surface,
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: playlist.tracks.isEmpty
                                 ? null
-                                : () => editPlaylistName(
-                                    context,
-                                    initialName: playlist.name,
-                                    onSave: (name) => widget.collections
-                                        .renamePlaylist(playlist.id, name),
+                                : () => widget.playback.playAlbum(
+                                    widget.collections.client,
+                                    playlist.tracks,
+                                    0,
                                   ),
-                            child: const Text('Rename playlist'),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Play playlist'),
                           ),
-                        if (playlist.tracks.isEmpty)
-                          const Text('Add songs using their song menu.'),
+                          if (editable)
+                            TextButton.icon(
+                              onPressed: _editing || _loading
+                                  ? null
+                                  : _addSongs,
+                              icon: const Icon(
+                                Icons.add_circle_outline_rounded,
+                              ),
+                              label: const Text('Add songs'),
+                            ),
+                          if (editable)
+                            TextButton(
+                              onPressed: _editing || _loading
+                                  ? null
+                                  : () => editPlaylistName(
+                                      context,
+                                      initialName: playlist.name,
+                                      onSave: (name) => widget.collections
+                                          .renamePlaylist(playlist.id, name),
+                                    ),
+                              child: const Text('Rename playlist'),
+                            ),
+                          if (playlist.tracks.isEmpty)
+                            const Text('Add songs using their song menu.'),
+                        ],
+                        if (_loading || _editing)
+                          const LinearProgressIndicator(),
+                        if (_error != null)
+                          Text(_error!, textAlign: TextAlign.center),
+                        if (_error != null)
+                          TextButton(
+                            onPressed: _loading || _editing ? null : _load,
+                            child: const Text('Retry'),
+                          ),
                       ],
-                      if (_loading || _editing) const LinearProgressIndicator(),
-                      if (_error != null)
-                        Text(_error!, textAlign: TextAlign.center),
-                      TextButton.icon(
-                        onPressed: _loading || _editing ? null : _load,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Refresh playlist'),
-                      ),
-                    ],
+                    ),
+                  );
+                }
+                final song = playlist!.tracks[index - 1];
+                return ListTile(
+                  selected: sameOrder && playing.data?.queueIndex == index - 1,
+                  leading: SizedBox(width: 28, child: Text('$index')),
+                  title: Text(
+                    song.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    '${song.artist} · ${song.album}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: SongActions(
+                    collections: widget.collections,
+                    song: song,
+                    enabled: !_editing && !_loading && _error == null,
+                    onRemove: editable ? () => _remove(index - 1) : null,
+                  ),
+                  onTap: () => widget.playback.playAlbum(
+                    widget.collections.client,
+                    playlist.tracks,
+                    index - 1,
                   ),
                 );
-              }
-              final song = playlist!.tracks[index - 1];
-              return ListTile(
-                selected: sameOrder && playing.data?.queueIndex == index - 1,
-                leading: SizedBox(width: 28, child: Text('$index')),
-                title: Text(
-                  song.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  '${song.artist} · ${song.album}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: SongActions(
-                  collections: widget.collections,
-                  song: song,
-                  enabled: !_editing && !_loading && _error == null,
-                  onRemove: editable ? () => _remove(index - 1) : null,
-                ),
-                onTap: () => widget.playback.playAlbum(
-                  widget.collections.client,
-                  playlist.tracks,
-                  index - 1,
-                ),
-              );
-            },
+              },
+            ),
           ),
         );
       },

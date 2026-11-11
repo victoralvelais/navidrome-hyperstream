@@ -1,144 +1,330 @@
 import 'package:flutter/material.dart';
 
+import '../../services/account_session.dart';
 import '../../services/playback_service.dart';
+import '../connect/connection_screen.dart';
 import '../player/volume_controls.dart';
 
-Future<void> showSettings(
-  BuildContext context,
-  PlaybackService playback, {
-  VoidCallback? onDisconnect,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  constraints: const BoxConstraints(maxWidth: 560),
-  builder: (context) =>
-      SettingsSheet(playback: playback, onDisconnect: onDisconnect),
-);
-
-class SettingsSheet extends StatelessWidget {
-  const SettingsSheet({super.key, required this.playback, this.onDisconnect});
+/// Part of the Home navigation stack, so the floating player stays available.
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({
+    super.key,
+    required this.playback,
+    this.session,
+    this.onDisconnect,
+    this.onBackHome,
+  });
   final PlaybackService playback;
+  final AccountSession? session;
   final VoidCallback? onDisconnect;
+  final VoidCallback? onBackHome;
+  @override
+  State<SettingsPage> createState() => SettingsPageState();
+}
+
+class SettingsPageState extends State<SettingsPage> {
+  String? _page;
+  bool back() {
+    if (_page == null) return false;
+    setState(() => _page = null);
+    return true;
+  }
+
+  void _open(String page) => setState(() => _page = page);
+
+  Future<void> _remove(String id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Remove $name?'),
+        content: const Text(
+          'Remove this saved connection from this device. Your server and music will stay untouched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.session!.removeServer(id);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not remove this saved server. Please try again.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _row(
+    String title,
+    String subtitle, {
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) => ListTile(
+    title: Text(title),
+    subtitle: Text(subtitle),
+    trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
+    onTap: onTap,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+  );
+
+  Widget _group(List<Widget> rows) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainer,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(24),
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.outlineVariant
+            .withValues(alpha: .22),
+      ),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Divider(height: 1),
+            ),
+          rows[i],
+        ],
+      ],
+    ),
+  );
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 28, 8, 12),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-      child: ListenableBuilder(
-        listenable: Listenable.merge([
-          playback.preferences,
-          playback.settingsError,
-        ]),
-        builder: (context, _) {
-          final preferences = playback.preferences;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([
+      widget.playback.preferences,
+      widget.playback.settingsError,
+      if (widget.session != null) widget.session!,
+    ]),
+    builder: (context, _) {
+      final preferences = widget.playback.preferences;
+      final session = widget.session;
+      return ListView(
+        key: ValueKey(_page),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          MediaQuery.paddingOf(context).bottom + 32,
+        ),
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Settings',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close settings',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Appearance',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<ThemeMode>(
-                isExpanded: true,
-                initialValue: preferences.themeMode,
-                decoration: const InputDecoration(labelText: 'Theme'),
-                items: const [
-                  DropdownMenuItem(
-                    value: ThemeMode.system,
-                    child: Text('Follow system'),
-                  ),
-                  DropdownMenuItem(
-                    value: ThemeMode.light,
-                    child: Text('Light'),
-                  ),
-                  DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
-                ],
-                onChanged: (value) {
-                  if (value != null) preferences.setThemeMode(value);
-                },
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Glass effects'),
-                subtitle: const Text(
-                  'Soft blur and translucent controls. Turn off for solid surfaces.',
+              if (_page != null || widget.onBackHome != null)
+                IconButton(
+                  tooltip: _page == null ? 'Back to home' : 'Back to settings',
+                  onPressed: _page == null
+                      ? widget.onBackHome
+                      : () => setState(() => _page = null),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    _page ?? 'Settings',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_page == null) ...[
+            _group([
+              _row(
+                'Appearance',
+                'Theme and glass effects',
+                onTap: () => _open('Appearance'),
+              ),
+            ]),
+            _label('Listening'),
+            _group([
+              _row(
+                'Playback',
+                'Music volume and other audio',
+                onTap: () => _open('Playback'),
+              ),
+              if (session != null)
+                _row(
+                  'Servers',
+                  '${session.savedServers.length} saved connections',
+                  onTap: () => _open('Servers'),
+                ),
+            ]),
+            _label('Account'),
+            _group([
+              if (session != null)
+                _row(
+                  'Connected to',
+                  '${session.username ?? ''}\n${session.serverUrl ?? ''}',
+                  trailing: const Icon(Icons.check_circle_outline_rounded),
+                ),
+              if (widget.onDisconnect != null)
+                _row(
+                  'Disconnect from server',
+                  'Stop playback and forget this connection',
+                  onTap: widget.onDisconnect,
+                ),
+            ]),
+          ],
+          if (_page == 'Appearance')
+            _group([
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: DropdownButtonFormField<ThemeMode>(
+                  isExpanded: true,
+                  initialValue: preferences.themeMode,
+                  decoration: const InputDecoration(labelText: 'Theme'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ThemeMode.system,
+                      child: Text('Follow system'),
+                    ),
+                    DropdownMenuItem(
+                      value: ThemeMode.light,
+                      child: Text('Light'),
+                    ),
+                    DropdownMenuItem(
+                      value: ThemeMode.dark,
+                      child: Text('Dark'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) preferences.setThemeMode(value);
+                  },
+                ),
+              ),
+              SwitchListTile.adaptive(
+                title: const Text('Glass effects'),
+                subtitle: const Text('Soft blur and translucent controls'),
                 value: preferences.glassEffects,
                 onChanged: preferences.setGlassEffects,
               ),
-              const SizedBox(height: 28),
-              Text(
-                'Music volume',
-                style: Theme.of(context).textTheme.titleMedium,
+            ]),
+          if (_page == 'Playback') ...[
+            _group([
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Music volume',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    VolumeControls(playback: widget.playback),
+                    const Text(
+                      'Adjusts Hyperstream only. Your device volume still sets the overall level.',
+                    ),
+                  ],
+                ),
               ),
-              VolumeControls(playback: playback),
-              const Text(
-                'Adjusts Hyperstream only. Your device volume still sets the overall level.',
-              ),
-              const SizedBox(height: 20),
-              if (playback.supportsMixing)
+            ]),
+            const SizedBox(height: 20),
+            if (widget.playback.supportsMixing)
+              _group([
                 SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
                   title: const Text('Mix with other audio'),
                   subtitle: const Text(
                     'Allow music alongside other apps. Calls may still pause playback.',
                   ),
                   value: preferences.mixWithOthers,
-                  onChanged: playback.setMixWithOthers,
-                )
-              else
-                const Text(
-                  'Windows mixes apps automatically. Calls can lower music according to your Windows sound settings.',
+                  onChanged: widget.playback.setMixWithOthers,
                 ),
-              if (playback.settingsError.value ?? preferences.notice
-                  case final String message) ...[
-                const SizedBox(height: 16),
-                Text(
-                  message,
+              ])
+            else
+              const Text(
+                'Windows mixes apps automatically. Calls can lower music according to your Windows sound settings.',
+              ),
+          ],
+          if (_page == 'Servers' && session != null) ...[
+            _group([
+              for (final server in session.savedServers)
+                _row(
+                  server.displayName,
+                  '${server.username} · ${server.serverUrl}',
+                  onTap: session.busy
+                      ? null
+                      : () => session.switchServer(
+                          server.id,
+                          beforeSwitch: widget.playback.reset,
+                        ),
+                  trailing: server.id == session.activeServerId
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : IconButton(
+                          tooltip: 'Remove ${server.displayName}',
+                          onPressed: session.busy
+                              ? null
+                              : () => _remove(server.id, server.displayName),
+                          icon: const Icon(Icons.remove_circle_outline_rounded),
+                        ),
+                ),
+              ListTile(
+                leading: const Icon(Icons.add_rounded),
+                title: const Text('Add connection'),
+                onTap: session.busy ? null : () => _open('Add connection'),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            const Text(
+              'Switching servers stops the current queue. Each library stays separate.',
+            ),
+            if (session.busy) const LinearProgressIndicator(),
+            if (session.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  session.error!,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-              ],
-              if (onDisconnect != null) ...[
-                const SizedBox(height: 28),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Disconnect from server'),
-                  subtitle: const Text(
-                    'Stop playback and remove the saved account from this device.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {
-                    Navigator.pop(context);
-                    onDisconnect!();
-                  },
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    ),
+              ),
+          ],
+          if (_page == 'Add connection' && session != null)
+            ServerSignInForm(
+              session: session,
+              adding: true,
+              beforeSwitch: widget.playback.reset,
+            ),
+          if (widget.playback.settingsError.value ?? preferences.notice
+              case final String message)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                message,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+        ],
+      );
+    },
   );
 }

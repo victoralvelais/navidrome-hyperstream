@@ -26,6 +26,13 @@ audio commands, preferences, and responsive UI; a native Windows test checks
 HTTP playback, volume/mute, pause, seeking, track transition, and reset with
 generated audio. Comprehensive codec/interruption and new iOS mixing checks remain.
 
+Settings lives on Home and supports several securely saved Navidrome servers.
+Search opens a Discover page for the selected library, with browse cards and genres.
+The mobile glass dock collapses while scrolling, lists support pull-to-refresh,
+and Now Playing groups output selection with volume. iOS uses the native route
+picker; Windows selects this app's audio device. External charts and network
+casting integrations remain future work.
+
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,
 bitrate, duration, core tags, embedded artwork count, and decodability, publishes

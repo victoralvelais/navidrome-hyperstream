@@ -140,7 +140,9 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
             return client == null
                 ? ConnectionScreen(session: _account)
                 : LibraryScreen(
+                    key: ObjectKey(client),
                     client: client,
+                    accountSession: _account,
                     playback: snapshot.data!,
                     onDisconnect: _disconnect,
                   );

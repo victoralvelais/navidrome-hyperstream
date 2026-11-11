@@ -10,6 +10,7 @@ import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
 import '../library/cover_art.dart';
 import 'volume_button.dart';
+import 'output_button.dart';
 
 String _time(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
@@ -20,17 +21,27 @@ class PlayerControls extends StatelessWidget {
     required this.playback,
     required this.client,
     this.collections,
+    this.compact = false,
   });
   final PlaybackService playback;
   final NavidromeClient client;
   final LibraryCollections? collections;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => _PlaybackView(
     playback: playback,
     builder: (context, item, state) {
       if (item == null && state.processingState != AudioProcessingState.error) {
-        return const SizedBox.shrink();
+        return compact
+            ? const GlassSurface(
+                radius: 28,
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Not playing', maxLines: 1),
+                ),
+              )
+            : const SizedBox.shrink();
       }
       final labels = InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -52,16 +63,17 @@ class PlayerControls extends StatelessWidget {
           label: 'Open now playing',
           child: Row(
             children: [
-              SizedBox(
-                width: 42,
-                height: 42,
-                child: CoverArt(
-                  client: client,
-                  id: item?.extras?['coverArtId'] as String?,
-                  radius: 12,
+              if (!compact)
+                SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: CoverArt(
+                    client: client,
+                    id: item?.extras?['coverArtId'] as String?,
+                    radius: 12,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
+              if (!compact) const SizedBox(width: 10),
               Expanded(child: _TrackLabels(item: item)),
             ],
           ),
@@ -73,11 +85,13 @@ class PlayerControls extends StatelessWidget {
           _Previous(playback: playback, state: state),
           _PlayButton(playback: playback, item: item, state: state),
           _Next(playback: playback, state: state),
-          VolumeButton(playback: playback),
+          if (!compact) VolumeButton(playback: playback),
         ],
       );
       return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+        padding: compact
+            ? EdgeInsets.zero
+            : const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: GlassSurface(
           radius: 28,
           child: Column(
@@ -88,8 +102,9 @@ class PlayerControls extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, bounds) {
                     final narrow =
-                        bounds.maxWidth < 330 ||
-                        MediaQuery.textScalerOf(context).scale(1) > 1.2;
+                        !compact &&
+                        (bounds.maxWidth < 330 ||
+                            MediaQuery.textScalerOf(context).scale(1) > 1.2);
                     return IconButtonTheme(
                       data: IconButtonThemeData(
                         style: IconButton.styleFrom(
@@ -418,10 +433,16 @@ class _NowPlayingState extends State<_NowPlaying> {
                               ),
                               GlassSurface(
                                 radius: 26,
-                                child: VolumeButton(
-                                  playback: playback,
-                                  onExpandedChanged: (open) =>
-                                      setState(() => _volumeOpen = open),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const OutputButton(),
+                                    VolumeButton(
+                                      playback: playback,
+                                      onExpandedChanged: (open) =>
+                                          setState(() => _volumeOpen = open),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

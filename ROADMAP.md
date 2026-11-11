@@ -92,13 +92,22 @@ record that direction. The first implementation of this selection includes:
   The expanded player reserves space so volume doesn't cover Next or seeking.
 - An actual queue view and an Add songs picker for owned playlists.
 
-The implementation passes 78 unit/widget tests, including phone/tablet/desktop,
+The implementation includes unit/widget coverage for phone/tablet/desktop,
 dark/light, enlarged text, navigation, volume and playlist editing. Glass can be
 disabled; high contrast and iOS Reduce Transparency use opaque surfaces. Expansion
 animations respect reduced motion. Native iOS appearance/performance still need
-device acceptance. Lyrics, casting, queue reordering, shuffle/repeat and queue
+device acceptance. Lyrics, network casting, queue reordering, shuffle/repeat and queue
 restoration require separate functional work. Concept artwork/counts are examples;
 the app renders Navidrome content and does not invent library totals.
+
+The follow-up revision uses grouped Settings pages from Home, multiple securely
+saved Navidrome connections, and a Discover landing page inside Search. Discover
+offers server genres, recent additions, most-played albums, and random selections.
+List titles use heavier, tighter typography; pull-to-refresh replaces refresh
+buttons, and playlist creation is a small header action. Mobile navigation
+collapses while scrolling and preserves previous/play/next. Now Playing groups
+volume with an iOS system route picker or Windows app-specific output selection.
+Native routing and the revised glass layout still require physical-device acceptance.
 
 ## Proposed architecture
 

@@ -14,8 +14,8 @@ ThemeData hyperstreamTheme(Brightness brightness) {
         onSurfaceVariant: dark
             ? const Color(0xffb9bbc5)
             : const Color(0xff656570),
-        surface: dark ? const Color(0xff0b0b10) : const Color(0xfffaf9fc),
-        surfaceContainer: dark ? const Color(0xff212125) : Colors.white,
+        surface: dark ? const Color(0xff08080a) : const Color(0xfff7f7fa),
+        surfaceContainer: dark ? const Color(0xff141416) : Colors.white,
         surfaceContainerHighest: dark
             ? const Color(0xff303036)
             : const Color(0xffeeedf1),
@@ -33,8 +33,39 @@ ThemeData hyperstreamTheme(Brightness brightness) {
         letterSpacing: -.5,
       ),
       titleMedium: base.textTheme.titleMedium?.copyWith(
+        fontSize: 17,
         fontWeight: FontWeight.w600,
+        letterSpacing: -.35,
       ),
+      titleSmall: base.textTheme.titleSmall?.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.2,
+      ),
+      bodyLarge: base.textTheme.bodyLarge?.copyWith(
+        fontSize: 17,
+        letterSpacing: -.35,
+      ),
+      bodyMedium: base.textTheme.bodyMedium?.copyWith(
+        fontSize: 15,
+        letterSpacing: -.2,
+      ),
+      labelLarge: base.textTheme.labelLarge?.copyWith(letterSpacing: -.15),
+      labelMedium: base.textTheme.labelMedium?.copyWith(letterSpacing: 0),
+    ),
+    listTileTheme: ListTileThemeData(
+      titleTextStyle: base.textTheme.bodyLarge?.copyWith(
+        color: scheme.onSurface,
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.35,
+      ),
+      subtitleTextStyle: base.textTheme.bodyMedium?.copyWith(
+        color: scheme.onSurfaceVariant,
+        fontSize: 14,
+        letterSpacing: -.15,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,

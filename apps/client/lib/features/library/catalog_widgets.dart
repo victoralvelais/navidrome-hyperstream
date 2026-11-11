@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/pull_to_refresh.dart';
+
 import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
@@ -145,7 +147,7 @@ class _CatalogPageState extends State<CatalogPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool refresh = false}) async {
     if (_busy) return;
     setState(() {
       _busy = true;
@@ -156,6 +158,7 @@ class _CatalogPageState extends State<CatalogPage> {
         final albums = await widget.client.artistAlbums(artist.id);
         if (!mounted) return;
         setState(() {
+          if (refresh) _albums.clear();
           _albums.addAll(albums);
           _more = false;
         });
@@ -164,14 +167,19 @@ class _CatalogPageState extends State<CatalogPage> {
           '',
           browse: true,
           albumCount: widget.kind == 'Albums' ? 40 : 0,
-          albumOffset: _albums.length,
+          albumOffset: refresh ? 0 : _albums.length,
           artistCount: widget.kind == 'Artists' ? 40 : 0,
-          artistOffset: _artists.length,
+          artistOffset: refresh ? 0 : _artists.length,
           songCount: widget.kind == 'Songs' ? 40 : 0,
-          songOffset: _songs.length,
+          songOffset: refresh ? 0 : _songs.length,
         );
         if (!mounted) return;
         setState(() {
+          if (refresh) {
+            _albums.clear();
+            _artists.clear();
+            _songs.clear();
+          }
           _albums.addAll(result.albums);
           _artists.addAll(result.artists);
           _songs.addAll(result.tracks);
@@ -189,81 +197,92 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   @override
-  Widget build(BuildContext context) => CustomScrollView(
-    slivers: [
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-          child: Text(
-            widget.artist?.name ?? widget.kind,
-            style: Theme.of(context).textTheme.headlineLarge,
+  Widget build(BuildContext context) => PullToRefresh(
+    onRefresh: () => _load(refresh: true),
+    child: CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+            child: Text(
+              widget.artist?.name ?? widget.kind,
+              style: Theme.of(context).textTheme.headlineLarge,
+            ),
           ),
         ),
-      ),
-      if (_albums.isNotEmpty)
-        AlbumGrid(
-          albums: _albums,
-          client: widget.client,
-          onSelected: widget.onAlbum,
-        ),
-      SliverList.builder(
-        itemCount: _artists.length,
-        itemBuilder: (_, i) => ArtistRow(
-          artist: _artists[i],
-          client: widget.client,
-          onTap: () => widget.onArtist(_artists[i]),
-        ),
-      ),
-      SliverList.builder(
-        itemCount: _songs.length,
-        itemBuilder: (_, i) {
-          final song = _songs[i];
-          return ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 4,
-            ),
-            leading: SizedBox(
-              width: 48,
-              height: 48,
-              child: CoverArt(client: widget.client, id: song.coverArt),
-            ),
-            title: Text(
-              song.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(song.artist, maxLines: 1),
-            trailing: SongActions(collections: widget.collections, song: song),
-            onTap: () =>
-                widget.playback.playAlbum(widget.client, List.of(_songs), i),
-          );
-        },
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: _busy
-                ? const CircularProgressIndicator()
-                : _error != null
-                ? Column(
-                    children: [
-                      Text(_error!),
-                      TextButton(onPressed: _load, child: const Text('Retry')),
-                    ],
-                  )
-                : _more
-                ? TextButton(
-                    onPressed: _load,
-                    child: Text('More ${widget.kind.toLowerCase()}'),
-                  )
-                : _albums.isEmpty && _artists.isEmpty && _songs.isEmpty
-                ? const Text('Nothing here yet.')
-                : const SizedBox.shrink(),
+        if (_albums.isNotEmpty)
+          AlbumGrid(
+            albums: _albums,
+            client: widget.client,
+            onSelected: widget.onAlbum,
+          ),
+        SliverList.builder(
+          itemCount: _artists.length,
+          itemBuilder: (_, i) => ArtistRow(
+            artist: _artists[i],
+            client: widget.client,
+            onTap: () => widget.onArtist(_artists[i]),
           ),
         ),
-      ),
-    ],
+        SliverList.builder(
+          itemCount: _songs.length,
+          itemBuilder: (_, i) {
+            final song = _songs[i];
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 4,
+              ),
+              leading: SizedBox(
+                width: 48,
+                height: 48,
+                child: CoverArt(client: widget.client, id: song.coverArt),
+              ),
+              title: Text(
+                song.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(song.artist, maxLines: 1),
+              trailing: SongActions(
+                collections: widget.collections,
+                song: song,
+              ),
+              onTap: () =>
+                  widget.playback.playAlbum(widget.client, List.of(_songs), i),
+            );
+          },
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: _busy
+                  ? const CircularProgressIndicator()
+                  : _error != null
+                  ? Column(
+                      children: [
+                        Text(_error!),
+                        TextButton(
+                          onPressed: _load,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  : _more
+                  ? TextButton(
+                      onPressed: _load,
+                      child: Text('More ${widget.kind.toLowerCase()}'),
+                    )
+                  : _albums.isEmpty && _artists.isEmpty && _songs.isEmpty
+                  ? const Text('Nothing here yet.')
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: DockSpacer()),
+      ],
+    ),
   );
 }

@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import AVKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -15,6 +16,7 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HyperstreamAppearance") else { return }
+    registrar.register(HyperstreamRouteFactory(), withId: "dev.hyperstream/audio_route_picker")
     let channel = FlutterMethodChannel(name: "dev.hyperstream/appearance", binaryMessenger: registrar.messenger())
     appearanceChannel = channel
     channel.setMethodCallHandler { call, result in
@@ -36,4 +38,26 @@ import UIKit
   deinit {
     if let observer = transparencyObserver { NotificationCenter.default.removeObserver(observer) }
   }
+}
+
+private class HyperstreamRouteFactory: NSObject, FlutterPlatformViewFactory {
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol { FlutterStandardMessageCodec.sharedInstance() }
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    HyperstreamRouteView(frame: frame, arguments: args)
+  }
+}
+
+private class HyperstreamRouteView: NSObject, FlutterPlatformView {
+  private let picker: AVRoutePickerView
+  init(frame: CGRect, arguments: Any?) {
+    picker = AVRoutePickerView(frame: frame)
+    super.init()
+    let dark = (arguments as? [String: Any])?["dark"] as? Bool ?? false
+    picker.overrideUserInterfaceStyle = dark ? .dark : .light
+    picker.tintColor = dark ? .white : .black
+    picker.activeTintColor = .systemPink
+    picker.prioritizesVideoDevices = false
+    picker.accessibilityLabel = "Choose audio output"
+  }
+  func view() -> UIView { picker }
 }

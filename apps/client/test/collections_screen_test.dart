@@ -255,7 +255,7 @@ Future<void> main() async {
         await tap(find.byTooltip('Back to playlists'));
         expect(find.text('Evening mix'), findsOneWidget);
 
-        await tap(find.text('New playlist'));
+        await tap(find.byTooltip('New playlist'));
         if (viewport.name == 'small-phone') {
           tester.view.viewInsets = const FakeViewPadding(bottom: 250);
           await tester.pumpAndSettle();
@@ -287,7 +287,18 @@ Future<void> main() async {
         await tester.tapAt(const Offset(10, 10));
         await tester.pumpAndSettle();
 
-        await tap(find.byTooltip('Settings'));
+        if (find.byTooltip('Expand navigation').evaluate().isNotEmpty) {
+          await tap(find.byTooltip('Expand navigation'));
+        }
+        await tap(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w is NavigationBar || w is NavigationRail,
+            ),
+            matching: find.text('Home'),
+          ),
+        );
+        await tap(find.text('Settings'));
         await tester.ensureVisible(find.text('Disconnect from server'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Disconnect from server'));

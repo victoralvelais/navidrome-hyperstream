@@ -179,6 +179,60 @@ class NavidromeClient {
     }
   }
 
+  Future<List<Album>> discoverAlbums({
+    String type = 'random',
+    String? genre,
+    int offset = 0,
+    int size = 40,
+  }) async {
+    if (![
+          'random',
+          'newest',
+          'frequent',
+          'byGenre',
+          'starred',
+        ].contains(type) ||
+        (type == 'byGenre' && (genre == null || genre.isEmpty))) {
+      throw const NavidromeException('Choose a discovery category.');
+    }
+    final data = await _request('getAlbumList2', {
+      'type': type,
+      'offset': '$offset',
+      'size': '$size',
+      'genre': ?genre,
+    });
+    try {
+      return (((data['albumList2'] as Map<String, dynamic>)['album']
+                  as List?) ??
+              [])
+          .map((a) => Album.fromJson(a as Map<String, dynamic>))
+          .toList();
+    } on Object {
+      throw const NavidromeException(
+        'The server returned an invalid album list.',
+      );
+    }
+  }
+
+  Future<List<String>> genres() async {
+    final data = await _request('getGenres');
+    try {
+      final items =
+          ((data['genres'] as Map<String, dynamic>)['genre'] as List?) ?? [];
+      final genres =
+          items
+              .where((g) => (g['albumCount'] as num? ?? 0) > 0)
+              .map((g) => g['value'] as String)
+              .where((g) => g.trim().isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      return genres;
+    } on Object {
+      throw const NavidromeException('The server returned invalid genres.');
+    }
+  }
+
   // Search the server's entire library, independently of the album browser.
   // OpenSubsonic search3 has separate counts and offsets for each result type.
   Future<LibrarySearchResults> search(
