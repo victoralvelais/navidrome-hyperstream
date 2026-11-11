@@ -5,7 +5,7 @@ import 'package:hyperstream_client/main.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('real app startup reaches sign-in with native settings and audio', (
     tester,
@@ -26,7 +26,8 @@ void main() {
     );
     expect(find.text('Connect'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 500));
+    // Leave sign-in visible for the host's screenshot. The host terminates the
+    // simulator app; widget tests separately cover disposal during startup.
+    binding.reportData = {'startupReachedSignIn': true};
   });
 }

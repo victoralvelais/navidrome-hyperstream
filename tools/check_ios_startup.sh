@@ -21,6 +21,10 @@ print(choices[0]["udid"])
 trap 'xcrun simctl shutdown "$simulator_id" >/dev/null 2>&1 || true' EXIT
 xcrun simctl boot "$simulator_id"
 xcrun simctl bootstatus "$simulator_id" -b
-flutter test integration_test/startup_smoke_test.dart \
-  -d "$simulator_id" --no-pub --reporter expanded \
+flutter build ios --simulator --debug --no-pub \
+  --target integration_test/startup_smoke_test.dart \
+  2>&1 | tee build/ci/ios-startup-build.log
+# Capture console output before launch; Flutter 3.47.9 can miss the VM-service
+# announcement when its unified-log reader races with simulator startup.
+python3 ../../tools/run_ios_startup.py "$simulator_id" \
   2>&1 | tee build/ci/ios-startup.log
