@@ -28,7 +28,8 @@ if [[ "$executable" == */* || "$executable" == .* || ! -s "$app/$executable" ]];
   echo 'App bundle executable is missing or invalid.' >&2
   exit 1
 fi
-xcrun lipo -verify_arch arm64 "$app/$executable"
+# -verify_arch treats every following argument as an architecture name.
+xcrun lipo "$app/$executable" -verify_arch arm64
 
 mkdir -p "$(dirname "$archive")"
 archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
