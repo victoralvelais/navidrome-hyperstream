@@ -44,8 +44,9 @@ temporary preferences without overwriting unread saved data. A Dart timeout cann
 recover a blocked native main thread or a failure before Flutter starts; a wholly
 blank screen still requires device/LiveContainer evidence.
 
-The workflow also runs `integration_test/startup_smoke_test.dart` in an available
-iPhone simulator using `tools/check_ios_startup.sh`. This launches the real app
+The workflow's optional **check_simulator** input runs
+`integration_test/startup_smoke_test.dart` in an available iPhone simulator using
+`tools/check_ios_startup.sh`. This launches the real app
 and native plugins and checks that sign-in appears. It does not start audio or
 connect to Navidrome, and cannot reproduce LiveContainer's guest environment.
 The `ios-build-log` artifact includes the simulator test output, app console,
@@ -55,8 +56,15 @@ to the announced VM service. This avoids depending on the SDK's unified-log
 reader to capture the initial announcement. Run 4 timed out after its simulator
 build without starting the test; this is consistent with the
 [upstream simulator log-reader race](https://dart.googlesource.com/external/github.com/flutter/flutter/+/c3ed85ef987759ee54a6bce275490cde2a238dc1)
-and is not itself evidence of a Hyperstream crash. A packaged diagnostic IPA is
-still uploaded if the simulator check fails, with the workflow failure retained.
+and is not itself evidence of a Hyperstream crash. Run 5 showed that its hosted
+simulator took about five minutes to boot and another six minutes to build the
+test app, leaving only about half a minute after launch before the former
+12-minute step deadline. Its console contained a restoration-marker warning,
+but no captured crash or test result. The startup check is therefore experimental,
+off by default, and now has a 22-minute step allowance. It has not passed on the
+hosted simulator yet. The workflow summary explicitly reports skipped/failed/
+successful simulator checks. A packaged diagnostic IPA is still uploaded if the
+check fails, with the workflow failure retained.
 
 ## Set up the repository
 

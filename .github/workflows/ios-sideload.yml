@@ -3,6 +3,11 @@ name: Build iOS for sideloading
 # Manual while we establish iPhone playback. No automatic builds on every push.
 on:
   workflow_dispatch:
+    inputs:
+      check_simulator:
+        description: Run the experimental iOS simulator startup check (slower)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -79,7 +84,9 @@ jobs:
           } > build/ci/build-info.txt
 
       - name: Launch app in iOS simulator
-        timeout-minutes: 12
+        id: simulator
+        if: ${{ inputs.check_simulator }}
+        timeout-minutes: 22
         run: bash ../../tools/check_ios_startup.sh
 
       - name: Upload sideload package
@@ -110,6 +117,9 @@ jobs:
           retention-days: 7
 
       - name: Explain the artifact
+        if: ${{ !cancelled() && steps.package_ios.outcome == 'success' }}
+        env:
+          SIMULATOR_RESULT: ${{ steps.simulator.outcome }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ### iOS sideload build
@@ -121,7 +131,8 @@ jobs:
           Use a server address reachable from your phone; `localhost` refers to
           the phone itself. No Navidrome address or credentials are baked in.
 
-          Build success verifies compilation, simulator startup, and packaging.
-          Physical-device playback and LiveContainer compatibility need device checks.
+          The device IPA was compiled and packaged. Physical-device playback and
+          LiveContainer compatibility still need device checks.
           See `docs/ios-github-actions.md` for installation and device checks.
           SUMMARY
+          printf '\nSimulator startup check: **%s**.\n' "$SIMULATOR_RESULT" >> "$GITHUB_STEP_SUMMARY"

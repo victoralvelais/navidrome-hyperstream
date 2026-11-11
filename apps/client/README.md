@@ -164,7 +164,7 @@ native Windows integration test. The native test uses the actual WinRT decoder
 and HTTP playback, including automatic transition to a second track.
 
 ```powershell
-& D:/Tools/flutter/bin/dart.bat format --output=none --set-exit-if-changed lib test integration_test
+& D:/Tools/flutter/bin/dart.bat format --output=none --set-exit-if-changed lib test integration_test test_driver
 & D:/Tools/flutter/bin/flutter.bat analyze
 & D:/Tools/flutter/bin/flutter.bat test
 & D:/Tools/flutter/bin/flutter.bat test integration_test/playback_smoke_test.dart -d windows
@@ -210,6 +210,9 @@ app works; the new volume/mixing controls still need their own device check.
 Build 3 subsequently showed a black screen in LiveContainer. See the
 [LiveContainer diagnostic notes](../../docs/ios-github-actions.md#investigating-a-livecontainer-black-screen);
 the cause has not been confirmed.
+The diagnostic update passes 36 unit/widget tests and a native Windows startup
+test. The iOS simulator check remains experimental after hosted setup/build
+timeouts; it does not yet establish a successful simulator launch.
 
 The user reports working library playback on both Windows and the sideloaded
 iPhone build. Broader device acceptance remains open.
