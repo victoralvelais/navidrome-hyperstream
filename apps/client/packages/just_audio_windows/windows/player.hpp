@@ -240,7 +240,7 @@ public:
     });
   }
 
-  AudioPlayer::~AudioPlayer() {
+  ~AudioPlayer() {
     Dispose();
   }
 
@@ -248,7 +248,7 @@ public:
     return id == playerId;
   }
 
-  void AudioPlayer::HandleMethodCall(
+  void HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result
   ) {
@@ -454,7 +454,7 @@ public:
     }
   }
 
-  void AudioPlayer::loadSource(const flutter::EncodableMap& source) const& {
+  void loadSource(const flutter::EncodableMap& source) const& {
     if(disposed_) return;
     auto items = mediaPlaybackList.Items();
     items.Clear(); // Always clear the list since we are resetting
@@ -479,7 +479,7 @@ public:
   /**
   * Creates a single MediaPlaybackItem, which can be used directly or inside a list.
   */
-  Playback::MediaPlaybackItem AudioPlayer::createMediaPlaybackItem(const flutter::EncodableMap& source) const& {
+  Playback::MediaPlaybackItem createMediaPlaybackItem(const flutter::EncodableMap& source) const& {
     const std::string* type = std::get_if<std::string>(ValueOrNull(source, "type"));
 
     if (type->compare("clipping") == 0) {
@@ -517,7 +517,7 @@ public:
   /**
   * Creates a single MediaSource.
   */
-  MediaSource AudioPlayer::createMediaSource(const flutter::EncodableMap& source) const {
+  MediaSource createMediaSource(const flutter::EncodableMap& source) const {
       const std::string* type = std::get_if<std::string>(ValueOrNull(source, "type"));
       if (type->compare("progressive") == 0 || type->compare("dash") == 0 || type->compare("hls") == 0) {
           const auto* uri = std::get_if<std::string>(ValueOrNull(source, "uri"));
@@ -531,7 +531,7 @@ public:
   }
 
 
-  void AudioPlayer::broadcastState() {
+  void broadcastState() {
     try {
       broadcastPlaybackEvent();
     } catch (winrt::hresult_error const& ex) {
@@ -545,7 +545,7 @@ public:
     }
   }
 
-  void AudioPlayer::broadcastPlaybackEvent() {
+  void broadcastPlaybackEvent() {
     if(disposed_) return;
     auto session = mediaPlayer.PlaybackSession();
 
@@ -586,7 +586,7 @@ public:
     event_sink_->Success(eventData);
   }
 
-  int AudioPlayer::processingState(Playback::MediaPlaybackState state) {
+  int processingState(Playback::MediaPlaybackState state) {
     if(disposed_) return 0;
     auto session = mediaPlayer.PlaybackSession();
 
@@ -602,7 +602,7 @@ public:
     return 3; //ready
   }
 
-  void AudioPlayer::broadcastDataEvent() {
+  void broadcastDataEvent() {
     if(disposed_) return;
     auto session = mediaPlayer.PlaybackSession();
     auto eventData = flutter::EncodableMap();
@@ -618,7 +618,7 @@ public:
     data_sink_->Success(eventData);
   }
 
-  int AudioPlayer::getLoopMode() {
+  int getLoopMode() {
     if (mediaPlayer.IsLoopingEnabled()) {
       // one
       return 1;
@@ -631,12 +631,12 @@ public:
     }
   }
 
-  int AudioPlayer::getShuffleMode() {
+  int getShuffleMode() {
     // TODO(bdlukaa): playlists
     return 0;
   }
 
-  flutter::EncodableMap AudioPlayer::collectIcyMetadata() {
+  flutter::EncodableMap collectIcyMetadata() {
     auto icyData = flutter::EncodableMap();
 
     // TODO: Icy Metadata
@@ -651,7 +651,7 @@ public:
     return num;
   }
 
-  void AudioPlayer::seekToItem(uint32_t index) {
+  void seekToItem(uint32_t index) {
     if (index >= mediaPlaybackList.Items().Size()) {
       return;
     }
@@ -665,14 +665,14 @@ public:
     broadcastState();
   }
 
-  void AudioPlayer::seekToPosition(int64_t microseconds) {
+  void seekToPosition(int64_t microseconds) {
     if(disposed_) return;
     mediaPlayer.Position(TimeSpan(std::chrono::microseconds(microseconds)));
 
     broadcastState();
   }
 
-  void AudioPlayer::setShuffleOrder(const flutter::EncodableMap& source) {
+  void setShuffleOrder(const flutter::EncodableMap& source) {
     const std::string* type = std::get_if<std::string>(ValueOrNull(source, "type"));
     // const std::string* id = std::get_if<std::string>(ValueOrNull(source, "id"));
 

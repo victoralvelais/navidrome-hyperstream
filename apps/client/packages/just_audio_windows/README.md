@@ -2,7 +2,7 @@
 
 Vendored from `just_audio_windows` 0.2.3 in the pub.dev cache. The upstream MIT
 license is retained in `LICENSE`. The target uses C++20 for standard WinRT
-coroutines; inline constructors in `player.hpp` omit redundant class qualifiers
+coroutines; inline member declarations in `player.hpp` omit redundant class qualifiers
 for standard conformance. Playback behavior is otherwise unchanged.
 
 `windows/just_audio_windows_plugin.cpp` adds the `dev.hyperstream/audio_outputs`
