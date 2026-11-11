@@ -11,60 +11,30 @@ successfully compiled, packaged, and uploaded the unsigned IPA from commit
 and app executable-permission checks. The user subsequently confirmed that the
 sideloaded app works on iPhone. Each new audio feature still needs a device check.
 
-Update: build 3 (`2fdf940`, the volume/appearance update) passed the hosted build
-and archive checks, but the user reports a black screen after importing it into
-LiveContainer. The cause is not yet established. Archive integrity and a successful
-Xcode build do not establish LiveContainer runtime compatibility.
-
-## Investigating a LiveContainer black screen
-
-First distinguish LiveContainer's own app list failing to open from Hyperstream
-failing after selection. Keep the previously working build 2 as a comparison;
-do not erase app/container data to perform that comparison.
-
-- If LiveContainer itself is stuck reopening a guest, its documented launcher URL
-  is `livecontainer://livecontainer-launch?bundle-name=ui`. Open it from Safari or
-  a Shortcuts Open URLs action to request LiveContainer's own UI. See the
-  [LiveContainer 3.3.0 notes](https://github.com/LiveContainer/LiveContainer/releases/tag/3.3.0).
-- Check the exact LiveContainer/iOS versions. Its current
-  [crash troubleshooting](https://livecontainer.github.io/docs/faq/app-crashes)
-  calls for LiveContainer 3.6.65 or newer on iOS 26.4 or newer.
-- If only Hyperstream fails, compare the previous IPA and the new one using the
-  same LiveContainer settings. Direct AltStore/SideStore installation is a useful
-  independent check; it is also LiveContainer's recommended way to distinguish
-  guest compatibility from an app that fails when sideloaded normally.
-- Record device model, iOS/LiveContainer versions, whether other guest apps open,
-  whether the old IPA still opens, and any crash/error text. Avoid changing many
-  compatibility toggles at once; their behavior varies by LiveContainer version.
+## Startup checks
 
 Hyperstream now renders a named startup screen before making settings/audio
 platform calls. It shows the current startup step and a message after 15 seconds
 at one step. A settings read that does not finish in three seconds falls back to
 temporary preferences without overwriting unread saved data. A Dart timeout cannot
 recover a blocked native main thread or a failure before Flutter starts; a wholly
-blank screen still requires device/LiveContainer evidence.
+blank screen still requires device logs.
 
 The workflow's optional **check_simulator** input runs
 `integration_test/startup_smoke_test.dart` in an available iPhone simulator using
 `tools/check_ios_startup.sh`. This launches the real app
 and native plugins and checks that sign-in appears. It does not start audio or
-connect to Navidrome, and cannot reproduce LiveContainer's guest environment.
+connect to Navidrome.
 The `ios-build-log` artifact includes the simulator test output, app console,
 system log, and screenshot. The simulator check builds a debug test app, launches
 it with `simctl --console`, then attaches Flutter's supported integration driver
 to the announced VM service. This avoids depending on the SDK's unified-log
-reader to capture the initial announcement. Run 4 timed out after its simulator
-build without starting the test; this is consistent with the
-[upstream simulator log-reader race](https://dart.googlesource.com/external/github.com/flutter/flutter/+/c3ed85ef987759ee54a6bce275490cde2a238dc1)
-and is not itself evidence of a Hyperstream crash. Run 5 showed that its hosted
-simulator took about five minutes to boot and another six minutes to build the
-test app, leaving only about half a minute after launch before the former
-12-minute step deadline. Its console contained a restoration-marker warning,
-but no captured crash or test result. The startup check is therefore experimental,
-off by default, and now has a 22-minute step allowance. It has not passed on the
-hosted simulator yet. The workflow summary explicitly reports skipped/failed/
-successful simulator checks. A packaged diagnostic IPA is still uploaded if the
-check fails, with the workflow failure retained.
+reader to capture the initial announcement. The startup check is experimental,
+off by default, and has a 22-minute step allowance. Hosted attempts have timed out
+during setup/build and have not established a successful simulator test. The
+workflow summary explicitly reports skipped, failed, or successful checks. A
+successfully packaged IPA is still uploaded if this check fails, with the workflow
+failure retained.
 
 ## Set up the repository
 

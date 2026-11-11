@@ -65,6 +65,32 @@ void main() {
   });
 
   test(
+    'mixed album queues keep each song artwork and album fallback',
+    () async {
+      await service.playAlbum(
+        client,
+        [
+          const Track(
+            id: 'search-song',
+            title: 'Search song',
+            artist: 'Another artist',
+            album: 'Another album',
+            duration: Duration(minutes: 2),
+            coverArt: 'song-cover',
+          ),
+          tracks.first,
+        ],
+        0,
+        coverArtId: 'album-cover',
+      );
+      expect(service.queue.value.map((item) => item.extras?['coverArtId']), [
+        'song-cover',
+        'album-cover',
+      ]);
+    },
+  );
+
+  test(
     'app volume clamps input, restores mute level, and survives a queue reset',
     () async {
       await service.setAppVolume(2);

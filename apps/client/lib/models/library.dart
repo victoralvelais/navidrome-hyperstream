@@ -30,6 +30,7 @@ class Track {
     required this.album,
     required this.duration,
     this.number,
+    this.coverArt,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -39,6 +40,7 @@ class Track {
     album: json['album'] as String? ?? 'Unknown album',
     duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
     number: (json['track'] as num?)?.toInt(),
+    coverArt: json['coverArt'] as String?,
   );
 
   final String id;
@@ -47,4 +49,12 @@ class Track {
   final String album;
   final Duration duration;
   final int? number;
+  final String? coverArt;
+}
+
+class LibrarySearchResults {
+  const LibrarySearchResults({this.albums = const [], this.tracks = const []});
+
+  final List<Album> albums;
+  final List<Track> tracks;
 }

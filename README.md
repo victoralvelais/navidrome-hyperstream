@@ -13,8 +13,8 @@ The user has confirmed working playback on Windows and a sideloaded iPhone build
 ## What exists
 
 The [Flutter client](apps/client/README.md) provides Navidrome sign-in, paginated
-album browsing, artwork, track lists, and a native album queue with play/pause,
-previous/next, and seeking. It has iOS and Windows hosts, layouts for narrow and
+album browsing, server-wide album/song search, artwork, track lists, and a native
+queue with play/pause, previous/next, and seeking. It has iOS and Windows hosts, layouts for narrow and
 wide windows, and in-memory credentials. It now includes independent app volume,
 mute with level restoration, saved light/dark/system appearance, an expanded Now
 Playing view, and an optional iOS audio-mixing setting. Unit/widget tests cover

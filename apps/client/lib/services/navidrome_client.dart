@@ -171,6 +171,41 @@ class NavidromeClient {
     }
   }
 
+  // Search the server's entire library, independently of the album browser.
+  // OpenSubsonic search3 has separate counts and offsets for each result type.
+  Future<LibrarySearchResults> search(
+    String query, {
+    int albumOffset = 0,
+    int songOffset = 0,
+    int albumCount = 20,
+    int songCount = 20,
+  }) async {
+    if (query.trim().isEmpty) return const LibrarySearchResults();
+    final data = await _request('search3', {
+      'query': query.trim(),
+      'artistCount': '0',
+      'albumCount': '$albumCount',
+      'albumOffset': '$albumOffset',
+      'songCount': '$songCount',
+      'songOffset': '$songOffset',
+    });
+    try {
+      final results = data['searchResult3'] as Map<String, dynamic>;
+      return LibrarySearchResults(
+        albums: (results['album'] as List<dynamic>? ?? [])
+            .map((item) => Album.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        tracks: (results['song'] as List<dynamic>? ?? [])
+            .map((item) => Track.fromJson(item as Map<String, dynamic>))
+            .toList(),
+      );
+    } on Object {
+      throw const NavidromeException(
+        'The server returned invalid search results.',
+      );
+    }
+  }
+
   // These URLs are passed only to the native player, never persisted or logged.
   // Request the existing file without a second lossy transcode.
   Uri streamUri(String trackId) =>

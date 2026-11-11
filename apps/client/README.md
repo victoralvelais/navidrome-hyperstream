@@ -7,6 +7,15 @@ Wide windows show albums and tracks side by side; narrow windows use one pane.
 The library uses an artwork-first layout with a floating mini player and an
 expanded Now Playing sheet. Light, dark, and system appearance are available.
 
+The Search tab finds albums and songs across the entire Navidrome library using
+[OpenSubsonic search3](https://opensubsonic.netlify.app/docs/endpoints/search3/).
+Typing waits 350 ms before sending a request; pressing Search submits immediately.
+Albums and songs page independently. Opening an album or switching tabs preserves
+the query and results, including across narrow/wide layout changes. Tapping a song
+replaces the player queue with the currently loaded song results, starting at that
+song. Fetching another page does not change a queue that is already playing.
+Artist browsing and external-provider search remain future work.
+
 This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
 
@@ -118,6 +127,7 @@ accepts the installed Visual Studio Build Tools 2019 and Windows 10 SDK.
 | Settings sheet | `lib/features/settings/settings_sheet.dart` |
 | Sign-in form and validation | `lib/features/connect/connection_screen.dart` |
 | Album grid, pagination, responsive layout | `lib/features/library/library_screen.dart` |
+| Library search, debounce, result paging | `lib/features/search/library_search.dart` |
 | Track list and album selection | `lib/features/library/album_tracks.dart` |
 | Artwork loading | `lib/features/library/cover_art.dart` |
 | Mini player, Now Playing, and seeking | `lib/features/player/player_controls.dart` |
@@ -176,6 +186,9 @@ sign-in retries, queue replacement, pause during loading, reset, and errors.
 They also check volume/mute ordering and recovery, preference persistence,
 mixing configuration and failures, and the library/player/settings flows at
 393px, 320px with larger text, and 1280px widths.
+Search checks cover query encoding, empty and malformed responses, stale requests,
+clearing/debouncing, page retries, result playback, and preserving results across
+album navigation and window resizing.
 Startup tests cover rendering before initialization, stage reporting, slow startup,
 retry, disposal after closing, and unavailable or stalled preference storage.
 The native startup test uses the real preferences/audio plugins and reaches the
@@ -207,11 +220,8 @@ credentials in CI are needed for this route. The
 successfully compiled and packaged the IPA, and the downloaded archive and
 checksum were verified. The user has since confirmed that the sideloaded iPhone
 app works; the new volume/mixing controls still need their own device check.
-Build 3 subsequently showed a black screen in LiveContainer. See the
-[LiveContainer diagnostic notes](../../docs/ios-github-actions.md#investigating-a-livecontainer-black-screen);
-the cause has not been confirmed.
-The diagnostic update passes 36 unit/widget tests and a native Windows startup
-test. The iOS simulator check remains experimental after hosted setup/build
+Startup checks include unit/widget tests and a native Windows startup test.
+The optional iOS simulator check remains experimental after hosted setup/build
 timeouts; it does not yet establish a successful simulator launch.
 
 The user reports working library playback on both Windows and the sideloaded
@@ -221,5 +231,5 @@ First manual acceptance checks: connect to the real server, play and seek MP3,
 FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and
 restore network access, and resize the window. On iPhone also check screen lock,
 Control Center, track transitions while locked, headphone removal, interruptions,
-and background recovery. Saved credentials, search, playlists, favorites, queue
+and background recovery. Saved credentials, playlists, favorites, queue
 restoration, system artwork, offline mode, and Mornye integration come later.

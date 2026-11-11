@@ -100,6 +100,24 @@ Future<void> main() async {
                       },
                     ],
                   },
+                if (request.url.path.endsWith('search3.view'))
+                  'searchResult3': {
+                    'album': [
+                      {
+                        'id': 'result',
+                        'name': 'Search album',
+                        'artist': 'Search artist',
+                      },
+                    ],
+                    'song': [
+                      {
+                        'id': 'result-song',
+                        'title': 'Search song',
+                        'artist': 'Search artist',
+                        'album': 'Search album',
+                      },
+                    ],
+                  },
               },
             }),
             200,
@@ -146,7 +164,7 @@ Future<void> main() async {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Library'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
       // Optional visual review artifacts, excluded from normal CI/golden checks.
       if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
@@ -206,6 +224,49 @@ Future<void> main() async {
       await tester.tap(find.text('Follow system').last);
       await tester.pumpAndSettle();
       expect(playback.preferences.themeMode, ThemeMode.system);
+      expect(tester.takeException(), isNull);
+      // Return from settings and search using the same persistent player.
+      Navigator.of(tester.element(find.text('Appearance'))).pop();
+      await tester.pumpAndSettle();
+      await playback.preferences.setThemeMode(viewport.theme);
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Search');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text('Search song'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile('../build/previews/${viewport.name}-search.png'),
+        );
+      }
+      tester.view.physicalSize = viewport.size.width < 850
+          ? const Size(1280, 800)
+          : const Size(393, 852);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Search',
+      );
+      expect(find.text('Search song'), findsOneWidget);
+      tester.view.physicalSize = viewport.size;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Search album'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play album'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back to search'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Search',
+      );
+      await tester.ensureVisible(find.text('Search song'));
+      await tester.tap(find.text('Search song'));
+      await tester.pumpAndSettle();
+      expect(playback.mediaItem.value?.id, 'result-song');
+      expect(find.text('Search song'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

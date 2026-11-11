@@ -290,8 +290,8 @@ MP3 320 kbps output, metadata/artwork checks, collision protection, duplicate
 events, restart recovery, and delayed source cleanup. See [README.md](README.md).
 
 The first Flutter client slice exists in `apps/client`, with Navidrome sign-in,
-paginated albums, artwork, tracks, native queue/playback controls, independent
-volume/mute, saved appearance, and iOS audio-mixing preferences. Unit/widget tests
+paginated albums, server-wide album/song search, artwork, tracks, native queue/playback
+controls, independent volume/mute, saved appearance, and iOS audio-mixing preferences. Unit/widget tests
 and a native Windows integration test cover this slice. The native test
 uses generated silent audio and a temporary loopback server to verify playback,
 volume/mute, pause, seek, automatic track transition, and reset. The user reports
@@ -323,12 +323,5 @@ but no general-purpose library upload endpoint. Both Flutter and a PWA would cal
 the same authenticated companion API for imports. Normal library listening should
 continue directly through Navidrome even if that companion is unavailable.
 
-Next slice: secure saved server sign-in and library search, followed by an
+Next slice: secure saved server sign-in, followed by an
 authenticated companion job API and a provider-to-library import proof.
-
-Current reliability issue: build 3 opens to a black screen in the user's
-LiveContainer setup. Native build/IPA checks pass; comparison with build 2 found
-the same Flutter engine, SDK/scene configuration, and packaging method. Saved
-preferences are the new native dependency, but no cause has been confirmed.
-Startup now reports progress and falls back from stalled preference reads; verify
-the diagnostic build on the device before treating the launch issue as resolved.

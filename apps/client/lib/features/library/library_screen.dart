@@ -4,6 +4,7 @@ import '../../models/library.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../player/player_controls.dart';
+import '../search/library_search.dart';
 import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
 import 'cover_art.dart';
@@ -25,7 +26,9 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final List<Album> _albums = [];
+  final _browseKey = GlobalKey();
   Album? _selected;
+  int _section = 0;
   bool _busy = false;
   bool _more = true;
   bool _disconnecting = false;
@@ -183,6 +186,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ),
   );
 
+  // Keep browsing/search state alive while opening albums or changing tabs.
+  Widget _browsePane() => IndexedStack(
+    key: _browseKey,
+    index: _section,
+    children: [
+      _albumGrid(),
+      LibrarySearch(
+        client: widget.client,
+        playback: widget.playback,
+        onAlbumSelected: (album) => setState(() => _selected = album),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: _selected == null,
@@ -194,7 +211,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         leading: _selected == null
             ? null
             : IconButton(
-                tooltip: 'Back to albums',
+                tooltip: _section == 0 ? 'Back to albums' : 'Back to search',
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() => _selected = null),
               ),
@@ -210,7 +227,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           IconButton(
             tooltip: 'Refresh albums',
             icon: const Icon(Icons.refresh),
-            onPressed: _busy || _disconnecting
+            onPressed: _busy || _disconnecting || _section != 0
                 ? null
                 : () => _load(refresh: true),
           ),
@@ -234,7 +251,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     if (constraints.maxWidth >= 850) {
                       return Row(
                         children: [
-                          Expanded(child: _albumGrid()),
+                          Expanded(child: _browsePane()),
                           const VerticalDivider(width: 1),
                           SizedBox(
                             width: 370,
@@ -273,7 +290,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         ],
                       );
                     }
-                    return _selected == null ? _albumGrid() : _trackPane();
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Offstage(
+                          offstage: _selected != null,
+                          child: _browsePane(),
+                        ),
+                        if (_selected != null) _trackPane(),
+                      ],
+                    );
                   },
                 ),
               ),
@@ -281,6 +307,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ],
           ),
         ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _section,
+        onDestinationSelected: _disconnecting
+            ? null
+            : (index) {
+                FocusScope.of(context).unfocus();
+                setState(() {
+                  _section = index;
+                  _selected = null;
+                });
+              },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.library_music_outlined),
+            selectedIcon: Icon(Icons.library_music_rounded),
+            label: 'Library',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.search_rounded),
+            label: 'Search',
+          ),
+        ],
       ),
     ),
   );

@@ -90,7 +90,7 @@ jobs:
         run: bash ../../tools/check_ios_startup.sh
 
       - name: Upload sideload package
-        # Preserve a successfully packaged diagnostic IPA even if the simulator
+        # Preserve a successfully packaged IPA even if the simulator
         # check fails; the workflow still reports the failed check.
         if: ${{ !cancelled() && steps.package_ios.outcome == 'success' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -131,8 +131,8 @@ jobs:
           Use a server address reachable from your phone; `localhost` refers to
           the phone itself. No Navidrome address or credentials are baked in.
 
-          The device IPA was compiled and packaged. Physical-device playback and
-          LiveContainer compatibility still need device checks.
+          The device IPA was compiled and packaged. Validate playback and
+          background audio on a physical device after audio changes.
           See `docs/ios-github-actions.md` for installation and device checks.
           SUMMARY
           printf '\nSimulator startup check: **%s**.\n' "$SIMULATOR_RESULT" >> "$GITHUB_STEP_SUMMARY"

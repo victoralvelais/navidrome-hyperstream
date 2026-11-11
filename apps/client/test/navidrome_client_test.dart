@@ -91,6 +91,84 @@ void main() {
     expect(await client.albums(offset: 40), isEmpty);
   });
 
+  test(
+    'search encodes queries and pages each result type independently',
+    () async {
+      final client = clientWith((request) async {
+        expect(request.url.path, '/navidrome/rest/search3.view');
+        final parameters = request.url.queryParameters;
+        expect(parameters['query'], 'Café & u=someone');
+        expect(parameters['u'], 'a user');
+        expect(parameters['artistCount'], '0');
+        expect(parameters['albumCount'], '0');
+        expect(parameters['albumOffset'], '0');
+        expect(parameters['songCount'], '20');
+        expect(parameters['songOffset'], '40');
+        return ok({
+          'searchResult3': {
+            'song': [
+              {
+                'id': 'song',
+                'title': 'Café',
+                'coverArt': 'art',
+                'duration': 90,
+              },
+            ],
+          },
+        });
+      });
+      final results = await client.search(
+        '  Café & u=someone  ',
+        albumCount: 0,
+        songOffset: 40,
+      );
+      expect(results.albums, isEmpty);
+      expect(results.tracks.single.title, 'Café');
+      expect(results.tracks.single.coverArt, 'art');
+    },
+  );
+
+  test('blank search never requests the entire server library', () async {
+    final client = clientWith(
+      (_) async => throw StateError('Unexpected request'),
+    );
+    final results = await client.search('   ');
+    expect(results.albums, isEmpty);
+    expect(results.tracks, isEmpty);
+  });
+
+  test('search distinguishes no matches from a malformed payload', () async {
+    final empty = clientWith(
+      (_) async => ok({'searchResult3': <String, dynamic>{}}),
+    );
+    expect((await empty.search('nothing')).tracks, isEmpty);
+    for (final payload in [
+      <String, dynamic>{},
+      {
+        'searchResult3': {'album': 'secret'},
+      },
+      {
+        'searchResult3': {
+          'song': [
+            {'title': 'missing id'},
+          ],
+        },
+      },
+    ]) {
+      final client = clientWith((_) async => ok(payload));
+      await expectLater(
+        client.search('query'),
+        throwsA(
+          isA<NavidromeException>().having(
+            (e) => e.message,
+            'message',
+            'The server returned invalid search results.',
+          ),
+        ),
+      );
+    }
+  });
+
   test('reads unicode album names and fractional track durations', () async {
     final client = clientWith(
       (request) async => request.url.path.contains('getAlbumList2')
