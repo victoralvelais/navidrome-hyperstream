@@ -165,12 +165,14 @@ iOS compilation requires macOS/Xcode. The project now has a manually triggered
 [GitHub Actions build and sideloading guide](../../docs/ios-github-actions.md):
 the hosted Mac compiles an unsigned release, and AltStore Classic/AltServer can
 sign it locally from Windows. No paid Apple Developer membership or Apple
-credentials in CI are needed for this route. The workflow has been checked
-locally, but its first hosted run and device installation are pending.
+credentials in CI are needed for this route. The
+[hosted build](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
+successfully compiled and packaged the IPA, and the downloaded archive and
+checksum were verified. Device installation and playback checks are pending.
 
 The bundle identifier is a placeholder until signing is configured. Native iOS
-compilation and device behavior remain unverified. The user reports that the
-Windows client is working with their library so far.
+compilation is verified; device behavior remains unverified. The user reports
+that the Windows client is working with their library so far.
 
 First manual acceptance checks: connect to the real server, play and seek MP3,
 FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and

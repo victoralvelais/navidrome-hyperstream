@@ -30,7 +30,8 @@ Confirmed decisions:
   remains the Apple-first alternative if a separate Windows client is acceptable.
 - GitHub Actions is selected for hosted macOS builds. Begin with manually
   triggered unsigned release IPAs and local signing through AltStore Classic/
-  AltServer on Windows. The first hosted run and device installation are pending.
+  AltServer on Windows. Hosted compilation and packaging are verified; device
+  installation and playback remain pending.
 
 Proposed MVP boundaries:
 
@@ -205,8 +206,8 @@ does not commit the client to any framework.
 The user has no Mac. GitHub Actions is the selected macOS build environment; the
 initial workflow creates an unsigned release IPA for local signing and sideloading
 from Windows. This supports phone testing without a local Mac, while interactive
-native debugging remains less convenient. The workflow is prepared locally but
-has not yet run on GitHub. See the [build guide](docs/ios-github-actions.md) and
+native debugging remains less convenient. Hosted compilation and IPA packaging
+are verified. See the [build guide](docs/ios-github-actions.md) and
 [Flutter iOS setup](https://docs.flutter.dev/platform-integration/ios/setup).
 
 ## Milestones and completion criteria
@@ -272,9 +273,9 @@ actual providers and release features at milestone 6. See
   backend version? Establish this through the initial integration proof.
 - What are the existing Docker deployment and host music paths, and can the
   companion write to a dedicated import destination?
-- Which GitHub repository will host the project? The unsigned build workflow
-  requires an initial push and successful hosted run, followed by local signing
-  and installation on the phone. Paid Apple signing/TestFlight is deferred.
+- Does the unsigned IPA install and play reliably after local signing on the
+  phone? GitHub Actions compilation and packaging are verified. Paid Apple
+  signing/TestFlight is deferred.
 - Does Flutter's playback/platform spike satisfy reliability and manual
   maintainability, or is an Apple-native client with a later Windows port preferable?
 - Which listening features are release requirements: gapless, AirPlay, CarPlay,
@@ -299,4 +300,7 @@ Docker verification was prepared but execution was not approved, so container
 behavior remains unverified. No live provider integration, Navidrome indexing,
 comprehensive real-library acceptance, or iOS device validation is complete.
 Milestone 0 is open. The GitHub Actions iOS workflow and macOS packaging script
-pass local workflow/shell syntax checks; Xcode compilation is still unverified.
+passed [hosted run 2](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757),
+including Dart checks, Xcode compilation, IPA packaging, and artifact upload.
+The downloaded archive, checksum, device-platform metadata, and app executable
+permissions were verified. Installation and playback on an iPhone remain pending.

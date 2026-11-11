@@ -59,9 +59,11 @@ unsigned iOS release on a standard macOS runner and packages it for local signin
 with AltStore Classic/AltServer. It requires no Apple credentials in GitHub.
 See the [setup and sideloading guide](docs/ios-github-actions.md).
 
-The workflow is prepared and checked locally; its first hosted build and iPhone
-installation are still pending. Public repositories have free standard runners;
-private repositories use their account's included allowance and billing rules.
+The [verified hosted build](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
+compiled, packaged, and uploaded an unsigned iOS release. The downloaded archive
+and checksum were verified; iPhone installation and playback remain pending.
+Public repositories have free standard runners; private repositories use their
+account's included allowance and billing rules.
 
 ## Run the isolated prototype
 
