@@ -1,13 +1,18 @@
 import json
+import io
+import hashlib
 from pathlib import Path
 import plistlib
 import stat
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
+import urllib.error
+from types import SimpleNamespace
 import zipfile
 
-from tools.release import artifacts_for, publish_pair, repository_from_remote
+from tools.release import GitHub, artifacts_for, publish_pair, repository_from_remote
 from tools.release_artifacts import PACKAGES, ReleaseError, checked_members, sha256
 
 
@@ -152,6 +157,47 @@ class ReleaseToolsTests(unittest.TestCase):
                     'https://elsewhere.example/owner/repo']:
             with self.assertRaises(ReleaseError):
                 repository_from_remote(url)
+
+    def test_new_run_lookup_retries_eventual_404(self):
+        api = GitHub('owner/repo', 'test-token')
+        calls = []
+        def open_request(request, timeout):
+            calls.append(request)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError(request.full_url, 404, 'Not ready', {}, None)
+            return io.BytesIO(b'{"id":123}')
+        api.opener = SimpleNamespace(open=open_request)
+        with patch('tools.release.time.sleep'):
+            self.assertEqual(api.request('/actions/runs/123')['id'], 123)
+        self.assertEqual(len(calls), 3)
+
+    def test_dispatch_is_not_retried_after_an_uncertain_response(self):
+        api = GitHub('owner/repo', 'test-token')
+        calls = []
+        def open_request(request, timeout):
+            calls.append(request)
+            raise urllib.error.HTTPError(request.full_url, 503, 'Unavailable', {}, None)
+        api.opener = SimpleNamespace(open=open_request)
+        with self.assertRaises(ReleaseError):
+            api.request('/actions/workflows/ios-sideload.yml/dispatches', {'ref': 'main'})
+        self.assertEqual(len(calls), 1)
+
+    def test_download_redirect_does_not_forward_github_credentials(self):
+        api = GitHub('owner/repo', 'test-token')
+        requests = []
+        data = b'archive bytes'
+        def open_request(request, timeout):
+            requests.append(request)
+            if len(requests) == 1:
+                raise urllib.error.HTTPError(request.full_url, 302, 'Found',
+                    {'Location': 'https://storage.example.com/artifact?sig=private'}, None)
+            return io.BytesIO(data)
+        api.opener = SimpleNamespace(open=open_request)
+        destination = self.root / 'download.zip'
+        api.download({'id': 123, 'digest': 'sha256:' + hashlib.sha256(data).hexdigest()}, destination)
+        self.assertTrue(requests[0].has_header('Authorization'))
+        self.assertFalse(requests[1].has_header('Authorization'))
+        self.assertEqual(destination.read_bytes(), data)
 
 
 if __name__ == '__main__':

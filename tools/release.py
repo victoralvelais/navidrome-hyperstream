@@ -72,15 +72,24 @@ class GitHub:
             data=None if body is None else json.dumps(body).encode('utf-8'))
         if body is not None:
             request.add_header('Content-Type', 'application/json')
-        try:
-            with self.opener.open(request, timeout=45) as response:
-                data = response.read()
-                return json.loads(data) if data else {}
-        except urllib.error.HTTPError as error:
-            raise ReleaseError(f'GitHub returned HTTP {error.code}. Check Actions access and the run in GitHub.') from None
-        except (urllib.error.URLError, TimeoutError):
-            # A dispatch might have succeeded even if its response was lost.
-            raise ReleaseError('GitHub did not respond. Check Actions before repeating a build; use fetch to resume a completed run.') from None
+        for attempt in range(5):
+            try:
+                with self.opener.open(request, timeout=45) as response:
+                    data = response.read()
+                    return json.loads(data) if data else {}
+            except urllib.error.HTTPError as error:
+                eventual_run = error.code == 404 and path.startswith('/actions/runs/')
+                transient = error.code in (429, 500, 502, 503, 504) or eventual_run
+                if body is None and transient and attempt < 4:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise ReleaseError(f'GitHub returned HTTP {error.code}. Check Actions access and the run in GitHub.') from None
+            except (urllib.error.URLError, TimeoutError):
+                if body is None and attempt < 4:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                # Never retry a dispatch: its response may be lost after success.
+                raise ReleaseError('GitHub did not respond. Check Actions before repeating a build; use fetch to resume a completed run.') from None
 
     def download(self, artifact, destination):
         url = self.base + f"/actions/artifacts/{artifact['id']}/zip"
