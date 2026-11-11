@@ -5,16 +5,16 @@ import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
-import '../library/cover_art.dart';
+import '../../widgets/glass_surface.dart';
 import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
-import '../../widgets/glass_surface.dart';
-import 'volume_controls.dart';
+import '../library/cover_art.dart';
+import 'volume_button.dart';
 
 String _time(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
 
-class PlayerControls extends StatefulWidget {
+class PlayerControls extends StatelessWidget {
   const PlayerControls({
     super.key,
     required this.playback,
@@ -26,138 +26,111 @@ class PlayerControls extends StatefulWidget {
   final LibraryCollections? collections;
 
   @override
-  State<PlayerControls> createState() => _PlayerControlsState();
-}
-
-class _PlayerControlsState extends State<PlayerControls> {
-  bool _showVolume = false;
-
-  void _openPlayer() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    showDragHandle: false,
-    constraints: const BoxConstraints(maxWidth: 560),
-    builder: (context) => _NowPlaying(
-      playback: widget.playback,
-      client: widget.client,
-      collections: widget.collections,
-    ),
-  );
-
-  @override
   Widget build(BuildContext context) => _PlaybackView(
-    playback: widget.playback,
+    playback: playback,
     builder: (context, item, state) {
       if (item == null && state.processingState != AudioProcessingState.error) {
         return const SizedBox.shrink();
       }
+      final labels = InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          showDragHandle: false,
+          constraints: const BoxConstraints(maxWidth: 560),
+          builder: (_) => _NowPlaying(
+            playback: playback,
+            client: client,
+            collections: collections,
+          ),
+        ),
+        child: Semantics(
+          button: true,
+          label: 'Open now playing',
+          child: Row(
+            children: [
+              SizedBox(
+                width: 42,
+                height: 42,
+                child: CoverArt(
+                  client: client,
+                  id: item?.extras?['coverArtId'] as String?,
+                  radius: 12,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: _TrackLabels(item: item)),
+            ],
+          ),
+        ),
+      );
+      final controls = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Previous(playback: playback, state: state),
+          _PlayButton(playback: playback, item: item, state: state),
+          _Next(playback: playback, state: state),
+          VolumeButton(playback: playback),
+        ],
+      );
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         child: GlassSurface(
+          radius: 28,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: _openPlayer,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Semantics(
-                          button: true,
-                          label: 'Open now playing',
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: CoverArt(
-                                  client: widget.client,
-                                  id: item?.extras?['coverArtId'] as String?,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(child: _TrackLabels(item: item)),
-                            ],
-                          ),
+                child: LayoutBuilder(
+                  builder: (context, bounds) {
+                    final narrow =
+                        bounds.maxWidth < 330 ||
+                        MediaQuery.textScalerOf(context).scale(1) > 1.2;
+                    return IconButtonTheme(
+                      data: IconButtonThemeData(
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          maximumSize: const Size(44, 44),
+                          padding: EdgeInsets.zero,
                         ),
                       ),
-                    ),
-                    _PlayButton(
-                      playback: widget.playback,
-                      item: item,
-                      state: state,
-                    ),
-                    IconButton(
-                      tooltip: 'Next track',
-                      onPressed:
-                          state.controls.contains(MediaControl.skipToNext) &&
-                              state.processingState !=
-                                  AudioProcessingState.error
-                          ? widget.playback.skipToNext
-                          : null,
-                      icon: const Icon(Icons.skip_next_rounded),
-                    ),
-                    ListenableBuilder(
-                      listenable: widget.playback.preferences,
-                      builder: (context, _) => IconButton(
-                        tooltip: _showVolume
-                            ? 'Hide music volume'
-                            : 'Show music volume',
-                        isSelected: _showVolume,
-                        onPressed: () =>
-                            setState(() => _showVolume = !_showVolume),
-                        icon: Icon(
-                          widget.playback.preferences.volume == 0
-                              ? Icons.volume_off_rounded
-                              : Icons.volume_up_rounded,
-                        ),
-                      ),
-                    ),
-                  ],
+                      child: narrow
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                labels,
+                                const SizedBox(height: 4),
+                                controls,
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(child: labels),
+                                const SizedBox(width: 4),
+                                controls,
+                              ],
+                            ),
+                    );
+                  },
                 ),
               ),
-              if (_showVolume)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 18, 4),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Music volume',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      VolumeControls(playback: widget.playback),
-                    ],
-                  ),
-                ),
-              if (state.processingState == AudioProcessingState.error)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(state.errorMessage ?? 'Playback failed.'),
-                ),
-              ValueListenableBuilder<String?>(
-                valueListenable: widget.playback.settingsError,
-                builder: (context, error, _) => error == null
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(error),
-                      ),
-              ),
+              _PlayerErrors(playback: playback, state: state),
               StreamBuilder<Duration>(
-                stream: widget.playback.positionStream,
-                initialData: widget.playback.position,
+                stream: playback.positionStream,
+                initialData: playback.position,
                 builder: (context, snapshot) {
                   final duration = item?.duration?.inMilliseconds ?? 0;
                   final busy =
                       state.processingState == AudioProcessingState.loading ||
                       state.processingState == AudioProcessingState.buffering;
                   return LinearProgressIndicator(
-                    minHeight: 2,
+                    minHeight: 1.5,
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: .6),
                     value: busy
                         ? null
                         : duration <= 0
@@ -185,12 +158,25 @@ class _NowPlaying extends StatefulWidget {
   final PlaybackService playback;
   final NavidromeClient client;
   final LibraryCollections? collections;
+
   @override
   State<_NowPlaying> createState() => _NowPlayingState();
 }
 
 class _NowPlayingState extends State<_NowPlaying> {
-  bool _showVolume = false;
+  PlaybackService get playback => widget.playback;
+  NavidromeClient get client => widget.client;
+  LibraryCollections? get collections => widget.collections;
+  bool _volumeOpen = false;
+
+  Widget _volumeSpace(Widget child) => AnimatedPadding(
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180),
+    curve: Curves.easeOutCubic,
+    padding: EdgeInsets.only(right: _volumeOpen ? 72 : 0),
+    child: child,
+  );
 
   Track _track(MediaItem item) => Track(
     id: item.id,
@@ -202,50 +188,122 @@ class _NowPlayingState extends State<_NowPlaying> {
     starred: item.extras?['starred'] as bool? ?? false,
   );
 
+  void _showQueue(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    constraints: const BoxConstraints(maxWidth: 560),
+    builder: (context) => FractionallySizedBox(
+      heightFactor: .7,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Up next',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close queue',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<MediaItem>>(
+              stream: playback.queue,
+              initialData: playback.queue.value,
+              builder: (context, queue) => StreamBuilder<PlaybackState>(
+                stream: playback.playbackState,
+                initialData: playback.playbackState.value,
+                builder: (context, state) => ListView.builder(
+                  itemCount: queue.data?.length ?? 0,
+                  itemBuilder: (context, index) {
+                    final item = queue.data![index];
+                    return ListTile(
+                      selected: index == state.data?.queueIndex,
+                      leading: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: CoverArt(
+                          client: client,
+                          id: item.extras?['coverArtId'] as String?,
+                        ),
+                      ),
+                      title: Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(item.artist ?? '', maxLines: 1),
+                      trailing: index == state.data?.queueIndex
+                          ? const Icon(Icons.graphic_eq_rounded)
+                          : null,
+                      onTap: () => playback.skipToQueueItem(index),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => FractionallySizedBox(
-    heightFactor: .94,
+    heightFactor: .98,
     child: ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       child: _PlaybackView(
-        playback: widget.playback,
+        playback: playback,
         builder: (context, item, state) {
           final scheme = Theme.of(context).colorScheme;
-          final coverSize = (MediaQuery.sizeOf(context).height * .35).clamp(
+          final coverSize = (MediaQuery.sizeOf(context).height * .42).clamp(
             180.0,
-            340.0,
+            360.0,
           );
           return ArtworkBackdrop(
-            client: widget.client,
+            client: client,
             coverArt: item?.extras?['coverArtId'] as String?,
             child: SafeArea(
               top: false,
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 14, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
                     child: Row(
                       children: [
+                        IconButton(
+                          tooltip: 'Close player',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        ),
                         Expanded(
-                          child: Text(
-                            'Now playing',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          child: Center(
+                            child: Semantics(
+                              header: true,
+                              child: Text(
+                                'Now playing',
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                            ),
                           ),
                         ),
-                        GlassSurface(
-                          radius: 24,
-                          child: IconButton(
-                            tooltip: 'Close player',
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                          ),
-                        ),
+                        const SizedBox(width: 48),
                       ],
                     ),
                   ),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+                      padding: const EdgeInsets.fromLTRB(24, 14, 24, 24),
                       child: Column(
                         children: [
                           Center(
@@ -253,21 +311,21 @@ class _NowPlayingState extends State<_NowPlaying> {
                               constraints: BoxConstraints(maxWidth: coverSize),
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(22),
+                                  borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(
                                         alpha: .24,
                                       ),
                                       blurRadius: 32,
-                                      offset: const Offset(0, 16),
+                                      offset: const Offset(0, 12),
                                     ),
                                   ],
                                 ),
                                 child: CoverArt(
-                                  client: widget.client,
+                                  client: client,
                                   id: item?.extras?['coverArtId'] as String?,
-                                  radius: 22,
+                                  radius: 16,
                                 ),
                               ),
                             ),
@@ -278,146 +336,97 @@ class _NowPlayingState extends State<_NowPlaying> {
                               Expanded(
                                 child: _TrackLabels(item: item, large: true),
                               ),
-                              if (item != null &&
-                                  widget.collections != null) ...[
-                                const SizedBox(width: 12),
+                              if (item != null && collections != null) ...[
+                                const SizedBox(width: 8),
                                 GlassSurface(
-                                  radius: 26,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      FavoriteButton(
-                                        collections: widget.collections!,
-                                        song: _track(item),
-                                      ),
-                                      SongActions(
-                                        collections: widget.collections!,
-                                        song: _track(item),
-                                      ),
-                                    ],
+                                  radius: 24,
+                                  child: FavoriteButton(
+                                    collections: collections!,
+                                    song: _track(item),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GlassSurface(
+                                  radius: 24,
+                                  child: SongActions(
+                                    collections: collections!,
+                                    song: _track(item),
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                          const SizedBox(height: 14),
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: scheme.onSurface,
-                              inactiveTrackColor: scheme.onSurface.withValues(
-                                alpha: .15,
+                          const SizedBox(height: 16),
+                          _volumeSpace(
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: scheme.onSurface,
+                                inactiveTrackColor: scheme.onSurface.withValues(
+                                  alpha: .25,
+                                ),
+                                thumbColor: scheme.onSurface,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 4,
+                                ),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 14,
+                                ),
                               ),
-                              thumbColor: scheme.onSurface,
-                              thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 5,
-                              ),
-                            ),
-                            child: _SeekBar(
-                              key: ValueKey(item?.id),
-                              playback: widget.playback,
-                              item: item,
-                              state: state,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          GlassSurface(
-                            radius: 40,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Previous track',
-                                    iconSize: 34,
-                                    onPressed:
-                                        state.controls.contains(
-                                              MediaControl.skipToPrevious,
-                                            ) &&
-                                            state.processingState !=
-                                                AudioProcessingState.error
-                                        ? widget.playback.skipToPrevious
-                                        : null,
-                                    icon: const Icon(
-                                      Icons.skip_previous_rounded,
-                                    ),
-                                  ),
-                                  _PlayButton(
-                                    playback: widget.playback,
-                                    item: item,
-                                    state: state,
-                                    large: true,
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Next track',
-                                    iconSize: 34,
-                                    onPressed:
-                                        state.controls.contains(
-                                              MediaControl.skipToNext,
-                                            ) &&
-                                            state.processingState !=
-                                                AudioProcessingState.error
-                                        ? widget.playback.skipToNext
-                                        : null,
-                                    icon: const Icon(Icons.skip_next_rounded),
-                                  ),
-                                ],
+                              child: _SeekBar(
+                                key: ValueKey(item?.id),
+                                playback: playback,
+                                item: item,
+                                state: state,
                               ),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          TextButton.icon(
-                            onPressed: () =>
-                                setState(() => _showVolume = !_showVolume),
-                            icon: Icon(
-                              _showVolume
-                                  ? Icons.expand_less_rounded
-                                  : Icons.volume_up_rounded,
-                            ),
-                            label: Text(
-                              _showVolume
-                                  ? 'Hide music volume'
-                                  : 'Music volume',
+                          _volumeSpace(
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _Previous(
+                                  playback: playback,
+                                  state: state,
+                                  large: true,
+                                ),
+                                _PlayButton(
+                                  playback: playback,
+                                  item: item,
+                                  state: state,
+                                  large: true,
+                                ),
+                                _Next(
+                                  playback: playback,
+                                  state: state,
+                                  large: true,
+                                ),
+                              ],
                             ),
                           ),
-                          if (_showVolume)
-                            GlassSurface(
-                              radius: 24,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  4,
-                                  4,
-                                  16,
-                                  12,
-                                ),
-                                child: Column(
-                                  children: [
-                                    VolumeControls(playback: widget.playback),
-                                    Text(
-                                      'Adjusts Hyperstream only',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium,
-                                    ),
-                                  ],
+                          const SizedBox(height: 28),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GlassSurface(
+                                radius: 26,
+                                child: IconButton(
+                                  tooltip: 'Show queue',
+                                  onPressed: () => _showQueue(context),
+                                  icon: const Icon(Icons.queue_music_rounded),
                                 ),
                               ),
-                            ),
-                          if (state.processingState ==
-                              AudioProcessingState.error)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Text(
-                                state.errorMessage ?? 'Playback failed.',
+                              GlassSurface(
+                                radius: 26,
+                                child: VolumeButton(
+                                  playback: playback,
+                                  onExpandedChanged: (open) =>
+                                      setState(() => _volumeOpen = open),
+                                ),
                               ),
-                            ),
-                          ValueListenableBuilder<String?>(
-                            valueListenable: widget.playback.settingsError,
-                            builder: (context, error, _) => error == null
-                                ? const SizedBox.shrink()
-                                : Text(error),
+                            ],
                           ),
+                          _PlayerErrors(playback: playback, state: state),
                         ],
                       ),
                     ),
@@ -436,7 +445,6 @@ class _TrackLabels extends StatelessWidget {
   const _TrackLabels({required this.item, this.large = false});
   final MediaItem? item;
   final bool large;
-
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,13 +461,55 @@ class _TrackLabels extends StatelessWidget {
         item?.artist ?? '',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: large
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     ],
+  );
+}
+
+class _Previous extends StatelessWidget {
+  const _Previous({
+    required this.playback,
+    required this.state,
+    this.large = false,
+  });
+  final PlaybackService playback;
+  final PlaybackState state;
+  final bool large;
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: 'Previous track',
+    color: Theme.of(context).colorScheme.onSurface,
+    iconSize: large ? 38 : 24,
+    onPressed:
+        state.controls.contains(MediaControl.skipToPrevious) &&
+            state.processingState != AudioProcessingState.error
+        ? playback.skipToPrevious
+        : null,
+    icon: const Icon(Icons.skip_previous_rounded),
+  );
+}
+
+class _Next extends StatelessWidget {
+  const _Next({
+    required this.playback,
+    required this.state,
+    this.large = false,
+  });
+  final PlaybackService playback;
+  final PlaybackState state;
+  final bool large;
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: 'Next track',
+    color: Theme.of(context).colorScheme.onSurface,
+    iconSize: large ? 38 : 24,
+    onPressed:
+        state.controls.contains(MediaControl.skipToNext) &&
+            state.processingState != AudioProcessingState.error
+        ? playback.skipToNext
+        : null,
+    icon: const Icon(Icons.skip_next_rounded),
   );
 }
 
@@ -474,18 +524,11 @@ class _PlayButton extends StatelessWidget {
   final MediaItem? item;
   final PlaybackState state;
   final bool large;
-
   @override
   Widget build(BuildContext context) => IconButton(
-    style: large
-        ? IconButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.onSurface,
-            foregroundColor: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.all(6),
-          )
-        : null,
     tooltip: state.playing ? 'Pause' : 'Play',
-    iconSize: large ? 52 : 32,
+    color: Theme.of(context).colorScheme.onSurface,
+    iconSize: large ? 64 : 28,
     onPressed:
         item == null || state.processingState == AudioProcessingState.error
         ? null
@@ -493,6 +536,29 @@ class _PlayButton extends StatelessWidget {
         ? playback.pause
         : playback.play,
     icon: Icon(state.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+  );
+}
+
+class _PlayerErrors extends StatelessWidget {
+  const _PlayerErrors({required this.playback, required this.state});
+  final PlaybackService playback;
+  final PlaybackState state;
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (state.processingState == AudioProcessingState.error)
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(state.errorMessage ?? 'Playback failed.'),
+        ),
+      ValueListenableBuilder<String?>(
+        valueListenable: playback.settingsError,
+        builder: (context, error, _) => error == null
+            ? const SizedBox.shrink()
+            : Padding(padding: const EdgeInsets.all(12), child: Text(error)),
+      ),
+    ],
   );
 }
 
@@ -506,14 +572,12 @@ class _SeekBar extends StatefulWidget {
   final PlaybackService playback;
   final MediaItem? item;
   final PlaybackState state;
-
   @override
   State<_SeekBar> createState() => _SeekBarState();
 }
 
 class _SeekBarState extends State<_SeekBar> {
   double? _drag;
-
   @override
   Widget build(BuildContext context) => StreamBuilder<Duration>(
     stream: widget.playback.positionStream,
@@ -545,12 +609,19 @@ class _SeekBarState extends State<_SeekBar> {
                   }
                 : null,
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_time(Duration(milliseconds: position.round()))),
-              Text(_time(duration)),
-            ],
+          DefaultTextStyle(
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_time(Duration(milliseconds: position.round()))),
+                Text(
+                  '-${_time(duration - Duration(milliseconds: position.round()))}',
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -562,7 +633,6 @@ class _PlaybackView extends StatelessWidget {
   const _PlaybackView({required this.playback, required this.builder});
   final PlaybackService playback;
   final Widget Function(BuildContext, MediaItem?, PlaybackState) builder;
-
   @override
   Widget build(BuildContext context) => StreamBuilder<MediaItem?>(
     stream: playback.mediaItem,

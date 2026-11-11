@@ -1,3 +1,22 @@
+class Artist {
+  const Artist({
+    required this.id,
+    required this.name,
+    this.coverArt,
+    this.albumCount = 0,
+  });
+  factory Artist.fromJson(Map<String, dynamic> json) => Artist(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? 'Unknown artist',
+    coverArt: json['coverArt'] as String?,
+    albumCount: (json['albumCount'] as num?)?.toInt() ?? 0,
+  );
+  final String id;
+  final String name;
+  final String? coverArt;
+  final int albumCount;
+}
+
 class Album {
   const Album({
     required this.id,
@@ -88,8 +107,13 @@ class MusicPlaylist {
 }
 
 class LibrarySearchResults {
-  const LibrarySearchResults({this.albums = const [], this.tracks = const []});
+  const LibrarySearchResults({
+    this.albums = const [],
+    this.tracks = const [],
+    this.artists = const [],
+  });
 
   final List<Album> albums;
   final List<Track> tracks;
+  final List<Artist> artists;
 }

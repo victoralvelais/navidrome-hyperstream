@@ -74,6 +74,12 @@ class CollectionServer {
     final method = request.url.path.split('/').last.replaceAll('.view', '');
     final p = request.url.queryParameters;
     switch (method) {
+      case 'search3':
+        return collectionResponse({
+          'searchResult3': {
+            'song': [song('two')],
+          },
+        });
       case 'getAlbumList2':
         return collectionResponse({
           'albumList2': {

@@ -115,7 +115,7 @@ Future<void> main() async {
           await tap(menu);
         }
 
-        await tap(find.text('Test album'));
+        await tap(find.text('Test album').first);
         await tap(find.byTooltip('Add to favorites'));
         expect(server.favoriteAlbums, {'album'});
         await menuIn(
@@ -124,6 +124,14 @@ Future<void> main() async {
         );
         await tap(find.text('Add to favorites'));
         expect(server.favoriteSongs, {'one'});
+        await tap(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w is NavigationBar || w is NavigationRail,
+            ),
+            matching: find.text('Library'),
+          ),
+        );
         await tap(find.text('Favorites'));
         expect(find.text('Test album'), findsOneWidget);
         await tester.scrollUntilVisible(
@@ -161,6 +169,14 @@ Future<void> main() async {
           'one',
           'one',
         ]);
+        await tap(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) => w is NavigationBar || w is NavigationRail,
+            ),
+            matching: find.text('Library'),
+          ),
+        );
         await tap(find.text('Playlists'));
         await tap(find.text('Weekend'));
         await tap(find.text('Play playlist'));
@@ -219,6 +235,19 @@ Future<void> main() async {
               )
               .last,
         );
+        await tap(find.text('Add songs'));
+        await tester.enterText(find.byType(TextField), 'Second');
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pumpAndSettle();
+        await tap(find.byTooltip('Add Second song to playlist'));
+        expect(server.playlists['owned']!['songs'], [
+          'one',
+          'two',
+          'one',
+          'two',
+        ]);
+        expect(playback.queue.value.length, 4);
+        await tap(find.byTooltip('Close add songs'));
         await tap(find.text('Rename playlist'));
         await tester.enterText(find.byType(TextField), 'Evening mix');
         await tap(find.text('Save'));

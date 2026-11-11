@@ -96,6 +96,19 @@ Future<void> main() async {
             jsonEncode({
               'subsonic-response': {
                 'status': 'ok',
+                if (request.url.path.endsWith('getStarred2.view'))
+                  'starred2': {},
+                if (request.url.path.endsWith('getArtist.view'))
+                  'artist': {
+                    'album': [
+                      {
+                        'id': 'artist-album',
+                        'name': 'Artist album',
+                        'artist': 'Northline',
+                        if (covers.isNotEmpty) 'coverArt': 'two',
+                      },
+                    ],
+                  },
                 if (request.url.path.endsWith('getAlbumList2.view'))
                   'albumList2': {
                     'album': [
@@ -138,21 +151,34 @@ Future<void> main() async {
                   },
                 if (request.url.path.endsWith('search3.view'))
                   'searchResult3': {
-                    'album': [
-                      {
-                        'id': 'result',
-                        'name': 'Search album',
-                        'artist': 'Search artist',
-                      },
-                    ],
-                    'song': [
-                      {
-                        'id': 'result-song',
-                        'title': 'Search song',
-                        'artist': 'Search artist',
-                        'album': 'Search album',
-                      },
-                    ],
+                    if (request.url.queryParameters['artistCount'] != '0')
+                      'artist': [
+                        {
+                          'id': 'northline',
+                          'name': 'Northline',
+                          'albumCount': 1,
+                          if (covers.isNotEmpty) 'coverArt': 'two',
+                        },
+                      ],
+                    if (request.url.queryParameters['albumCount'] != '0')
+                      'album': [
+                        {
+                          'id': 'result',
+                          'name': 'Search album',
+                          'artist': 'Search artist',
+                          if (covers.isNotEmpty) 'coverArt': 'three',
+                        },
+                      ],
+                    if (request.url.queryParameters['songCount'] != '0')
+                      'song': [
+                        {
+                          'id': 'result-song',
+                          'title': 'Search song',
+                          'artist': 'Search artist',
+                          'album': 'Search album',
+                          if (covers.isNotEmpty) 'coverArt': 'four',
+                        },
+                      ],
                   },
               },
             }),
@@ -208,31 +234,75 @@ Future<void> main() async {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Library'), findsNWidgets(2));
+      expect(find.text('Home'), findsNWidgets(2));
+      Finder nav(String label) => find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => w is NavigationBar || w is NavigationRail,
+        ),
+        matching: find.text(label),
+      );
+      await _capturePreview(tester, '${viewport.name}-home');
+      await tester.tap(nav('Library'));
+      await tester.pumpAndSettle();
+      expect(find.text('Artists'), findsOneWidget);
+      expect(find.byTooltip('Previous track'), findsOneWidget);
       expect(tester.takeException(), isNull);
       // Optional visual review artifacts, excluded from normal CI/golden checks.
       await _capturePreview(tester, viewport.name);
+      await tester.tap(find.text('Artists'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Northline'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Artist album'));
+      await tester.tap(find.text('Artist album'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play album'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back to artist'));
+      await tester.pumpAndSettle();
+      expect(find.text('Artist album'), findsOneWidget);
+      await tester.tap(nav('Library'));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Show music volume'));
+      await tester.tap(find.byTooltip('Music volume'));
       await tester.pumpAndSettle();
-      final volumeSlider = tester.widget<Slider>(find.byType(Slider));
-      volumeSlider.onChanged!(.27);
+      final volumeTrack = tester.getRect(
+        find.byKey(const ValueKey('vertical-volume-track')),
+      );
+      await tester.tapAt(
+        Offset(
+          volumeTrack.center.dx,
+          volumeTrack.top + volumeTrack.height * .60,
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(player.volume, .27);
+      expect(player.volume, closeTo(.4, .01));
       await tester.tap(find.byTooltip('Mute music'));
       await tester.pumpAndSettle();
       expect(player.volume, 0);
       await tester.tap(find.byTooltip('Unmute music'));
       await tester.pumpAndSettle();
-      expect(player.volume, .27);
-
-      await tester.tap(find.byTooltip('Hide music volume'));
+      expect(player.volume, closeTo(.4, .01));
+      await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
       await tester.tap(find.text('A quiet place to start again'));
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-player');
+      await tester.ensureVisible(find.byTooltip('Music volume').last);
+      await tester.tap(find.byTooltip('Music volume').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byTooltip('Next track').last).right,
+        lessThanOrEqualTo(
+          tester
+              .getRect(find.byKey(const ValueKey('vertical-volume-track')))
+              .left,
+        ),
+      );
+      await _capturePreview(tester, '${viewport.name}-volume');
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
       // A drag previews position; only releasing it asks the native player to seek.
       final seekSlider = tester.widget<Slider>(find.byType(Slider).first);
       seekSlider.onChanged!(45000);
@@ -242,9 +312,25 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(player.seekCalls, 1);
       expect(player.position, const Duration(seconds: 45));
+      await tester.ensureVisible(find.byTooltip('Show queue'));
+      await tester.tap(find.byTooltip('Show queue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Up next'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close queue'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Close player'));
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('After Hours').hitTestable(),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const PageStorageKey('library-hub')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(find.text('After Hours'));
       await tester.pumpAndSettle();
       expect(find.text('Play album'), findsOneWidget);
@@ -264,14 +350,19 @@ Future<void> main() async {
       Navigator.of(tester.element(find.text('Appearance'))).pop();
       await tester.pumpAndSettle();
       await playback.preferences.setThemeMode(viewport.theme);
-      await tester.tap(find.text('Search'));
+      await tester.tap(nav('Search'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Search');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(find.text('Search song'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-search');
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('search-filter-songs')),
+      );
+      await tester.tap(find.byKey(const ValueKey('search-filter-songs')));
+      await tester.pumpAndSettle();
+      expect(find.text('Search song'), findsOneWidget);
       tester.view.physicalSize = viewport.size.width < 850
           ? const Size(1280, 800)
           : const Size(393, 852);
@@ -283,6 +374,13 @@ Future<void> main() async {
       expect(find.text('Search song'), findsOneWidget);
       tester.view.physicalSize = viewport.size;
       await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('search-filter-albums')),
+      );
+      await tester.tap(find.byKey(const ValueKey('search-filter-albums')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Search album'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Search album'));
       await tester.pumpAndSettle();
       expect(find.text('Play album'), findsOneWidget);
@@ -292,6 +390,11 @@ Future<void> main() async {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'Search',
       );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('search-filter-songs')),
+      );
+      await tester.tap(find.byKey(const ValueKey('search-filter-songs')));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Search song'));
       await tester.tap(find.text('Search song'));
       await tester.pumpAndSettle();

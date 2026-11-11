@@ -55,6 +55,28 @@ void main() {
     client.close();
   });
 
+  test('previous restarts after three seconds, goes back near start and stays paused', () async {
+    await service.playAlbum(client, tracks, 1);
+    await service.pause();
+    player.position = const Duration(seconds: 3);
+    await service.skipToPrevious();
+    expect(player.currentIndex, 1);
+    expect(player.position, Duration.zero);
+    expect(player.playing, isFalse);
+    await service.skipToPrevious();
+    expect(player.currentIndex, 0);
+    expect(service.mediaItem.value?.id, 'one');
+    expect(
+      service.playbackState.value.controls,
+      contains(MediaControl.skipToPrevious),
+    );
+    player.position = const Duration(seconds: 1);
+    await service.skipToPrevious();
+    expect(player.currentIndex, 0);
+    expect(player.position, Duration.zero);
+    expect(player.playing, isFalse);
+  });
+
   test('loads the whole album natively at the selected track', () async {
     await service.playAlbum(client, tracks, 1);
     expect(player.loaded.single.length, 2);

@@ -13,7 +13,7 @@ The user has confirmed working playback on Windows and a sideloaded iPhone build
 ## What exists
 
 The [Flutter client](apps/client/README.md) provides Navidrome sign-in, paginated
-album browsing, server-wide album/song search, playlists, favorite albums/songs,
+album/artist/song browsing, grouped server-wide search, playlists, favorite albums/songs,
 artwork, track lists, and a native queue with play/pause, previous/next, and seeking.
 Own playlists support creation, renaming, and adding/removing songs. Disconnect is
 in Settings. It has iOS and Windows hosts, layouts for narrow and wide windows,

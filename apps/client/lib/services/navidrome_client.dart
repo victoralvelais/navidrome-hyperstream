@@ -141,9 +141,13 @@ class NavidromeClient {
 
   Future<void> ping() async => _request('ping');
 
-  Future<List<Album>> albums({int offset = 0, int size = 40}) async {
+  Future<List<Album>> albums({
+    int offset = 0,
+    int size = 40,
+    bool recent = false,
+  }) async {
     final data = await _request('getAlbumList2', {
-      'type': 'newest',
+      'type': recent ? 'recent' : 'newest',
       'offset': '$offset',
       'size': '$size',
     });
@@ -183,11 +187,15 @@ class NavidromeClient {
     int songOffset = 0,
     int albumCount = 20,
     int songCount = 20,
+    int artistCount = 0,
+    int artistOffset = 0,
+    bool browse = false,
   }) async {
-    if (query.trim().isEmpty) return const LibrarySearchResults();
+    if (query.trim().isEmpty && !browse) return const LibrarySearchResults();
     final data = await _request('search3', {
       'query': query.trim(),
-      'artistCount': '0',
+      'artistCount': '$artistCount',
+      'artistOffset': '$artistOffset',
       'albumCount': '$albumCount',
       'albumOffset': '$albumOffset',
       'songCount': '$songCount',
@@ -196,6 +204,9 @@ class NavidromeClient {
     try {
       final results = data['searchResult3'] as Map<String, dynamic>;
       return LibrarySearchResults(
+        artists: (results['artist'] as List<dynamic>? ?? [])
+            .map((item) => Artist.fromJson(item as Map<String, dynamic>))
+            .toList(),
         albums: (results['album'] as List<dynamic>? ?? [])
             .map((item) => Album.fromJson(item as Map<String, dynamic>))
             .toList(),
@@ -207,6 +218,18 @@ class NavidromeClient {
       throw const NavidromeException(
         'The server returned invalid search results.',
       );
+    }
+  }
+
+  Future<List<Album>> artistAlbums(String id) async {
+    final data = await _request('getArtist', {'id': id});
+    try {
+      final artist = data['artist'] as Map<String, dynamic>;
+      return (artist['album'] as List<dynamic>? ?? [])
+          .map((item) => Album.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on Object {
+      throw const NavidromeException('The server returned an invalid artist.');
     }
   }
 

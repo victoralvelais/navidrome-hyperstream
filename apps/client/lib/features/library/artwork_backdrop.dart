@@ -13,10 +13,12 @@ class ArtworkBackdrop extends StatefulWidget {
     required this.client,
     required this.coverArt,
     required this.child,
+    this.immersive = true,
   });
   final NavidromeClient client;
   final String? coverArt;
   final Widget child;
+  final bool immersive;
   @override
   State<ArtworkBackdrop> createState() => _ArtworkBackdropState();
 }
@@ -89,10 +91,14 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   scheme.surface.withValues(
-                                    alpha: dark ? .65 : .84,
+                                    alpha: dark
+                                        ? (widget.immersive ? .30 : .96)
+                                        : (widget.immersive ? .82 : .97),
                                   ),
                                   scheme.surface.withValues(
-                                    alpha: dark ? .87 : .96,
+                                    alpha: dark
+                                        ? (widget.immersive ? .52 : .65)
+                                        : .90,
                                   ),
                                 ],
                               ),

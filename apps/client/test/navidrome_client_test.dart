@@ -53,6 +53,63 @@ void main() {
     },
   );
 
+  test(
+    'artist search, browse paging and artist albums use the server contracts',
+    () async {
+      final requests = <Uri>[];
+      final client = clientWith((request) async {
+        requests.add(request.url);
+        if (request.url.path.endsWith('getArtist.view')) {
+          return ok({
+            'artist': {
+              'album': [
+                {'id': 'album', 'name': 'Blue Hour', 'artist': 'Northline'},
+              ],
+            },
+          });
+        }
+        return ok({
+          'searchResult3': {
+            'artist': [
+              {
+                'id': 'artist',
+                'name': 'Northline',
+                'albumCount': 2,
+                'coverArt': 'cover',
+              },
+            ],
+          },
+        });
+      });
+      final result = await client.search(
+        'Northline',
+        artistCount: 20,
+        artistOffset: 40,
+      );
+      expect(result.artists.single.name, 'Northline');
+      expect(result.artists.single.albumCount, 2);
+      expect(requests.last.queryParameters['artistOffset'], '40');
+      await client.search(
+        '',
+        browse: true,
+        songOffset: 80,
+        songCount: 40,
+        albumCount: 0,
+      );
+      expect(requests.last.queryParameters['query'], '');
+      expect(requests.last.queryParameters['songOffset'], '80');
+      final albums = await client.artistAlbums('artist');
+      expect(albums.single.name, 'Blue Hour');
+      expect(requests.last.queryParameters['id'], 'artist');
+      final count = requests.length;
+      await client.search('');
+      expect(
+        requests.length,
+        count,
+      ); // Empty search stays local; browsing is explicit.
+    },
+  );
+
   test('stream identifiers are encoded as data and request original audio', () {
     final client = clientWith((_) async => ok());
     final uri = client.streamUri('track&u=intruder/#one');

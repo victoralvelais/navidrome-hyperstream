@@ -12,24 +12,37 @@ and Apple's [materials guidance](https://developer.apple.com/design/human-interf
 Glass controls and navigation are implemented in shared Flutter code; they are
 Liquid Glass-inspired surfaces, not Apple's native Liquid Glass renderer.
 
-The Search tab finds albums and songs across the entire Navidrome library using
+Home, Search, and Library are the main destinations. Library has Artists,
+Albums, Songs, Playlists, and Favorites entries; wide windows use a sidebar and
+an adjacent detail pane. Home shows favorite songs, recently added albums, and
+Navidrome's existing recently played albums when available. This reads server
+history; Hyperstream does not yet submit listening-history scrobbles.
+
+The Search tab finds artists, albums and songs across the entire Navidrome library using
 [OpenSubsonic search3](https://opensubsonic.netlify.app/docs/endpoints/search3/).
 Typing waits 350 ms before sending a request; pressing Search submits immediately.
-Albums and songs page independently. Opening an album or switching tabs preserves
+Artists, albums and songs page independently, with All/Artists/Albums/Songs filters.
+Artists open their server albums, album results use cover grids, and songs use compact rows.
+Opening an album or switching tabs preserves
 the query and results, including across narrow/wide layout changes. Tapping a song
 replaces the player queue with the currently loaded song results, starting at that
 song. Fetching another page does not change a queue that is already playing.
-Artist browsing and external-provider search remain future work.
+Artist and song categories use OpenSubsonic's explicit empty-query browse contract;
+an empty search field sends no request. Artist albums use
+[getArtist](https://opensubsonic.netlify.app/docs/endpoints/getartist/).
+External-provider search remains future work.
 
 This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
 
 ## Playlists and favorites
 
-- The **Playlists** tab browses your Navidrome playlists and starts native playback
+- **Library → Playlists** browses your Navidrome playlists and starts native playback
   in their saved order. Create and rename your own playlists; song menus let you
-  add songs or remove entries from a playlist you own. Shared playlists are playable.
-- The **Favorites** tab shows favorite albums and songs, with a play-all action
+  add songs or remove entries from a playlist you own. **Add songs** on an owned
+  playlist opens a song search picker and leaves the current playback queue alone.
+  Shared playlists are playable.
+- **Library → Favorites** shows favorite albums and songs, with a play-all action
   for songs. Use the heart on albums and Now Playing, or a song's menu, to change
   favorites. Updates are saved in Navidrome and appear only after it confirms them.
 - Song menus are available in albums, search, favorites, playlists, and Now Playing.
@@ -50,11 +63,18 @@ acceptance for these new features remains open.
 
 ## Volume, mixing, and appearance
 
-- Tap the mini player's speaker button to show the independent music volume
-  slider. Mute restores the previous audible level when toggled again.
+- The mini player always shows previous/restart, play/pause, next, and a speaker.
+  Previous restarts after three seconds; near the beginning it goes back one track.
+  On the first track it restarts. Paused playback stays paused.
+- Tap the speaker to expand a vertical volume capsule, or press and drag up/down
+  directly. Outside tap or Escape closes it; arrow keys adjust by five percent.
+  The speaker inside the expanded control mutes/restores the prior audible level.
+  This changes Hyperstream's independent music volume. Narrow screens and larger
+  text use two mini-player rows to keep transport controls accessible.
 - Tap the track title or artwork to open Now Playing, with a larger cover,
   artwork-colored backdrop, transport controls, and seek bar. Seeking commits
-  when a drag ends. **Music volume** expands its separate volume control.
+  when a drag ends. The queue button shows the actual current queue and lets you
+  jump to a track. Volume expands separately, with space reserved beside transport.
 - Open the toolbar's Settings button for light/dark/system appearance and audio
   preferences. Volume (including mute), its restore level, mixing, and appearance
   are saved locally with `shared_preferences`. Credentials use separate secure storage.
@@ -180,7 +200,7 @@ accepts the installed Visual Studio Build Tools 2019 and Windows 10 SDK.
 | Track list and album selection | `lib/features/library/album_tracks.dart` |
 | Artwork loading | `lib/features/library/cover_art.dart` |
 | Mini player, Now Playing, and seeking | `lib/features/player/player_controls.dart` |
-| Independent music volume and mute | `lib/features/player/volume_controls.dart` |
+| Vertical music volume control; Settings slider and mute | `lib/features/player/volume_button.dart`, `volume_controls.dart` |
 | Native queue and system playback commands | `lib/services/playback_service.dart` |
 | Navidrome endpoints, authentication, response parsing | `lib/services/navidrome_client.dart` |
 | Album and track fields | `lib/models/library.dart` |
@@ -252,7 +272,7 @@ on each platform; a future transcoding fallback is separate from server imports.
 
 ## Checks
 
-The glass interface pass passes formatting, analysis, and 75 unit/widget tests.
+Client checks cover formatting, analysis, and unit/widget behavior.
 Earlier native Windows playback checks used the actual WinRT decoder and HTTP
 playback, including automatic transition to a second track. Hosted release builds
 also run the native Windows secure-account storage check.
@@ -272,6 +292,9 @@ mixing configuration and failures, and the library/player/settings flows at
 393px, 320px with larger text, 1024px tablet, and 1280px desktop widths.
 Glass checks cover preference persistence, high-contrast fallback, and simulated
 iOS Reduce Transparency events and native-channel failure.
+Selected-design checks cover previous/restart at the three-second boundary,
+direct volume dragging, keyboard/mute/dismissal, artist navigation, search filters,
+playlist song picking, and keeping transport clear of the expanded volume control.
 Search checks cover query encoding, empty and malformed responses, stale requests,
 clearing/debouncing, page retries, result playback, and preserving results across
 album navigation and window resizing.

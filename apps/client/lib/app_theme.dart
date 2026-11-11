@@ -10,6 +10,10 @@ ThemeData hyperstreamTheme(Brightness brightness) {
       ).copyWith(
         primary: dark ? const Color(0xffff526f) : const Color(0xffd92048),
         onPrimary: Colors.white,
+        onSurface: dark ? const Color(0xfff5f5f7) : const Color(0xff151518),
+        onSurfaceVariant: dark
+            ? const Color(0xffb9bbc5)
+            : const Color(0xff656570),
         surface: dark ? const Color(0xff0b0b10) : const Color(0xfffaf9fc),
         surfaceContainer: dark ? const Color(0xff212125) : Colors.white,
         surfaceContainerHighest: dark

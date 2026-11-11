@@ -59,7 +59,11 @@ class AccountClient extends NavidromeClient {
   }
 
   @override
-  Future<List<Album>> albums({int offset = 0, int size = 40}) async => [];
+  Future<List<Album>> albums({
+    int offset = 0,
+    int size = 40,
+    bool recent = false,
+  }) async => [];
   @override
   void close() {
     closed = true;

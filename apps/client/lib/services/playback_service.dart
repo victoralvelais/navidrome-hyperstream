@@ -212,7 +212,7 @@ class PlaybackService extends BaseAudioHandler {
     playbackState.add(
       PlaybackState(
         controls: [
-          if (!_loading && _player.hasPrevious) MediaControl.skipToPrevious,
+          if (!_loading && mediaItem.value != null) MediaControl.skipToPrevious,
           playing ? MediaControl.pause : MediaControl.play,
           if (!_loading && _player.hasNext) MediaControl.skipToNext,
           MediaControl.stop,
@@ -281,9 +281,15 @@ class PlaybackService extends BaseAudioHandler {
 
   @override
   Future<void> skipToPrevious() async {
-    if (!_loading && _player.hasPrevious) {
-      await _command(_player.seekToPrevious);
-    }
+    if (_loading || mediaItem.value == null || error.value != null) return;
+    await _command(() async {
+      final index = _player.currentIndex ?? 0;
+      final previous =
+          _player.position < const Duration(seconds: 3) && index > 0;
+      await _player.seek(Duration.zero, index: previous ? index - 1 : index);
+      _publishItem();
+      _publishState();
+    });
   }
 
   @override

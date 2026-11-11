@@ -58,16 +58,17 @@ Apply these patterns to Hyperstream's existing Apple Music-inspired direction:
 
 - **Now Playing:** large square artwork, soft artwork-colored background, clear
   title/artist hierarchy, generous transport spacing, and circular favorite/menu
-  controls. Keep the independent app-volume toggle and label its expanded control
-  so it is visually distinct from seeking.
+  controls. Use an independent speaker control that expands into a vertical
+  volume capsule, with direct press-and-drag adjustment separate from seeking.
 - **Album and playlist pages:** prominent cover and title, one clear Play action,
   compact secondary controls, and readable track rows. Preserve existing favorites
   and playlist editing while refining their presentation.
 - **Mini player and navigation:** a compact floating player with artwork,
-  play/pause, next, and subtle progress. Keep navigation labels and reserve enough
+  previous/restart, play/pause, next, volume, and subtle progress. Keep navigation labels and reserve enough
   content padding that neither floating surface obscures the last item.
 - **Library:** stronger headings, spacious cover grids, and easy access to favorite
-  songs and playlists. Recently played requires real listening-history support.
+  songs and playlists. Home reads Navidrome's recently played albums; submission
+  of new listening-history scrobbles remains separate work.
 - **iPad and Windows:** adapt navigation to a sidebar and make use of the existing
   split layout; give playback and the queue space alongside browsing.
 - **Appearance:** retain Hyperstream's rose accent, refine dark surfaces using
@@ -76,17 +77,28 @@ Apply these patterns to Hyperstream's existing Apple Music-inspired direction:
   Add Apple-style glass to controls and navigation, with opaque accessibility
   fallbacks and a saved user switch. Use shared Flutter rendering across platforms.
 
-First implementation pass is in place: Now Playing and album detail use larger
-covers and artwork-colored backdrops; the mini player, navigation, and playback
-controls use rounded glass surfaces. Independent music volume remains separately
-labeled and collapsible. Glass effects can be disabled; high contrast and iOS
-Reduce Transparency use opaque surfaces. Phone, tablet, and desktop widget checks
-cover light/dark layouts and enlarged text. Native iOS appearance and performance
-still need device acceptance. Follow with library/sidebar and playlist refinements.
-The gallery also shows artists,
-lyrics, casting, queue editing, and additional playback modes; those require
-separate functional work before exposing their controls. Use the screenshots as
-design references, with Hyperstream rendering the user's own artwork and data.
+The user selected A/C's navigation and search, B's immersive atmosphere and
+vertical volume, and C's mini player with an always-visible previous button.
+The [consolidated concept](design/concepts/2026-11-11/selected-direction-v1.png)
+and [interaction specification](design/concepts/2026-11-11/selected-direction.json)
+record that direction. The first implementation of this selection includes:
+
+- Home/Search/Library navigation, with sidebar navigation on wide windows.
+- Library categories, artist albums, grouped search with filters and cover grids.
+- Immersive album, playlist and player backgrounds; unboxed player transport.
+- A persistent previous/restart button: restart at three seconds or later, go
+  back near the beginning, restart on the first track, and preserve paused state.
+- A vertical volume capsule with direct dragging, keyboard adjustment and mute.
+  The expanded player reserves space so volume doesn't cover Next or seeking.
+- An actual queue view and an Add songs picker for owned playlists.
+
+The implementation passes 78 unit/widget tests, including phone/tablet/desktop,
+dark/light, enlarged text, navigation, volume and playlist editing. Glass can be
+disabled; high contrast and iOS Reduce Transparency use opaque surfaces. Expansion
+animations respect reduced motion. Native iOS appearance/performance still need
+device acceptance. Lyrics, casting, queue reordering, shuffle/repeat and queue
+restoration require separate functional work. Concept artwork/counts are examples;
+the app renders Navidrome content and does not invent library totals.
 
 ## Proposed architecture
 
@@ -371,7 +383,7 @@ but no general-purpose library upload endpoint. Both Flutter and a PWA would cal
 the same authenticated companion API for imports. Normal library listening should
 continue directly through Navidrome even if that companion is unavailable.
 
-Secure saved server sign-in and the first glass visual pass are implemented.
-Next client slice: device acceptance, then library/sidebar and playlist refinements.
+Secure saved server sign-in and the selected glass/navigation design are implemented.
+Next client slice: device acceptance, listening history and playback-mode refinements.
 The next server slice remains an authenticated
 companion job API and a provider-to-library import proof.

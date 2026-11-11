@@ -38,18 +38,18 @@ class GlassSurface extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        const Color(0xff41414b).withValues(alpha: .84),
-                        const Color(0xff202027).withValues(alpha: .82),
+                        const Color(0xff59616b).withValues(alpha: .42),
+                        const Color(0xff141a21).withValues(alpha: .36),
                       ]
                     : [
-                        Colors.white.withValues(alpha: .92),
-                        const Color(0xfff2eef5).withValues(alpha: .86),
+                        Colors.white.withValues(alpha: .68),
+                        const Color(0xfffaf8f3).withValues(alpha: .48),
                       ],
               )
             : null,
         border: Border.all(
           color: glass
-              ? Colors.white.withValues(alpha: dark ? .22 : .9)
+              ? Colors.white.withValues(alpha: dark ? .36 : .95)
               : scheme.outline,
         ),
       ),
@@ -70,7 +70,7 @@ class GlassSurface extends StatelessWidget {
         borderRadius: corners,
         child: glass
             ? BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                 child: surface,
               )
             : surface,

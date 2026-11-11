@@ -1,0 +1,53 @@
+{
+  "status": "User-selected direction implemented in Flutter; native device appearance/performance acceptance pending. PNG remains a concept image.",
+  "preview": "selected-direction-v1.png",
+  "generator": "Built-in image_gen",
+  "prompt": "Use case: ui-mockup. Edit/composite the three supplied Hyperstream concept boards into ONE coherent selected design, using the user's precise choices.\nReference roles: image 1 A Midnight supplies Home/Library navigation and dark browsing hierarchy; image 2 B Liquid supplies immersive artwork atmosphere and optical glass/vertical volume; image 3 C Pearl supplies grouped Search, light navigation and especially the compact floating mini-player. Preserve these selected visual ideas faithfully. Replace the previous alternatives board with one refined consolidated concept board.\nOutput: wide landscape premium presentation, THREE equal-size large straight-on iPhone mockup screens, sharp readable SF-style typography, restrained neutral warm-gray board background. Heading exact \"Hyperstream — selected direction\". Labels below screens exact \"Library · dark\", \"Search · light\", \"Now Playing · volume\". No marketing copy, no code, no tilted perspective.\n\nLEFT Library dark: exactly A's bold Library heading and organized category rows Artists, Albums, Songs, Playlists, Favorites, thin rose icons/counts/chevrons, charcoal content. Recently Added with two large original photographic coastal/forest album covers under the rows. Clear smoked-glass floating bottom nav Home, Search, Library with labels and selected Library lens. C's compact floating mini-player immediately above it, adapted to dark clear-glass material: rounded thumbnail at far left, short two-line \"Coastline\" / \"Northline\", then FOUR unmistakable distinct icons in this exact order PREVIOUS TRACK (vertical bar plus left triangle), PAUSE, NEXT TRACK (right triangle plus vertical bar), SPEAKER. All four are always visible. This previous-track button is the most critical requested change. Make room for all of them; never omit previous or hide it in menus. Use a tight tasteful 44pt icon hit area, smaller art, short track name.\n\nMIDDLE Search light: C's white/ivory light screen, bold Search heading, search field \"Northline\", pills All / Artists / Albums / Songs. One circular Artist result, Albums row with two beautiful cover images, Songs result beneath. C's luminous clear-glass mini-player and navigation at bottom, content colors visibly diffusing through them. The mini-player MUST show artwork, title \"Coastline\", artist \"Northline\", and all FOUR separate icons PREVIOUS, PAUSE, NEXT, SPEAKER in that order. Nav Home, Search, Library with Search selected. No extra branding text above Search.\n\nRIGHT Now Playing dark: B's immersive deep teal full-height artwork-color atmosphere, huge square photo cover of coastal road at blue twilight, subtle close chevron at top, title \"Coastline\" artist \"Northline\", separate heart and ellipsis circles. Fine white seek line with times, large free-standing white previous / pause / next, no transport-pill background. At bottom-left queue button. At bottom-right B's tall narrow vertical glass volume capsule anchored to the speaker button, white fill lower 60%, readable 60%, speaker at base. Position along the right edge with room beside transport: do NOT cover next, track title or seek thumb. This is Hyperstream's own volume.\n\nMaterials must follow B's clear optical glass and C's miniplayer profile, with delicate refractive edges and album color showing through the centers, never thick opaque gray pills. Deep black/dark teal in dark screens, clear pearl/ivory in light screen. Same original photographic cover and track across miniature and large player.\nBelow phones a clean small enlarged detail of the light mini-player only, showing exactly thumbnail + \"Coastline / Northline\" + PREVIOUS + PAUSE + NEXT + SPEAKER. This detail must make the added previous button unmistakable.\nInclude two short readable captions under the detail: \"Previous: restart after 3 seconds; otherwise go back\" and \"Volume: press + drag, or tap to expand\".\nPrioritize readable complete screens and exact icon order. No duplicate play/pause buttons, no missing previous icon, no hidden text-labeled volume toggle. This is a concept revision, not a live app screenshot.",
+  "selected_by_user": {
+    "navigation_and_search": "A and C",
+    "atmosphere_and_volume": "B",
+    "mini_player": "C, adding an always-visible previous/restart button"
+  },
+  "mini_player": {
+    "controls": [
+      "previous/restart",
+      "play/pause",
+      "next",
+      "volume"
+    ],
+    "always_visible": "Previous, play/pause and next are always rendered, rather than moved into an overflow menu.",
+    "previous_behavior": {
+      "threshold_seconds": 3,
+      "at_or_after_threshold": "Seek to the beginning of the current track.",
+      "before_threshold": "Go to the previous queue item, if one exists; otherwise seek to the beginning of the current track.",
+      "paused": "Preserve paused state when restarting or moving back.",
+      "note": "Three seconds is the proposed conventional threshold; the user specified restart/back behavior but no threshold."
+    },
+    "volume": "Always-visible speaker icon; tap expands an anchored vertical glass slider, press-and-drag adjusts directly without a separate reveal step.",
+    "narrow_or_large_text": "Use two rows if required to keep transport controls, a readable title and adequate touch targets.",
+    "navigation": "Only the artwork/title area opens Now Playing; transport and volume taps do not open it."
+  },
+  "volume": {
+    "scope": "Hyperstream app volume only, preserving the saved volume and mute restoration behavior.",
+    "interaction": "A continuous anchored control changes from speaker button to vertical filled capsule. Drag adjusts smoothly without an initial value jump; outside tap or Escape collapses.",
+    "placement": "Avoid covering transport buttons, seek position, or title. Fit to safe areas and viewport.",
+    "accessibility": "Adjustable screen-reader semantics, keyboard increments, clear percentage, high-contrast and reduced-transparency fallback, reduced-motion transition."
+  },
+  "navigation": {
+    "tabs": [
+      "Home",
+      "Search",
+      "Library"
+    ],
+    "library": "Prominent category rows and Recently Added; playlists and favorites remain easy to access.",
+    "search": "Grouped artists/albums/songs with explicit filters, retaining search state across navigation.",
+    "player": "B's artwork-derived immersive atmosphere and unboxed transport; C's mini-player profile adapted to dark/light."
+  },
+  "implementation_notes": [
+    "Home/Search/Library, wide sidebar, artists/albums/songs, grouped search filters, immersive player, previous/restart, vertical volume and queue view are implemented.",
+    "Owned playlists have an Add songs search picker. Current playback is preserved while editing.",
+    "Recently played reads Navidrome server album history. Hyperstream does not yet submit history scrobbles.",
+    "Generated sample counts and music are illustrative. Actual screens use Navidrome data without fabricated category totals.",
+    "Native device appearance and performance remain to be checked. These PNGs are design concepts, not app screenshots."
+  ]
+}
