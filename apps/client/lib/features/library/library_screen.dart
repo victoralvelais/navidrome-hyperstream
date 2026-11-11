@@ -4,6 +4,7 @@ import '../../models/library.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../player/player_controls.dart';
+import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
 import 'cover_art.dart';
 
@@ -67,54 +68,75 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget _albumGrid() => CustomScrollView(
     key: const PageStorageKey('albums'),
     slivers: [
-      const SliverToBoxAdapter(
+      SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Text('Recently added'),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Library', style: Theme.of(context).textTheme.headlineLarge),
+              const SizedBox(height: 20),
+              Text(
+                'Recently added',
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
         ),
       ),
       SliverPadding(
-        padding: const EdgeInsets.all(16),
-        sliver: SliverGrid.builder(
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 220,
-            mainAxisExtent: 270,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: _albums.length,
-          itemBuilder: (context, index) {
-            final album = _albums[index];
-            return InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(() => _selected = album),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: CoverArt(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+        sliver: SliverLayoutBuilder(
+          builder: (context, constraints) {
+            final columns = (constraints.crossAxisExtent / 190).floor().clamp(
+              2,
+              6,
+            );
+            final artworkSize =
+                (constraints.crossAxisExtent - 16 * (columns - 1)) / columns;
+            return SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisExtent:
+                    artworkSize +
+                    64 * MediaQuery.textScalerOf(context).scale(1),
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: _albums.length,
+              itemBuilder: (context, index) {
+                final album = _albums[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => setState(() => _selected = album),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CoverArt(
                         key: ValueKey(album.id),
                         client: widget.client,
                         id: album.coverArt,
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      Text(
+                        album.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      Text(
+                        album.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    album.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  Text(
-                    album.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         ),
@@ -152,8 +174,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     key: ValueKey(_selected!.id),
     client: widget.client,
     album: _selected!,
-    onPlay: (tracks, index) =>
-        widget.playback.playAlbum(widget.client, tracks, index),
+    playback: widget.playback,
+    onPlay: (tracks, index) => widget.playback.playAlbum(
+      widget.client,
+      tracks,
+      index,
+      coverArtId: _selected!.coverArt,
+    ),
   );
 
   @override
@@ -171,8 +198,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() => _selected = null),
               ),
-        title: const Text('Your library'),
+        title: const Text('Hyperstream'),
         actions: [
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: _disconnecting
+                ? null
+                : () => showSettings(context, widget.playback),
+          ),
           IconButton(
             tooltip: 'Refresh albums',
             icon: const Icon(Icons.refresh),
@@ -204,13 +238,37 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           const VerticalDivider(width: 1),
                           SizedBox(
                             width: 370,
-                            child: _selected == null
-                                ? const Center(
-                                    child: Text(
-                                      'Choose an album to see its tracks.',
-                                    ),
-                                  )
-                                : _trackPane(),
+                            child: Material(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainer,
+                              child: _selected == null
+                                  ? const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(32),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.album_outlined,
+                                              size: 64,
+                                            ),
+                                            SizedBox(height: 20),
+                                            Text(
+                                              'Choose an album',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            SizedBox(height: 8),
+                                            Text(
+                                              'Your next listen starts here.',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : _trackPane(),
+                            ),
                           ),
                         ],
                       );
@@ -219,7 +277,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   },
                 ),
               ),
-              PlayerControls(playback: widget.playback),
+              PlayerControls(playback: widget.playback, client: widget.client),
             ],
           ),
         ),

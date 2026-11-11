@@ -8,18 +8,19 @@ after successful validation and publication.
 See [ROADMAP.md](ROADMAP.md) for the product plan. The first client prototype uses
 Flutter to share application code across iPhone, iPad, and Windows. Reliability
 and code that is easy to edit manually take priority over language familiarity.
-The final framework decision still depends on real iPhone playback validation.
+The user has confirmed working playback on Windows and a sideloaded iPhone build.
 
 ## What exists
 
 The [Flutter client](apps/client/README.md) provides Navidrome sign-in, paginated
 album browsing, artwork, track lists, and a native album queue with play/pause,
 previous/next, and seeking. It has iOS and Windows hosts, layouts for narrow and
-wide windows, and in-memory credentials. Eighteen unit/widget tests and one native
-Windows integration test pass. The native test checks HTTP playback, pause,
-seeking, automatic track transition, and reset with generated audio. The user
-reports that the Windows client is working with their library; comprehensive
-codec/interruption checks and iPhone validation remain.
+wide windows, and in-memory credentials. It now includes independent app volume,
+mute with level restoration, saved light/dark/system appearance, an expanded Now
+Playing view, and an optional iOS audio-mixing setting. Unit/widget tests cover
+audio commands, preferences, and responsive UI; a native Windows test checks
+HTTP playback, volume/mute, pause, seeking, track transition, and reset with
+generated audio. Comprehensive codec/interruption and new iOS mixing checks remain.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,
@@ -61,7 +62,7 @@ See the [setup and sideloading guide](docs/ios-github-actions.md).
 
 The [verified hosted build](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
 compiled, packaged, and uploaded an unsigned iOS release. The downloaded archive
-and checksum were verified; iPhone installation and playback remain pending.
+and checksum were verified. The user subsequently confirmed working iPhone playback.
 Public repositories have free standard runners; private repositories use their
 account's included allowance and billing rules.
 
@@ -129,5 +130,5 @@ still need verification. No provider registries are installed by this repository
 - Only completed FLAC inputs are supported. Conversion retains MP3-compatible
   sample rates; other rates are mapped to 44.1 or 48 kHz. Unsupported metadata or
   artwork conversions fail validation and retain the source.
-- No Navidrome scanning/reconciliation, pre-import external streaming, background
-  service installation, or iOS device testing has been completed.
+- No Navidrome scanning/reconciliation, pre-import external streaming, or background
+  companion-service installation has been completed. Broader iOS acceptance remains open.

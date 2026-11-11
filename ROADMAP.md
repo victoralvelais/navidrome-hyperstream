@@ -16,7 +16,7 @@ Confirmed decisions:
 - Distribution: personal use and sideloading first; consider the App Store later.
 - Third-party downloads go to the Navidrome server only.
 - Navidrome currently runs in Docker on the user's Windows PC.
-- The user primarily works in TypeScript and has no Mac or macOS build service yet.
+- The user primarily works in TypeScript and has no local Mac; GitHub Actions now builds iOS releases.
 - Language familiarity is not a constraint: Swift/native development, Flutter,
   and later ports are acceptable. Reliability and understandable, manually
   editable code are the main implementation priorities.
@@ -31,7 +31,9 @@ Confirmed decisions:
 - GitHub Actions is selected for hosted macOS builds. Begin with manually
   triggered unsigned release IPAs and local signing through AltStore Classic/
   AltServer on Windows. Hosted compilation and packaging are verified; device
-  installation and playback remain pending.
+  installation and basic playback are confirmed by the user.
+- Independent app volume, optional iOS audio mixing, and an Apple Music-inspired
+  interface with saved light/dark/system appearance are part of the client.
 
 Proposed MVP boundaries:
 
@@ -273,9 +275,8 @@ actual providers and release features at milestone 6. See
   backend version? Establish this through the initial integration proof.
 - What are the existing Docker deployment and host music paths, and can the
   companion write to a dedicated import destination?
-- Does the unsigned IPA install and play reliably after local signing on the
-  phone? GitHub Actions compilation and packaging are verified. Paid Apple
-  signing/TestFlight is deferred.
+- Does the phone handle longer listening sessions, interruptions, and mixed audio
+  reliably? Basic sideloaded playback is confirmed; paid signing/TestFlight is deferred.
 - Does Flutter's playback/platform spike satisfy reliability and manual
   maintainability, or is an Apple-native client with a later Windows port preferable?
 - Which listening features are release requirements: gapless, AirPlay, CarPlay,
@@ -289,18 +290,38 @@ MP3 320 kbps output, metadata/artwork checks, collision protection, duplicate
 events, restart recovery, and delayed source cleanup. See [README.md](README.md).
 
 The first Flutter client slice exists in `apps/client`, with Navidrome sign-in,
-paginated albums, artwork, tracks, and native queue/playback controls. Eighteen
-unit/widget tests and one native Windows integration test pass. The native test
+paginated albums, artwork, tracks, native queue/playback controls, independent
+volume/mute, saved appearance, and iOS audio-mixing preferences. Unit/widget tests
+and a native Windows integration test cover this slice. The native test
 uses generated silent audio and a temporary loopback server to verify playback,
-pause, seek, automatic track transition, and reset. The user also reports that
-the Windows client is working with their library; broader acceptance checks remain.
+volume/mute, pause, seek, automatic track transition, and reset. The user reports
+working Windows and sideloaded iPhone playback; broader acceptance checks remain.
 See the [client guide](apps/client/README.md) for setup and remaining checks.
 
 Docker verification was prepared but execution was not approved, so container
 behavior remains unverified. No live provider integration, Navidrome indexing,
-comprehensive real-library acceptance, or iOS device validation is complete.
+comprehensive real-library acceptance, or new iOS mixing validation is complete.
 Milestone 0 is open. The GitHub Actions iOS workflow and macOS packaging script
 passed [hosted run 2](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757),
 including Dart checks, Xcode compilation, IPA packaging, and artifact upload.
 The downloaded archive, checksum, device-platform metadata, and app executable
-permissions were verified. Installation and playback on an iPhone remain pending.
+permissions were verified. The user subsequently confirmed working iPhone playback.
+
+## Flutter and a Docker-hosted web client
+
+Keep Flutter as the primary client for iOS, iPadOS, and Windows. It already talks
+directly to Navidrome and exposes native audio-session and player controls. A
+TypeScript PWA remains a possible secondary client; it would need its own browser
+audio/background acceptance checks, and would not remove the iOS signing step
+for the existing native app.
+
+Docker is the server deployment choice, independent of the client framework.
+The companion will run acquisition providers, convert to MP3 320, validate and
+publish files, discard the staged FLAC after success, and request/reconcile a
+Navidrome scan. Navidrome's documented Subsonic API has playback and scanning,
+but no general-purpose library upload endpoint. Both Flutter and a PWA would call
+the same authenticated companion API for imports. Normal library listening should
+continue directly through Navidrome even if that companion is unavailable.
+
+Next slice: secure saved server sign-in and library search, followed by an
+authenticated companion job API and a provider-to-library import proof.

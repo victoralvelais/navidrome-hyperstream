@@ -20,6 +20,7 @@ dependencies:
   http: ^1.6.0
   just_audio: ^0.10.6
   just_audio_windows: ^0.2.3
+  shared_preferences: ^2.5.6
 
 # Development and test tools, similar to npm devDependencies.
 dev_dependencies:

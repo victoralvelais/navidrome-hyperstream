@@ -34,7 +34,11 @@ class _CoverArtState extends State<CoverArt> {
 
   Widget _placeholder(BuildContext context) => ColoredBox(
     color: Theme.of(context).colorScheme.surfaceContainerHighest,
-    child: const Center(child: Icon(Icons.album_outlined, size: 48)),
+    child: LayoutBuilder(
+      builder: (context, constraints) => Center(
+        child: Icon(Icons.album_outlined, size: constraints.maxWidth * .3),
+      ),
+    ),
   );
 
   @override

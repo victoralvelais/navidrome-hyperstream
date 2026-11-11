@@ -143,6 +143,14 @@ void main() {
           'error=${playback.error.value}, streamed=$streamedIds',
     );
     expect(playback.mediaItem.value?.id, 'one');
+    await playback.setAppVolume(.3);
+    expect(playback.preferences.volume, .3);
+    await playback.toggleMute();
+    expect(playback.preferences.volume, 0);
+    expect(playback.playbackState.value.playing, isTrue);
+    await playback.toggleMute();
+    expect(playback.preferences.volume, .3);
+    expect(playback.settingsError.value, isNull);
     await playback.pause();
     expect(playback.playbackState.value.playing, isFalse);
     await playback.seek(const Duration(seconds: 10));

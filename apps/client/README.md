@@ -4,9 +4,33 @@ The first Flutter slice connects directly to Navidrome, browses recently added
 albums, lists their tracks, and sends an album queue to a native audio player.
 It includes play/pause, previous/next, seeking, connection errors, and disconnect.
 Wide windows show albums and tracks side by side; narrow windows use one pane.
+The library uses an artwork-first layout with a floating mini player and an
+expanded Now Playing sheet. Light, dark, and system appearance are available.
 
 This client is independent of the Python import prototype. Provider acquisition
 and server imports are not connected to this UI yet.
+
+## Volume, mixing, and appearance
+
+- Tap the mini player's speaker button to show the independent music volume
+  slider. Mute restores the previous audible level when toggled again.
+- Tap the track title or artwork to open Now Playing, with a larger cover,
+  transport controls, seek bar, and volume. Seeking commits when a drag ends.
+- Open the toolbar's Settings button for light/dark/system appearance and audio
+  preferences. Volume (including mute), its restore level, mixing, and appearance
+  are saved locally with `shared_preferences`. Credentials remain in memory only.
+- On iPhone/iPad, **Mix with other audio** enables the native audio session's
+  `mixWithOthers` option. It is off by default. This lets Hyperstream share audio
+  with other apps where iOS permits; it cannot guarantee playback through calls.
+  Normal interruption and headphone-removal handling remains enabled.
+- Windows already mixes ordinary application audio. The app volume is independent
+  of other apps, but Windows communication settings can still lower music during
+  calls. Device/system volume remains the overall output limit on every platform.
+
+See Apple's [mixing option](https://developer.apple.com/documentation/avfaudio/avaudiosession/categoryoptions-swift.struct/mixwithothers)
+and [interruption behavior](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions).
+Verify mixing with your particular audio/call apps on the phone; Windows tests
+cannot establish iOS audio-session behavior.
 
 ## Coming from TypeScript and npm
 
@@ -87,12 +111,16 @@ accepts the installed Visual Studio Build Tools 2019 and Windows 10 SDK.
 
 | Change | File |
 | --- | --- |
-| App theme, session lifetime, startup | `lib/main.dart` |
+| App startup and session lifetime | `lib/main.dart` |
+| Colors, typography, component styles | `lib/app_theme.dart` |
+| Saved appearance and audio preferences | `lib/services/app_preferences.dart` |
+| Settings sheet | `lib/features/settings/settings_sheet.dart` |
 | Sign-in form and validation | `lib/features/connect/connection_screen.dart` |
 | Album grid, pagination, responsive layout | `lib/features/library/library_screen.dart` |
 | Track list and album selection | `lib/features/library/album_tracks.dart` |
 | Artwork loading | `lib/features/library/cover_art.dart` |
-| Player controls | `lib/features/player/player_controls.dart` |
+| Mini player, Now Playing, and seeking | `lib/features/player/player_controls.dart` |
+| Independent music volume and mute | `lib/features/player/volume_controls.dart` |
 | Native queue and system playback commands | `lib/services/playback_service.dart` |
 | Navidrome endpoints, authentication, response parsing | `lib/services/navidrome_client.dart` |
 | Album and track fields | `lib/models/library.dart` |
@@ -143,9 +171,12 @@ and HTTP playback, including automatic transition to a second track.
 
 Unit/widget tests cover authentication, URL encoding, malformed responses,
 sign-in retries, queue replacement, pause during loading, reset, and errors.
+They also check volume/mute ordering and recovery, preference persistence,
+mixing configuration and failures, and the library/player/settings flows at
+393px, 320px with larger text, and 1280px widths.
 The native integration test opens a test window and runs a temporary loopback
 HTTP server with generated silent WAV audio. It checks decoding, advancing
-playback, pause, seek, automatic album transition, and reset. It never connects
+playback, volume/mute, pause, seek, automatic album transition, and reset. It never connects
 to the real Navidrome library or any third-party service.
 
 The integration build replaces the debug executable with a test harness. Run
@@ -168,11 +199,11 @@ sign it locally from Windows. No paid Apple Developer membership or Apple
 credentials in CI are needed for this route. The
 [hosted build](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
 successfully compiled and packaged the IPA, and the downloaded archive and
-checksum were verified. Device installation and playback checks are pending.
+checksum were verified. The user has since confirmed that the sideloaded iPhone
+app works; the new volume/mixing controls still need their own device check.
 
-The bundle identifier is a placeholder until signing is configured. Native iOS
-compilation is verified; device behavior remains unverified. The user reports
-that the Windows client is working with their library so far.
+The user reports working library playback on both Windows and the sideloaded
+iPhone build. Broader device acceptance remains open.
 
 First manual acceptance checks: connect to the real server, play and seek MP3,
 FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and

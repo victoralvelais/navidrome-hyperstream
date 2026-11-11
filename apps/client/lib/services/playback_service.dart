@@ -7,12 +7,19 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../models/library.dart';
+import 'app_preferences.dart';
 import 'navidrome_client.dart';
 
 /// One instance for the application, independent of navigation and widgets.
 /// just_audio owns the native queue, including transitions while backgrounded.
 class PlaybackService extends BaseAudioHandler {
-  PlaybackService({AudioPlayer? player}) : _player = player ?? AudioPlayer() {
+  PlaybackService({
+    AudioPlayer? player,
+    AppPreferences? preferences,
+    Future<void> Function(AudioSessionConfiguration)? configureSession,
+  }) : _player = player ?? AudioPlayer(),
+       preferences = preferences ?? AppPreferences(),
+       _configureSession = configureSession ?? _configureNativeSession {
     _subscriptions.addAll([
       _player.playbackEventStream.listen((_) => _publishState()),
       _player.playerStateStream.listen((_) => _publishState()),
@@ -22,16 +29,21 @@ class PlaybackService extends BaseAudioHandler {
     ]);
   }
 
-  static Future<PlaybackService> initialize() async {
+  static Future<PlaybackService> initialize({
+    AppPreferences? preferences,
+  }) async {
+    PlaybackService build() => PlaybackService(preferences: preferences);
     final handler = Platform.isIOS
-        ? await AudioService.init<PlaybackService>(builder: PlaybackService.new)
-        : PlaybackService();
+        ? await AudioService.init<PlaybackService>(builder: build)
+        : build();
     try {
       // Configure before the first play on every platform. just_audio also
       // consults this shared session on Windows; lazy first-play setup can race
       // with WinRT's initial paused-state notification and cancel playback.
-      final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration.music());
+      await handler._configureSession(
+        sessionConfiguration(handler.preferences.mixWithOthers),
+      );
+      await handler._player.setVolume(handler.preferences.volume);
     } on Object {
       await handler.dispose();
       rethrow;
@@ -40,6 +52,11 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   final AudioPlayer _player;
+  final AppPreferences preferences;
+  final Future<void> Function(AudioSessionConfiguration) _configureSession;
+  final ValueNotifier<String?> settingsError = ValueNotifier(null);
+  Future<void> _settingsPending = Future.value();
+  bool get supportsMixing => Platform.isIOS;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final ValueNotifier<String?> error = ValueNotifier(null);
   Future<void> _pending = Future.value();
@@ -50,13 +67,60 @@ class PlaybackService extends BaseAudioHandler {
   Stream<Duration> get positionStream => _player.positionStream;
   Duration get position => _player.position;
 
+  static AudioSessionConfiguration sessionConfiguration(bool mix) =>
+      const AudioSessionConfiguration.music().copyWith(
+        // Explicit zero also clears an earlier mixWithOthers choice.
+        avAudioSessionCategoryOptions: mix
+            ? AVAudioSessionCategoryOptions.mixWithOthers
+            : AVAudioSessionCategoryOptions.none,
+      );
+
+  static Future<void> _configureNativeSession(
+    AudioSessionConfiguration configuration,
+  ) async => (await AudioSession.instance).configure(configuration);
+
+  Future<void> _changeSetting(Future<void> Function() apply) {
+    _settingsPending = _settingsPending.then((_) async {
+      try {
+        await apply();
+        settingsError.value = null;
+      } on Object {
+        // A setting failure must not put the playing queue into an error state.
+        settingsError.value = 'Could not change the audio setting. Try again.';
+      }
+    });
+    return _settingsPending;
+  }
+
+  Future<void> setAppVolume(double value) {
+    if (!value.isFinite) return Future.value();
+    final level = value.clamp(0.0, 1.0);
+    return _changeSetting(() async {
+      await _player.setVolume(level);
+      // Disk writes are serialized by preferences; keep slider input responsive.
+      unawaited(preferences.setVolume(level));
+    });
+  }
+
+  Future<void> toggleMute() => _changeSetting(() async {
+    final level = preferences.volume == 0 ? preferences.audibleVolume : 0.0;
+    await _player.setVolume(level);
+    unawaited(preferences.setVolume(level));
+  });
+
+  Future<void> setMixWithOthers(bool value) => _changeSetting(() async {
+    await _configureSession(sessionConfiguration(value));
+    await preferences.setMixWithOthers(value);
+  });
+
   // Serializing replacement and reset prevents an older selection from taking
   // over a newer one. Revisions let queued, superseded selections be skipped.
   Future<void> playAlbum(
     NavidromeClient client,
     List<Track> tracks,
-    int index,
-  ) {
+    int index, {
+    String? coverArtId,
+  }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
     }
@@ -79,6 +143,7 @@ class PlaybackService extends BaseAudioHandler {
                 artist: track.artist,
                 album: track.album,
                 duration: track.duration,
+                extras: {'coverArtId': ?coverArtId},
               ),
             )
             .toList();
@@ -241,11 +306,15 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   Future<void> dispose() async {
+    await _settingsPending;
+    await preferences.flush();
     await reset();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
     await _player.dispose();
     error.dispose();
+    settingsError.dispose();
+    preferences.dispose();
   }
 }

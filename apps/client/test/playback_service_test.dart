@@ -1,117 +1,21 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:just_audio/just_audio.dart';
 
-// Fake only the native boundary; exercise the real queue and command handling.
-class FakePlayer extends Fake implements AudioPlayer {
-  final events = StreamController<PlaybackEvent>.broadcast(sync: true);
-  final errors = StreamController<PlayerException>.broadcast(sync: true);
-  final loaded = <List<AudioSource>>[];
-  Completer<void>? loadGate;
-  bool failNextLoad = false;
-  int playCalls = 0;
-
-  @override
-  int? currentIndex;
-  @override
-  bool playing = false;
-  @override
-  ProcessingState processingState = ProcessingState.idle;
-  @override
-  Duration position = Duration.zero;
-  @override
-  Duration get bufferedPosition => Duration.zero;
-  @override
-  double get speed => 1;
-  @override
-  Duration? get duration => const Duration(minutes: 3);
-  @override
-  bool get hasPrevious => (currentIndex ?? 0) > 0;
-  @override
-  bool get hasNext =>
-      loaded.isNotEmpty && (currentIndex ?? 0) < loaded.last.length - 1;
-  @override
-  Stream<PlaybackEvent> get playbackEventStream => events.stream;
-  @override
-  Stream<PlayerException> get errorStream => errors.stream;
-  @override
-  Stream<PlayerState> get playerStateStream => const Stream.empty();
-  @override
-  Stream<int?> get currentIndexStream => const Stream.empty();
-  @override
-  Stream<Duration?> get durationStream => const Stream.empty();
-
-  void emit() => events.add(PlaybackEvent());
-
-  @override
-  Future<Duration?> setAudioSources(
-    List<AudioSource> audioSources, {
-    bool preload = true,
-    int? initialIndex,
-    Duration? initialPosition,
-    ShuffleOrder? shuffleOrder,
-  }) async {
-    loaded.add(audioSources);
-    if (loadGate != null) await loadGate!.future;
-    if (failNextLoad) {
-      failNextLoad = false;
-      throw PlayerException(1, 'secret-auth-url', 0);
-    }
-    currentIndex = initialIndex ?? 0;
-    processingState = ProcessingState.ready;
-    emit();
-    return duration;
-  }
-
-  @override
-  Future<void> pause() async {
-    playing = false;
-    emit();
-  }
-
-  @override
-  Future<void> play() async {
-    playCalls++;
-    playing = true;
-    emit();
-  }
-
-  @override
-  Future<void> stop() async {
-    playing = false;
-    processingState = ProcessingState.idle;
-    emit();
-  }
-
-  @override
-  Future<void> clearAudioSources() async {
-    currentIndex = null;
-  }
-
-  @override
-  Future<void> seek(Duration? position, {int? index}) async {
-    this.position = position ?? Duration.zero;
-    currentIndex = index ?? currentIndex;
-    processingState = ProcessingState.ready;
-    emit();
-  }
-
-  @override
-  Future<void> dispose() async {
-    await events.close();
-    await errors.close();
-  }
-}
+import 'support/fake_player.dart';
 
 void main() {
   late FakePlayer player;
   late PlaybackService service;
   late NavidromeClient client;
+  late List<AudioSessionConfiguration> configurations;
+  bool failConfiguration = false;
   const tracks = [
     Track(
       id: 'one',
@@ -131,7 +35,15 @@ void main() {
 
   setUp(() {
     player = FakePlayer();
-    service = PlaybackService(player: player);
+    configurations = [];
+    failConfiguration = false;
+    service = PlaybackService(
+      player: player,
+      configureSession: (configuration) async {
+        if (failConfiguration) throw StateError('native details');
+        configurations.add(configuration);
+      },
+    );
     client = NavidromeClient(
       serverUrl: 'https://music.example.com',
       username: 'test',
@@ -151,6 +63,88 @@ void main() {
     expect(service.queue.value.map((item) => item.id), ['one', 'two']);
     expect(player.playCalls, 1);
   });
+
+  test(
+    'app volume clamps input, restores mute level, and survives a queue reset',
+    () async {
+      await service.setAppVolume(2);
+      expect(player.volume, 1);
+      await service.setAppVolume(.32);
+      await service.toggleMute();
+      expect(player.volume, 0);
+      await service.reset();
+      await service.toggleMute();
+      expect(player.volume, .32);
+      await service.playAlbum(client, tracks, 0);
+      expect(player.volume, .32);
+      await service.setAppVolume(-1);
+      expect(player.volume, 0);
+      await service.setAppVolume(double.nan);
+      expect(player.volume, 0);
+    },
+  );
+
+  test('rapid volume and mute commands finish in user order', () async {
+    await Future.wait([
+      service.setAppVolume(.2),
+      service.toggleMute(),
+      service.toggleMute(),
+      service.setAppVolume(.4),
+    ]);
+    expect(player.volumeCalls, [.2, 0, .2, .4]);
+    expect(service.preferences.volume, .4);
+  });
+
+  test(
+    'failed volume change does not break a playing queue or save a false level',
+    () async {
+      await service.playAlbum(client, tracks, 0);
+      player.failVolume = true;
+      await service.setAppVolume(.2);
+      expect(service.preferences.volume, 1);
+      expect(service.settingsError.value, isNotNull);
+      expect(service.error.value, isNull);
+      expect(service.playbackState.value.playing, isTrue);
+      player.failVolume = false;
+      await service.setAppVolume(.3);
+      expect(service.settingsError.value, isNull);
+    },
+  );
+
+  test(
+    'mixing can be enabled and explicitly cleared without changing the queue',
+    () async {
+      await service.playAlbum(client, tracks, 0);
+      await service.setMixWithOthers(true);
+      await service.setMixWithOthers(false);
+      expect(
+        configurations.first.avAudioSessionCategory,
+        AVAudioSessionCategory.playback,
+      );
+      expect(
+        configurations.first.avAudioSessionCategoryOptions,
+        AVAudioSessionCategoryOptions.mixWithOthers,
+      );
+      expect(
+        configurations.last.avAudioSessionCategoryOptions,
+        AVAudioSessionCategoryOptions.none,
+      );
+      expect(service.preferences.mixWithOthers, isFalse);
+      expect(service.playbackState.value.playing, isTrue);
+      expect(player.playCalls, 1);
+    },
+  );
+
+  test(
+    'failed session reconfiguration preserves the previous choice',
+    () async {
+      failConfiguration = true;
+      await service.setMixWithOthers(true);
+      expect(service.preferences.mixWithOthers, isFalse);
+      expect(service.settingsError.value, isNotNull);
+      expect(service.error.value, isNull);
+    },
+  );
 
   test(
     'a newer selection supersedes an in-flight album without stale autoplay',

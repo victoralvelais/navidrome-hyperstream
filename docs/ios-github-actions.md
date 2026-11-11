@@ -8,8 +8,8 @@ No Apple account, signing certificate, or Navidrome credential goes into Actions
 Status: [hosted run 2](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/42930047757)
 successfully compiled, packaged, and uploaded the unsigned IPA from commit
 `cb897fb`. The downloaded IPA passed checksum, archive-integrity, device-platform,
-and app executable-permission checks. Installation and playback on an iPhone
-remain to be verified.
+and app executable-permission checks. The user subsequently confirmed that the
+sideloaded app works on iPhone. Each new audio feature still needs a device check.
 
 ## Set up the repository
 
