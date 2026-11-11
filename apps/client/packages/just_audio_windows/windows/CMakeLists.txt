@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.14)
 set(PROJECT_NAME "just_audio_windows")
 project(${PROJECT_NAME} LANGUAGES CXX)
 set(CPPWINRT_VERSION 2.0.210806.1)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed
@@ -13,6 +14,7 @@ add_library(${PLUGIN_NAME} SHARED
   "player.hpp"
 )
 apply_standard_settings(${PLUGIN_NAME})
+target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_20)
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)

@@ -84,7 +84,7 @@ public:
   JustAudioEventSink(JustAudioEventSink const&) = delete;
   JustAudioEventSink& operator=(JustAudioEventSink const&) = delete;
 
-  JustAudioEventSink::JustAudioEventSink(flutter::BinaryMessenger* messenger, const std::string& id) {
+  JustAudioEventSink(flutter::BinaryMessenger* messenger, const std::string& id) {
     auto event_channel =
       std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(messenger, id, &flutter::StandardMethodCodec::GetInstance());
 
@@ -149,7 +149,7 @@ public:
   winrt::event_token item_failed_token_{};
 
 public:
-  AudioPlayer::AudioPlayer(std::string idx, flutter::BinaryMessenger* messenger) {
+  AudioPlayer(std::string idx, flutter::BinaryMessenger* messenger) {
     id = idx;
 
     // Set up channels
