@@ -197,11 +197,16 @@ The password is needed to generate fresh OpenSubsonic authentication tokens.
 
 Startup restores the account and checks the server. A server outage offers Retry
 and Edit connection while retaining the saved account. A rejected sign-in keeps
-the address and username but requires password re-entry. Unreadable secure storage
-offers Retry or Forget; it is never treated as an empty account. Saves and removals
-are read back to verify success. Disabling **Keep me signed in** clears any older
+the address and username but requires password re-entry. Errors reported by secure
+storage offer Retry or Forget; the app does not request deletion on a read failure.
+Saves and removals are read back to verify success. Disabling **Keep me signed in** clears any older
 saved account after successful authentication and keeps only the current session.
 **Settings → Disconnect from server** removes the saved record and stops playback.
+
+The pinned Windows storage plugin can discard an encrypted container it cannot
+decrypt or parse. In that case, a later launch requires signing in again. Account
+retention through network outages is handled by the app; damaged OS storage is
+not recoverable by the session controller.
 
 Windows account storage is independent of the versioned release folder. Keep the
 Windows product/company identifiers and iOS bundle identifier/signing identity
