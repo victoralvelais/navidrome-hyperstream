@@ -15,11 +15,7 @@ http.Response count(
   Object? rows = const [
     {'id': 'a', 'missing': false},
   ],
-}) => http.Response(
-  jsonEncode(rows),
-  200,
-  headers: {'x-total-count': ?total},
-);
+}) => http.Response(jsonEncode(rows), 200, headers: {'x-total-count': ?total});
 
 NavidromeClient countClient(
   FutureOr<http.Response> Function(http.Request) handler, {
