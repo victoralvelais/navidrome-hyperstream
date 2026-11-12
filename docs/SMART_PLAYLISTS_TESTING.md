@@ -222,3 +222,44 @@ Gesture regressions run with both iOS and Windows scroll behavior; volume tests
 cover both themes. The final light-theme volume preview was recaptured after
 fixing the expanded control's consistent dark track. Native Impeller refraction
 and gesture feel still need a sideload check on the iPhone.
+
+### Softer material transition and floating-player inset
+
+The next follow-up requests a midpoint between 28 and 29, with a continuous
+material rather than a visible frosted plate inside the lens. Apple's
+[Materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials)
+and [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)
+provide the design references: preserve the underlying content, use blur for
+legibility, and let lensing and restrained highlights provide separation. The
+following values are Hyperstream's approximation, not Apple's private recipe.
+
+- Blur is 12 points for controls and 14 for larger sheets, down from 24. Tint
+  alpha is .40/.36 in dark mode and .58/.47 in light mode, between the recent
+  normal-control treatments. Rim highlights and shadows are quieter.
+- The hard inner clip is gone. A rounded-distance mask blends the blur and tint
+  from zero at the outer edge to full strength over 20 points (28 for sheets,
+  scaled down for small controls). The 10-point bounded lens remains underneath.
+- The alpha mask paints with `dstIn` **inside** the backdrop filter's layer,
+  after its blur and tint; the result composites with `srcOver` onto the lens.
+  A `ShaderMask` wrapping a backdrop filter would hide the original pixels from
+  that filter, as explained by a Flutter engine contributor in
+  [flutter/flutter#154801](https://github.com/flutter/flutter/issues/154801).
+  Pixel tests verify actual blur, a continuous transition, and preservation of
+  the backdrop in both themes. This avoids snapshots and extra dependencies.
+- All foreground controls, including the iOS route picker, remain outside the
+  filtering/masking subtree. Reduce Transparency/high contrast stay opaque.
+- The compact floating player's leading inset increases from 8 to 18 points;
+  the expanded bar uses 12, giving artwork and labels room away from the curve.
+  This addresses `Screenshot 2026-11-12 at 2.11.27 PM.heic`.
+
+Device checks: inspect a queue/menu over detailed artwork and scroll text under
+the header. Look for a continuous frost transition rather than an inset plate,
+readable labels, bounded refraction, and stable edges while dragging the queue.
+Check the collapsed player with short/long titles in both themes. Native iPhone
+refraction still requires sideload verification.
+
+Local validation: 203 Flutter tests pass, static analysis is clean, and all five
+preview flows pass. New rendered tests check that the small/large rounded mask
+has no step at the former inner boundary, the center actually blurs fine detail,
+and the backdrop remains visible through the mask in both themes. Phone previews
+include the new compact-player inset.

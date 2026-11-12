@@ -115,7 +115,7 @@ class PlayerControls extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.fromLTRB(compact ? 18 : 12, 8, 12, 8),
                 child: LayoutBuilder(
                   builder: (context, bounds) {
                     final narrow =
