@@ -45,26 +45,11 @@ class GlassSurface extends StatefulWidget {
 
 class _GlassSurfaceState extends State<GlassSurface> {
   static Future<FragmentProgram?>? _program;
-  static Future<FragmentProgram?>? _frostProgram;
-  static FragmentProgram? _loadedFrost;
   FragmentShader? _shader;
-  FragmentShader? _frostShader;
 
   @override
   void initState() {
     super.initState();
-    // Alpha masks work on both Skia and Impeller; only the lens is Impeller-only.
-    _frostShader = _loadedFrost?.fragmentShader();
-    _frostProgram ??= FragmentProgram.fromAsset('shaders/glass_frost.frag')
-        .then<FragmentProgram?>((program) => _loadedFrost = program)
-        .catchError((Object _) => null);
-    if (_frostShader == null) {
-      _frostProgram!.then((program) {
-        if (mounted && program != null) {
-          setState(() => _frostShader = program.fragmentShader());
-        }
-      });
-    }
     if (ImageFilter.isShaderFilterSupported) {
       _program ??= FragmentProgram.fromAsset('shaders/glass.frag')
           .then<FragmentProgram?>((program) => program)
@@ -80,7 +65,6 @@ class _GlassSurfaceState extends State<GlassSurface> {
   @override
   void dispose() {
     _shader?.dispose();
-    _frostShader?.dispose();
     super.dispose();
   }
 
@@ -103,12 +87,12 @@ class _GlassSurfaceState extends State<GlassSurface> {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        tinted(const Color(0xff59616b)).withValues(alpha: .40),
-                        tinted(const Color(0xff141a21)).withValues(alpha: .36),
+                        tinted(const Color(0xff59616b)).withValues(alpha: .28),
+                        tinted(const Color(0xff141a21)).withValues(alpha: .24),
                       ]
                     : [
-                        tinted(Colors.white).withValues(alpha: .58),
-                        tinted(const Color(0xfffaf8f3)).withValues(alpha: .47),
+                        tinted(Colors.white).withValues(alpha: .40),
+                        tinted(const Color(0xfffaf8f3)).withValues(alpha: .32),
                       ],
               )
             : null,
@@ -116,26 +100,13 @@ class _GlassSurfaceState extends State<GlassSurface> {
       ),
       child: const SizedBox.expand(),
     );
-    // Blend a moderate Gaussian blur and tint continuously into the lens. A
-    // clipped inset created a visible second panel; a distance mask avoids that
-    // seam while retaining a quiet center and a clear refracting edge.
-    final sigma = widget.prominent ? 14.0 : 12.0;
+    // A lighter, continuous frost covers the full rounded surface. Avoid inset
+    // masks: they can make the center look like a separate plate inside the rim.
+    final sigma = widget.prominent ? 10.0 : 8.0;
     final frost = BackdropFilter(
       filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-      // The mask paints into this filter's own layer, after blur and tint.
-      // Wrapping it in ShaderMask would isolate it from the real backdrop.
-      // Composite the partially masked layer over the unblurred/lensed image.
-      blendMode: BlendMode.srcOver,
-      child: CustomPaint(
-        foregroundPainter: _frostShader == null
-            ? null
-            : _GlassFrostPainter(
-                _frostShader!,
-                widget.radius,
-                widget.prominent ? 28 : 20,
-              ),
-        child: surface,
-      ),
+      blendMode: BlendMode.src,
+      child: surface,
     );
     final shader = _shader;
     final background = DecoratedBox(
@@ -197,35 +168,6 @@ class _GlassSurfaceState extends State<GlassSurface> {
       ],
     );
   }
-}
-
-/// Draw into the BackdropFilter layer directly. A separate save layer would
-/// either hide the backdrop from the filter or mask only the tint above it.
-class _GlassFrostPainter extends CustomPainter {
-  const _GlassFrostPainter(this.shader, this.radius, this.feather);
-  final FragmentShader shader;
-  final double radius, feather;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    shader
-      ..setFloat(0, size.width)
-      ..setFloat(1, size.height)
-      ..setFloat(2, radius)
-      ..setFloat(3, feather);
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = shader
-        ..blendMode = BlendMode.dstIn,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_GlassFrostPainter oldDelegate) =>
-      shader != oldDelegate.shader ||
-      radius != oldDelegate.radius ||
-      feather != oldDelegate.feather;
 }
 
 /// Backdrop texture coordinates belong to the render target, not this widget.

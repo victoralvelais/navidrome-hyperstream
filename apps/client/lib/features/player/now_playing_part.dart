@@ -211,7 +211,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const OutputButton(),
+                                    OutputButton(obscured: _volumeOpen),
                                     VolumeButton(
                                       playback: playback,
                                       onExpandedChanged: (open) =>

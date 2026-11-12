@@ -263,3 +263,36 @@ preview flows pass. New rendered tests check that the small/large rounded mask
 has no step at the former inner boundary, the center actually blurs fine detail,
 and the backdrop remains visible through the mask in both themes. Phone previews
 include the new compact-player inset.
+
+### Lighter full-panel frost and covered AirPlay view
+
+The follow-up for `Screenshot 2026-11-12 at 3.34.33 PM.heic` reduces the
+material again and extends it across each full rounded panel. Blur is now
+8 points for controls and 10 for prominent sheets; tint alpha is .28/.24 in
+dark mode and .40/.32 in light mode. The inner fade mask and its shader asset
+are removed. Bounded refraction, restrained rim highlights, artwork tint and
+the opaque accessibility fallback remain. These values supersede the preceding
+material settings; there is no separate clear band around the frosted interior.
+
+The dark patch over the queue aligns with the underlying native AirPlay view.
+Flutter documents restrictions on filtering embedded iOS platform views in its
+[platform-view guidance](https://docs.flutter.dev/platform-integration/ios/platform-views).
+The route picker is now unmounted while another Flutter route covers Now Playing,
+including its closing animation, and while the local volume popover is open.
+A Flutter AirPlay icon occupies the same slot beneath the overlay. The native
+picker returns when uncovered. This avoids composing UIKit beneath the queue's
+backdrop filter; changing opacity alone would leave the native view in place.
+
+Regression checks cover full-panel blur and backdrop preservation in both themes,
+native-view disposal beneath a sheet, nested dialogs, delayed restoration after
+the closing transition, and local volume-overlay visibility. Physical iPhone
+checks remain necessary for native composition: open/drag/close Up Next over the
+AirPlay position, open nested queue options and the volume popover, and confirm
+the native route chooser still opens after dismissal. Inspect the lighter frost
+and bounded lens in both themes over detailed artwork.
+
+Local validation: 203 Flutter tests pass, static analysis and formatting are
+clean, and all five viewport preview flows pass. Light/dark phone queue and
+player previews were inspected. These captures use Flutter's desktop test
+renderer; they do not prove physical iOS platform-view composition or Impeller
+refraction.

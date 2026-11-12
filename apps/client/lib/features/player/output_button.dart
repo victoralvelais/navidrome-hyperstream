@@ -8,28 +8,52 @@ import '../../widgets/pull_to_refresh.dart';
 
 /// iOS owns its route sheet; Windows changes only this app's MediaPlayer output.
 class OutputButton extends StatelessWidget {
-  const OutputButton({super.key});
+  const OutputButton({super.key, this.obscured = false});
+  // Also covers local overlays, such as the expanded volume control, which
+  // don't push a route but can overlap part of the native view.
+  final bool obscured;
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       final scheme = Theme.of(context).colorScheme;
       final dark = scheme.brightness == Brightness.dark;
+      final route = ModalRoute.of(context);
+      final coveringAnimation =
+          route?.secondaryAnimation ?? kAlwaysDismissedAnimation;
       return SizedBox(
         width: 44,
         height: 44,
-        child: UiKitView(
-          key: ValueKey((
-            dark,
-            scheme.onSurface.toARGB32(),
-            scheme.primary.toARGB32(),
-          )),
-          viewType: 'dev.hyperstream/audio_route_picker',
-          creationParams: {
-            'dark': dark,
-            'tint': scheme.onSurface.toARGB32(),
-            'activeTint': scheme.primary.toARGB32(),
+        child: AnimatedBuilder(
+          animation: coveringAnimation,
+          builder: (context, _) {
+            // Native views cannot participate reliably in a Flutter sheet's
+            // backdrop filter. Unmount this one while covered, including the
+            // outgoing transition, instead of leaving an invisible UIKit view.
+            if (obscured ||
+                route?.isCurrent == false ||
+                !coveringAnimation.isDismissed) {
+              return ExcludeSemantics(
+                child: Center(
+                  key: const ValueKey('covered-airplay-placeholder'),
+                  child: Icon(Icons.airplay_rounded, color: scheme.onSurface),
+                ),
+              );
+            }
+            return UiKitView(
+              key: ValueKey((
+                dark,
+                scheme.onSurface.toARGB32(),
+                scheme.primary.toARGB32(),
+              )),
+              viewType: 'dev.hyperstream/audio_route_picker',
+              creationParams: {
+                'dark': dark,
+                'tint': scheme.onSurface.toARGB32(),
+                'activeTint': scheme.primary.toARGB32(),
+              },
+              creationParamsCodec: const StandardMessageCodec(),
+            );
           },
-          creationParamsCodec: const StandardMessageCodec(),
         ),
       );
     }

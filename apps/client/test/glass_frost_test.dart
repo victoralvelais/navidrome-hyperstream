@@ -31,53 +31,9 @@ class _Stripes extends CustomPainter {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'rounded frost mask fades continuously across the former inset boundary',
-    () async {
-      final program = await ui.FragmentProgram.fromAsset(
-        'shaders/glass_frost.frag',
-      );
-      for (final size in [const Size(220, 100), const Size(44, 44)]) {
-        final shader = program.fragmentShader()
-          ..setFloat(0, size.width)
-          ..setFloat(1, size.height)
-          ..setFloat(2, 28)
-          ..setFloat(3, 20);
-        final recorder = ui.PictureRecorder();
-        Canvas(recorder).drawRect(Offset.zero & size, Paint()..shader = shader);
-        final picture = recorder.endRecording();
-        final image = await picture.toImage(
-          size.width.toInt(),
-          size.height.toInt(),
-        );
-        final pixels = (await image.toByteData(
-          format: ui.ImageByteFormat.rawRgba,
-        ))!;
-        final width = size.width.toInt();
-        final y = size.height ~/ 2;
-        expect(_channel(pixels, width, 0, 0, 3), 0);
-        expect(_channel(pixels, width, 0, y, 3), lessThan(3));
-        expect(_channel(pixels, width, width ~/ 2, y, 3), 255);
-        for (var x = 1; x < 20; x++) {
-          final delta =
-              _channel(pixels, width, x, y, 3) -
-              _channel(pixels, width, x - 1, y, 3);
-          expect(
-            delta,
-            inInclusiveRange(0, 24),
-            reason: 'No hard inner frost edge at x=$x.',
-          );
-        }
-        image.dispose();
-        picture.dispose();
-        shader.dispose();
-      }
-    },
-  );
-
   for (final brightness in Brightness.values) {
     testWidgets(
-      'masked glass blurs its center, retains edge detail, and keeps the backdrop in $brightness',
+      'full-panel frost blurs both its edge and center and keeps the backdrop in $brightness',
       (tester) async {
         final capture = GlobalKey();
         await tester.pumpWidget(
@@ -110,9 +66,6 @@ void main() {
             ),
           ),
         );
-        await tester.runAsync(
-          () => ui.FragmentProgram.fromAsset('shaders/glass_frost.frag'),
-        );
         await tester.pumpAndSettle();
         await tester.runAsync(() async {
           final boundary =
@@ -136,13 +89,18 @@ void main() {
           expect(
             contrast(110, 180),
             lessThan(10),
-            reason: 'The mask must preserve real backdrop blur, not only tint.',
+            reason:
+                'The glass must preserve real backdrop blur, not only tint.',
           );
-          expect(contrast(47, 54), greaterThan(contrast(110, 180) + 30));
+          expect(
+            contrast(47, 54),
+            lessThan(10),
+            reason: 'The lighter frost must extend through the former clear edge band.',
+          );
           expect(
             _channel(pixels, 300, 150, 90),
             greaterThan(brightness == Brightness.light ? 150 : 50),
-            reason: 'The backdrop must survive the mask save layer instead of turning black.',
+            reason: 'The full panel must stay translucent instead of turning black.',
           );
           image.dispose();
         });
