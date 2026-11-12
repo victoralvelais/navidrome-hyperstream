@@ -14,9 +14,10 @@ After reviewing Feishin-informed proposals, the user selected both a rule editor
 and a pool mixer as selectable editor types. Both use the same rule model and
 account catalog. Scoring, artist spacing, export and addons remain later work.
 See [smart-playlist device checks](docs/SMART_PLAYLISTS_TESTING.md).
-Pending Recent Radio UI note: show a progress bar and the total tracks being synced,
-replacing the growing fetched/search-count message. Verify a trustworthy total;
-do not display a fabricated percentage. This status change is recorded, not shipped.
+Recent Radio's status follow-up is implemented: a progress bar plus the current
+catalog total replaces the growing fetched/search-count message. A bounded native
+Navidrome count query uses the same account and excludes missing tracks. If no
+reliable count is available, progress stays indeterminate until sync completes.
 The follow-up navigation correction puts grouped settings directly on Home,
 with Library in the middle and Search on the right. Continue producing paired
 iOS sideload and Windows releases for user testing as milestones are completed.

@@ -34,7 +34,11 @@ NavidromeClient api(
   serverUrl: url,
   username: user,
   password: 'synthetic',
-  httpClient: MockClient((request) async => handler(request)),
+  httpClient: MockClient(
+    (request) async => request.url.path.endsWith('/auth/login')
+        ? http.Response('', 404)
+        : handler(request),
+  ),
 );
 
 void main() {

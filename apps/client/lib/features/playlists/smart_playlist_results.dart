@@ -6,6 +6,7 @@ import '../../models/smart_playlist.dart';
 import '../../services/library_catalog.dart';
 import '../../services/playback_service.dart';
 import '../../services/smart_playlist_preview.dart';
+import '../../widgets/library_sync_status.dart';
 
 /// A bounded on-screen sample; Play always uses the full evaluated result.
 class SmartPlaylistResults extends StatelessWidget {
@@ -35,7 +36,10 @@ class SmartPlaylistResults extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (catalog.loading || preview.busy) const LinearProgressIndicator(),
+        if (catalog.loading)
+          LibrarySyncStatus(catalog: catalog)
+        else if (preview.busy)
+          const LinearProgressIndicator(),
         if (catalog.error != null) ...[
           Text(
             catalog.error!,

@@ -55,6 +55,7 @@ real server metadata, large-library timing and device usability still need testi
   overlays and the catalog itself are session-only.
 - Use phone portrait, enlarged text, iPad and Windows. Check nested rule dialogs,
   pool editing/reordering, discard confirmation, preview, save, delete and Back.
-- Recent Radio stays a separate hardcoded 30-day entry. Its requested progress
-  bar plus trustworthy total is recorded separately; current fetched counts are
-  not a valid total. Native count discovery remains pending.
+- Recent Radio stays a separate hardcoded 30-day entry. Its sync status now shows
+  a progress bar plus the catalog total. Smart-playlist syncs use the same status.
+  When the optional count lookup fails, the bar stays indeterminate; the actual
+  total appears after a complete successful sync. No fetched-count sentence appears.

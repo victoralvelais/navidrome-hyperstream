@@ -69,6 +69,11 @@ page. Returning after an overdue interval runs one sync. Play radio uses the
 displayed order, and later list updates leave that playing queue unchanged. Failed
 syncs retain local updates and the last synced library with an error.
 
+Sync status shows a progress bar and the total tracks in the catalog. A native
+Navidrome count lookup uses the existing account; if unavailable, the bar stays
+indeterminate without displaying a guessed total. On success it shows the actual
+synced total. Local listens and page revisits never trigger a count request.
+
 Recent Radio is a fixed built-in feature, separate from the smart-playlist
 editor and custom mixing. The earlier editable name/window preferences are left
 untouched but no longer used. Neither the cache nor unconfirmed local activity is

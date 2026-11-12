@@ -43,6 +43,7 @@ class NavidromeClient {
   final _listens = StreamController<LocalListen>.broadcast();
   final _favoriteChanges = StreamController<(String, bool)>.broadcast();
   bool _closed = false;
+  String? _countToken;
   String? serverType;
   String? serverVersion;
   bool openSubsonic = false;
@@ -162,6 +163,94 @@ class NavidromeClient {
   }
 
   Future<void> ping() async => _request('ping');
+
+  /// Optional native count for the same user's non-missing songs as search3.
+  /// Failure never prevents the OpenSubsonic catalog sync. Tokens stay in memory.
+  Future<int?> catalogTrackCount({required bool Function() cancelled}) async {
+    bool stopped() => _closed || cancelled();
+    if (stopped() || serverType?.toLowerCase() != 'navidrome') return null;
+    try {
+      // A cached expired token may be replaced once. Permission/proxy/network
+      // failures fall back to unknown progress without changing sign-in state.
+      for (var attempt = 0; attempt < 2 && !stopped(); attempt++) {
+        final hadToken = _countToken != null;
+        if (!hadToken) {
+          final request = http.Request('POST', baseUri.resolve('auth/login'))
+            ..followRedirects = false
+            ..headers['content-type'] = 'application/json'
+            ..body = jsonEncode({'username': username, 'password': _password});
+          final response = await _countRequest(request);
+          if (stopped() || response.statusCode != 200) return null;
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          if (data is! Map<String, dynamic> ||
+              data['username'] is! String ||
+              (data['username'] as String).toLowerCase() !=
+                  username.toLowerCase()) {
+            return null;
+          }
+          final token = data['token'];
+          if (token is! String ||
+              token.isEmpty ||
+              token.length > 8192 ||
+              !RegExp(r'^[A-Za-z0-9._~-]+$').hasMatch(token)) {
+            return null;
+          }
+          _countToken = token;
+        }
+        if (stopped()) return null;
+        final request =
+            http.Request(
+                'GET',
+                baseUri
+                    .resolve('api/song')
+                    .replace(
+                      queryParameters: {
+                        '_start': '0',
+                        '_end': '1',
+                        'missing': 'false',
+                      },
+                    ),
+              )
+              ..followRedirects = false
+              ..headers['x-nd-authorization'] = 'Bearer $_countToken';
+        final response = await _countRequest(request);
+        if (stopped()) return null;
+        if (response.statusCode == 401) {
+          _countToken = null;
+          if (hadToken && attempt == 0) continue;
+          return null;
+        }
+        if (response.statusCode != 200) return null;
+        final header = response.headers['x-total-count']?.trim();
+        if (header == null || !RegExp(r'^\d+$').hasMatch(header)) return null;
+        final count = int.tryParse(header);
+        final rows = jsonDecode(utf8.decode(response.bodyBytes));
+        if (count == null ||
+            count < 0 ||
+            rows is! List ||
+            rows.length > 1 ||
+            (count == 0) != rows.isEmpty ||
+            rows.any(
+              (row) =>
+                  row is! Map<String, dynamic> ||
+                  row['id'] is! String ||
+                  (row['id'] as String).isEmpty ||
+                  row['missing'] == true,
+            )) {
+          return null;
+        }
+        return count;
+      }
+    } on Object {
+      // Optional native API: never expose URLs, tokens or server response text.
+    }
+    return null;
+  }
+
+  Future<http.Response> _countRequest(http.Request request) => _http
+      .send(request)
+      .then(http.Response.fromStream)
+      .timeout(const Duration(seconds: 4));
 
   /// No retries: a lost response may follow a successfully recorded listen.
   Future<void> scrobble(String trackId, DateTime startedAt) async {
@@ -492,6 +581,7 @@ class NavidromeClient {
 
   void close() {
     _closed = true;
+    _countToken = null;
     _http.close();
     unawaited(_listens.close());
     unawaited(_favoriteChanges.close());

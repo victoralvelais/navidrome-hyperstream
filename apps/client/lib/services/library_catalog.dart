@@ -28,6 +28,17 @@ class LibraryCatalog extends ChangeNotifier {
   DateTime? lastSyncedAt;
   bool loading = false;
   int loadedCount = 0;
+  int? syncTotal;
+  int? lastSyncTrackCount;
+
+  /// The final page and metadata validation must finish before showing 100%.
+  double? get syncProgress {
+    if (!loading) return error == null && lastSyncedAt != null ? 1 : null;
+    final total = syncTotal;
+    if (total == null || total == 0) return null;
+    return (loadedCount / total).clamp(0.0, 0.99);
+  }
+
   String? error;
   bool _disposed = false;
   bool _started = false;
@@ -131,14 +142,21 @@ class LibraryCatalog extends ChangeNotifier {
     _timer?.cancel();
     loading = true;
     loadedCount = 0;
+    syncTotal = null;
     error = null;
     final revision = _revision;
     _notify();
     try {
+      syncTotal = await client.catalogTrackCount(cancelled: () => _disposed);
+      if (_disposed) return;
+      _notify();
       final tracks = await client.radioTracks(
         cancelled: () => _disposed,
         onProgress: (count) {
           loadedCount = count;
+          // The library may have grown since the count query. Keep paging and
+          // withdraw the stale total rather than invent a larger denominator.
+          if (syncTotal != null && count > syncTotal!) syncTotal = null;
           _notify();
         },
       );
@@ -168,6 +186,9 @@ class LibraryCatalog extends ChangeNotifier {
         }
       }
       _tracks = incoming;
+      loadedCount = tracks.length;
+      lastSyncTrackCount = tracks.length;
+      syncTotal = tracks.length;
       lastSyncedAt = _now();
       _evaluate();
     } on Object catch (failure) {

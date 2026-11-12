@@ -6,6 +6,7 @@ import '../../models/recent_radio.dart';
 import '../../services/playback_service.dart';
 import '../../services/recent_radio_service.dart';
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/library_sync_status.dart';
 import '../library/cover_art.dart';
 
 class RecentRadioScreen extends StatefulWidget {
@@ -86,11 +87,7 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
                           'Listening reports are off on this device. Enable them in Home > Playback to count your Hyperstream listens.',
                         ),
                       ),
-                    if (radio.loading) ...[
-                      const SizedBox(height: 16),
-                      const LinearProgressIndicator(),
-                      Text('Syncing library · ${radio.loadedCount} songs'),
-                    ],
+                    LibrarySyncStatus(catalog: radio),
                     if (radio.error case final String error) ...[
                       const SizedBox(height: 16),
                       Text(

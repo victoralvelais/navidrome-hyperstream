@@ -1,6 +1,6 @@
 # Smart playlists and optional providers
 
-Design and implementation record, November 11, 2026. Previous release: **0.1.0+17**.
+Design and implementation record, November 11, 2026. Previous release: **0.1.0+18**.
 Recent Radio and qualified listen reporting shipped in **0.1.0+15**; **0.1.0+17**
 keeps the radio fixed at 30 days, updates it locally from counted listens, and
 syncs on refresh/every 30 minutes while active. The user subsequently selected
@@ -86,29 +86,45 @@ complete scan owns catalog membership, including deletions. Incomplete/failed
 scans retain the current list and its actual last-sync timestamp. Stop timers and
 subscriptions on account disposal. List re-evaluation also removes expired dates.
 
-### Requested follow-up: sync status (recorded, not implemented)
+### Sync status follow-up: implemented
 
-Replace the changing `Syncing library · N songs` message with a progress bar and
-the **total number of tracks being synced**, for example a bar above `12,430 tracks`.
-Do not display search offsets, page numbers, or a running fetched-count sentence.
-This is the catalog being synced, not the number of tracks that match Recent Radio.
+Recent Radio now displays a progress bar and the **total number of tracks being
+synced**, for example a bar above `12,430 tracks`. The changing fetched-count
+sentence is removed. Smart-playlist syncs reuse this status component. The total
+is the catalog being synced, not the number of tracks that match the playlist.
 
-Use a determinate bar when a reliable total is known. The current `search3` paging
-response does not provide a catalog-total field, so the existing `loadedCount`
-cannot simply become the displayed total. Feishin obtains a total from the native
-Navidrome song-list response's `x-total-count` header, including a one-song count
-query. Investigate that path with the same account, accessible libraries and
-filters as the sync before using it. A missing count must stay unknown, not zero.
+On an identified Navidrome connection, an optional native request reads
+`GET api/song?_start=0&_end=1&missing=false` and validates its `x-total-count`
+header and one-row JSON response. It uses the existing server/account through
+`POST auth/login`, checks the returned username, and keeps its bearer token only
+in client memory. Both requests preserve reverse-proxy prefixes and disable
+redirects. No native session is written to preferences or logs. An expired cached
+token can be renewed once; other failures fall back without rejecting the working
+OpenSubsonic sign-in. Each optional request has a four-second timeout.
+
+The count follows Feishin's one-song request pattern. Source review of Navidrome
+at `a7f19c7c7ad39bfb3a3d6128616d9b0cb7644397` confirms that native CountAll and
+search3 use the user's library-access filter; search excludes missing tracks,
+so the count explicitly uses `missing=false`. Navidrome scanner status is a
+different operation and is not used as this denominator. The installed server
+has not been exercised with live credentials; device acceptance remains necessary.
 [Feishin count implementation](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/api/navidrome/navidrome-controller.ts#L863),
-[OpenSubsonic search response](https://opensubsonic.netlify.app/docs/responses/searchresult3/).
+[Navidrome count](https://github.com/navidrome/navidrome/blob/a7f19c7c7ad39bfb3a3d6128616d9b0cb7644397/persistence/mediafile_repository.go#L138),
+[library access](https://github.com/navidrome/navidrome/blob/a7f19c7c7ad39bfb3a3d6128616d9b0cb7644397/persistence/sql_base_repository.go#L241),
+[search filtering](https://github.com/navidrome/navidrome/blob/a7f19c7c7ad39bfb3a3d6128616d9b0cb7644397/persistence/sql_search.go).
 
-Until a trustworthy total is available, use an indeterminate bar and withhold the
-total rather than fabricate progress. A cached prior total must be identified as
-such if shown. Continue to the actual end of pagination even if the total changes
-during a sync; finish the bar only after the complete catalog is accepted. Keep
-the existing manual/30-minute schedule, local listen updates, failure recovery,
-and account isolation. The count-source investigation remains separate from the
-selected configuration milestone.
+Each sync starts with an unknown total, never the prior count. Missing/invalid
+headers, native API failures and unknown server types use an indeterminate bar
+with “Syncing library”, without a numeric total. Once known, progress reflects
+distinct fetched IDs divided by the total, capped at 99% until the final empty
+page and metadata validation succeed. If fetched IDs exceed the count, the stale
+total is withdrawn and sync continues. A successful sync sets the actual distinct
+remote-track total and 100%; session-only listen additions are not included in
+that synced count. Failure hides completion and retains the previous catalog.
+
+The existing manual/30-minute schedule, local updates, failure recovery and account
+isolation remain unchanged. Only a sync attempt makes a count lookup; listens,
+favorites and page revisits do not. See the expanded device checks.
 
 ### Exact preset semantics
 
@@ -529,8 +545,8 @@ shipped workflow in review; App Store approval remains unproven.
 
 ## Implementation order
 
-1. Validate the selected Rules and Mix editors on the sideloaded devices. Keep
-   fixed-radio acceptance open and the requested total/progress status pending.
+1. Validate the selected Rules and Mix editors on the sideloaded devices. Include
+   fixed-radio acceptance and the implemented total/progress status in device checks.
 2. Refine the selected model/editor using device feedback. Continue paired test
    releases; keep configuration and generated results distinct.
 3. Extend variety/metadata and add explicit generated playlist publishing or native

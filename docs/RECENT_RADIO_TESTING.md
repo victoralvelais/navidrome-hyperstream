@@ -1,8 +1,9 @@
 # Recent Radio: sideload and device acceptance
 
-Recent Radio stays a fixed built-in radio. This update adds immediate local
-listening updates and a separate 30-minute catalog sync schedule. It does not
-implement the general smart-playlist editor or custom mixing.
+Recent Radio stays a fixed built-in radio with immediate local listening updates
+and a separate 30-minute catalog sync schedule. Its sync status now shows a progress
+bar and the catalog total. Configurable Rules and Mix playlists are a separate
+feature with their own [device checks](SMART_PLAYLISTS_TESTING.md).
 
 Use the matched IPA/Windows pair referenced by `releases/latest.json`. The IPA
 still needs the existing sideload signing workflow; Windows needs the complete
@@ -30,6 +31,25 @@ extracted bundle. Older releases remain available for comparison.
 7. Switch saved accounts: previews, local activity and timers must stay separate.
    Restarting the app clears the session cache; first open loads from the server.
    The old release's name/window preferences are untouched but no longer used.
+
+## Verify sync progress and totals
+
+1. Refresh Recent Radio. Expect a progress bar with a stable total such as
+   `12,430 tracks`, not a growing fetched-song count or page/search offset.
+2. Compare the total with the same account's accessible, non-missing songs in
+   Navidrome. This is the full catalog, not the subset matching the 30-day radio.
+3. The bar stays below 100% until paging and metadata validation finish. A complete
+   successful sync shows the actual distinct track count and a full bar, including
+   `0 tracks` for an empty library. The last-sync time advances only on success.
+4. If the optional native count endpoint is unavailable, blocked or too slow,
+   expect an indeterminate bar with “Syncing library” and no guessed number.
+   Catalog syncing and sign-in still work. An actual total appears on completion.
+5. If tracks are added during sync and fetched tracks exceed the original count,
+   the stale total is withdrawn; paging continues to the end. The completed total
+   reflects the pages actually accepted. A failed sync does not show completion.
+6. Check a non-admin account with limited library access, reverse-proxy subpaths,
+   and different saved servers. Counts and native sessions must stay account-scoped.
+   Qualified listens still update immediately, without either a scan or count lookup.
 
 ## Verify listening history on the actual server
 
@@ -59,10 +79,12 @@ extracted bundle. Older releases remain available for comparison.
   are not a durable offline history queue or a promise of server acknowledgement.
 - Unobserved runtime gaps over five seconds are conservatively excluded and can
   undercount during system suspension. Device testing will guide refinement.
-- A general smart-playlist editor, custom mixing, managed Navidrome playlist saves,
+- Rules and Mix smart playlists are implemented separately; see their
+  [device checks](SMART_PLAYLISTS_TESTING.md). Managed Navidrome playlist saves,
   provider imports, and addons remain future work.
 
 Automated tests cover local updates without catalog requests, pending/failed
 submissions, sync races, timing/resume/coalescing, account disposal, date rules,
-pagination, queue stability and responsive UI. API fixtures and fake native audio
+pagination, count lookup/fallback, progress completion, queue stability and
+responsive UI. API fixtures and fake native audio
 cannot replace testing on the actual Navidrome server and sideloaded iPhone.
