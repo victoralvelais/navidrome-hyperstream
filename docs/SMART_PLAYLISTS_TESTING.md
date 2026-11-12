@@ -152,7 +152,8 @@ relied solely on the widget clip. Refraction is confined to an 8-point bevel wit
 at most 8 points of displacement (previously 14/30). Every lens/diffusion sample is
 projected inside the rounded panel so neighboring rows cannot enter through the
 rim. A normalized 5-by-5 Gaussian replaces the cross-shaped five-sample diffusion.
-Shared glass adds a 12% neutral frost wash in both themes. The captured backdrop
+This revision added a 12% neutral frost wash; the IMG_7066 follow-up below raises
+the shared baseline to 20%. The captured backdrop
 uses source replacement to avoid blending it over itself inside opacity layers,
 following [Flutter's backdrop blending guidance](https://api.flutter.dev/flutter/widgets/BackdropFilter-class.html).
 
@@ -162,3 +163,30 @@ undistorted. Scroll under the pinned header, open its menu, and rotate. Inspect
 light/dark labels and Reduce Transparency. Rendered regressions exercise the
 shader without an external clip, adjacent-color isolation at every rounded edge,
 and diffusion of fine detail; device compositing remains a sideload check.
+
+### Now Playing controls and connected startup (IMG_7066)
+
+- Shared panels now use a 20% neutral frost wash in both themes.
+- Glass paints its filtered background behind a separate foreground subtree.
+  The native iOS route picker no longer sits inside a shader/backdrop filter;
+  Flutter's iOS platform-view composition has filter restrictions. The picker
+  explicitly has a transparent, non-opaque native background and receives the
+  current text and violet accent colors from Flutter.
+  [Flutter iOS platform-view composition](https://docs.flutter.dev/platform-integration/ios/platform-views#composition-limitations).
+- In Now Playing, verify that the output/volume pill picks up the same glass as
+  the queue button in light and dark themes, rather than turning black. Open the
+  native output picker, return, expand/drag volume, and switch themes. Native
+  compositing still needs physical-device verification.
+- After a successful server login/restore, stay on Home: the shared catalog
+  should already start loading. A missing cache begins the first scan immediately;
+  a fresh cache is reused and an overdue cache refreshes in the background. Open
+  Radio or a smart playlist while loading: it must reuse that work. Check that
+  browsing/playback stays responsive. No catalog work starts when signed out or
+  when saved/new credentials are rejected. Switching/disconnecting cancels the
+  previous screen's catalog and prevents late pages from publishing to another account.
+
+Local validation: 187 Flutter tests pass, static analysis is clean, and the five
+phone/tablet/desktop preview runs pass. Startup tests cover a cold scan on Home,
+navigation sharing that request, fresh-cache reuse, cancellation on leaving the
+account, and signed-out/rejected-login sessions remaining idle. The iOS picker
+test checks theme colors, foreground interaction, and separation from the filter.

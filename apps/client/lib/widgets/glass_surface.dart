@@ -80,7 +80,7 @@ class _GlassSurfaceState extends State<GlassSurface> {
     final density = widget.prominent ? .18 : 0.0;
     // A light neutral frost improves label contrast without hiding cover colors.
     Color frosted(Color base, double alpha) => Color.alphaBlend(
-      scheme.surface.withValues(alpha: .12),
+      scheme.surface.withValues(alpha: .20),
       tinted(base).withValues(alpha: alpha + density),
     );
     final surface = DecoratedBox(
@@ -104,28 +104,14 @@ class _GlassSurfaceState extends State<GlassSurface> {
             : null,
         border: glass ? null : Border.all(color: scheme.outline),
       ),
-      child: CustomPaint(
-        foregroundPainter: glass
-            ? GlassRimPainter(radius: widget.radius, dark: dark)
-            : null,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: scheme.copyWith(
-              // A translucent sheet can sit over a dimmed cover in either theme.
-              // Keep secondary labels legible instead of using mid-gray on gray.
-              onSurfaceVariant: scheme.onSurface.withValues(alpha: .82),
-            ),
-          ),
-          child: Material(type: MaterialType.transparency, child: widget.child),
-        ),
-      ),
+      child: const SizedBox.expand(),
     );
     final blur = ImageFilter.blur(
       sigmaX: widget.prominent ? 5 : 2,
       sigmaY: widget.prominent ? 5 : 2,
     );
     final shader = _shader;
-    return DecoratedBox(
+    final background = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: corners,
         boxShadow: [
@@ -154,6 +140,38 @@ class _GlassSurfaceState extends State<GlassSurface> {
                     )
             : surface,
       ),
+    );
+    // Native iOS views (the route picker) must not be descendants of the shader
+    // filter. Paint the glass as a sibling behind the independently clipped
+    // controls; this also keeps the foreground out of offscreen filter buffers.
+    return Stack(
+      fit: StackFit.passthrough,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: IgnorePointer(child: background)),
+        ClipRRect(
+          borderRadius: corners,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: scheme.copyWith(
+                onSurfaceVariant: scheme.onSurface.withValues(alpha: .82),
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: widget.child,
+            ),
+          ),
+        ),
+        if (glass)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: GlassRimPainter(radius: widget.radius, dark: dark),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

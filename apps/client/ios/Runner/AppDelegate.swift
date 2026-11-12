@@ -74,10 +74,21 @@ private class HyperstreamRouteView: NSObject, FlutterPlatformView {
   init(frame: CGRect, arguments: Any?) {
     picker = AVRoutePickerView(frame: frame)
     super.init()
-    let dark = (arguments as? [String: Any])?["dark"] as? Bool ?? false
+    let params = arguments as? [String: Any]
+    let dark = params?["dark"] as? Bool ?? false
+    func color(_ key: String, fallback: UIColor) -> UIColor {
+      guard let value = params?[key] as? NSNumber else { return fallback }
+      let argb = value.uint32Value
+      return UIColor(red: CGFloat((argb >> 16) & 255) / 255,
+                     green: CGFloat((argb >> 8) & 255) / 255,
+                     blue: CGFloat(argb & 255) / 255,
+                     alpha: CGFloat((argb >> 24) & 255) / 255)
+    }
+    picker.backgroundColor = .clear
+    picker.isOpaque = false
     picker.overrideUserInterfaceStyle = dark ? .dark : .light
-    picker.tintColor = dark ? .white : .black
-    picker.activeTintColor = .systemPink
+    picker.tintColor = color("tint", fallback: dark ? .white : .black)
+    picker.activeTintColor = color("activeTint", fallback: .systemPurple)
     picker.prioritizesVideoDevices = false
     picker.accessibilityLabel = "Choose audio output"
   }

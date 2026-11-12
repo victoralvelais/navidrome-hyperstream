@@ -14,7 +14,7 @@ class LibraryCatalog extends ChangeNotifier {
     _favoritesSubscription = client.favoriteChanges.listen(_onFavorite);
     // Restore existing metadata even if this session never opens a playlist.
     // Otherwise listens on Library/Home could be lost on the next restart.
-    // A cache miss still waits for an explicit playlist visit before scanning.
+    // The account screen also starts ensureLoaded to scan a cold cache in the background.
     if (_cache != null) unawaited(_restoreOnce());
   }
 

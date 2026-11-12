@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:audio_service/audio_service.dart';
@@ -39,11 +41,13 @@ class LibraryScreen extends StatefulWidget {
     required this.playback,
     required this.onDisconnect,
     this.accountSession,
+    this.catalogCache,
   });
   final NavidromeClient client;
   final PlaybackService playback;
   final Future<void> Function() onDisconnect;
   final AccountSession? accountSession;
+  final CatalogCache? catalogCache;
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -87,7 +91,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     _collections = LibraryCollections(widget.client);
     _radio = RecentRadioService(
       widget.client,
-      cache: FileCatalogCache(widget.client),
+      cache: widget.catalogCache ?? FileCatalogCache(widget.client),
     );
     _smartStore = SmartPlaylistStore(widget.client);
     _icons = PlaylistIconStore(widget.client);
@@ -98,6 +102,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
     );
+    unawaited(_radio.ensureLoaded());
     _collections.refreshFavorites();
     _load();
   }

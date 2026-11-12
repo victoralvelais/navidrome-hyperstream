@@ -85,12 +85,14 @@ appear before the server confirms it; the existing Playback notice still reports
 uncertain submissions. Local activity persists with the catalog, not as an offline
 submission outbox.
 
-The first open without a valid cache loads the complete catalog. Later visits and
+Once a server connection succeeds, opening the account starts the shared catalog
+loader in the background, including the initial full scan if no valid cache exists.
+The sign-in/recovery screens never start this work. Later visits and
 app restarts restore the last complete catalog from disk and re-evaluate dates
 immediately. A due background refresh does not block playing the cached list.
 An existing cache restores when its account opens, so listens made without visiting
-the playlist page still persist. An account with no cache waits for a playlist visit
-before requesting its initial full scan.
+the playlist page still persist. Recent Radio and smart-playlist pages reuse the
+startup request; entering them does not create a second scan or block navigation.
 Pull-to-refresh and F5 sync explicitly; after each attempt, schedule the next attempt 30 minutes
 later while the app is active. The schedule belongs to the account session, so
 it continues on other app pages. Pause scheduling in the background; resume

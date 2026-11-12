@@ -12,14 +12,23 @@ class OutputButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      final dark = Theme.of(context).brightness == Brightness.dark;
+      final scheme = Theme.of(context).colorScheme;
+      final dark = scheme.brightness == Brightness.dark;
       return SizedBox(
         width: 44,
         height: 44,
         child: UiKitView(
-          key: ValueKey(dark),
+          key: ValueKey((
+            dark,
+            scheme.onSurface.toARGB32(),
+            scheme.primary.toARGB32(),
+          )),
           viewType: 'dev.hyperstream/audio_route_picker',
-          creationParams: {'dark': dark},
+          creationParams: {
+            'dark': dark,
+            'tint': scheme.onSurface.toARGB32(),
+            'activeTint': scheme.primary.toARGB32(),
+          },
           creationParamsCodec: const StandardMessageCodec(),
         ),
       );
