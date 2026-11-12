@@ -77,12 +77,6 @@ class _GlassSurfaceState extends State<GlassSurface> {
     Color tinted(Color base) =>
         tint == null ? base : Color.lerp(base, tint, dark ? .35 : .16)!;
     final corners = BorderRadius.circular(widget.radius);
-    final density = widget.prominent ? .18 : 0.0;
-    // A light neutral frost improves label contrast without hiding cover colors.
-    Color frosted(Color base, double alpha) => Color.alphaBlend(
-      scheme.surface.withValues(alpha: .20),
-      tinted(base).withValues(alpha: alpha + density),
-    );
     final surface = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: corners,
@@ -93,12 +87,12 @@ class _GlassSurfaceState extends State<GlassSurface> {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        frosted(const Color(0xff59616b), .18),
-                        frosted(const Color(0xff141a21), .15),
+                        tinted(const Color(0xff59616b)).withValues(alpha: .46),
+                        tinted(const Color(0xff141a21)).withValues(alpha: .42),
                       ]
                     : [
-                        frosted(Colors.white, .30),
-                        frosted(const Color(0xfffaf8f3), .22),
+                        tinted(Colors.white).withValues(alpha: .72),
+                        tinted(const Color(0xfffaf8f3)).withValues(alpha: .56),
                       ],
               )
             : null,
@@ -106,10 +100,10 @@ class _GlassSurfaceState extends State<GlassSurface> {
       ),
       child: const SizedBox.expand(),
     );
-    final blur = ImageFilter.blur(
-      sigmaX: widget.prominent ? 5 : 2,
-      sigmaY: widget.prominent ? 5 : 2,
-    );
+    // Restore the frost from before the transparency revisions. Keep the lens
+    // rim clear enough to refract: blur the interior after the bounded lens,
+    // without composing a padded blur into the shader's input coordinates.
+    final blur = ImageFilter.blur(sigmaX: 24, sigmaY: 24);
     final shader = _shader;
     final background = DecoratedBox(
       decoration: BoxDecoration(
@@ -136,7 +130,22 @@ class _GlassSurfaceState extends State<GlassSurface> {
                       radius: widget.radius,
                       scale: MediaQuery.devicePixelRatioOf(context),
                       softness: widget.prominent ? 2.5 : 1.0,
-                      child: surface,
+                      child: Stack(
+                        fit: StackFit.passthrough,
+                        children: [
+                          Positioned.fill(
+                            child: ClipPath(
+                              clipper: _GlassInteriorClipper(widget.radius),
+                              child: BackdropFilter(
+                                filter: blur,
+                                blendMode: BlendMode.src,
+                                child: const SizedBox.expand(),
+                              ),
+                            ),
+                          ),
+                          surface,
+                        ],
+                      ),
                     )
             : surface,
       ),
@@ -174,6 +183,25 @@ class _GlassSurfaceState extends State<GlassSurface> {
       ],
     );
   }
+}
+
+class _GlassInteriorClipper extends CustomClipper<Path> {
+  const _GlassInteriorClipper(this.radius);
+  final double radius;
+
+  @override
+  Path getClip(Size size) {
+    final rim = (size.shortestSide * .175).clamp(0.0, 10.0);
+    final shape = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    ).scaleRadii();
+    return Path()..addRRect(shape.deflate(rim));
+  }
+
+  @override
+  bool shouldReclip(_GlassInteriorClipper oldClipper) =>
+      radius != oldClipper.radius;
 }
 
 /// Backdrop texture coordinates belong to the render target, not this widget.

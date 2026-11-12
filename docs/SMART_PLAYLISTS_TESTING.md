@@ -190,3 +190,35 @@ phone/tablet/desktop preview runs pass. Startup tests cover a cold scan on Home,
 navigation sharing that request, fresh-cache reuse, cancellation on leaving the
 account, and signed-out/rejected-login sessions remaining idle. The iOS picker
 test checks theme colors, foreground interaction, and separation from the filter.
+
+### Original frost, volume contrast, and queue pull-down (IMG_7067–7068)
+
+The user clarified that the requested frost baseline is the version **before the
+transparency changes**, not removal of frost or the later 12%/20% overlays. The
+`79b7120` baseline is restored: dark tint alpha .46/.42, light .72/.56, and a
+24-point Gaussian blur. On Impeller the frosted interior is clipped inside the
+lens rim, so blur does not erase its refraction. This uses a separate filter
+after refraction, preserving the shader's coordinate system; native controls
+remain outside both filters. The lens band and maximum displacement increase
+from 8 to 10 points. Exterior passthrough and rounded sample bounds remain.
+
+The expanded volume slider keeps a dark empty track, light percentage, pale fill,
+and dark speaker over the fill in both themes, matching IMG_7068. The collapsed
+speaker still follows the surrounding theme.
+Check full volume, low volume, mute/unmute, and theme changes while expanded.
+
+Up Next now shares one list drag with the sheet. At the top, elastic list movement
+tapers toward 28 points; after 56 points of finger travel, panel movement eases
+in. Release after 120 points of panel travel dismisses it; a downward flick can
+dismiss earlier once the panel has moved 32 points. Short/cancelled pulls return
+to rest. Scrolled lists reach the top first, and reversing the drag returns the
+panel before scrolling the list upward. Header dragging, Close, queue reordering,
+and wheel scrolling keep their existing behavior. Check this on a physical iPhone
+with empty, short, and long queues, including a pull started low in the list.
+
+Local validation: 200 Flutter tests pass and static analysis is clean. The five
+viewport flows pass, including list-driven dismissal in the actual phone queue.
+Gesture regressions run with both iOS and Windows scroll behavior; volume tests
+cover both themes. The final light-theme volume preview was recaptured after
+fixing the expanded control's consistent dark track. Native Impeller refraction
+and gesture feel still need a sideload check on the iPhone.

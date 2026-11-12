@@ -183,6 +183,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                   icon: const Icon(Icons.queue_music_rounded),
                                   onPressed: () => showGlassSheet<void>(
                                     context: context,
+                                    pullFromList: true,
                                     builder: (_) => _QueuePage(
                                       playback: playback,
                                       client: widget.client,
@@ -274,12 +275,7 @@ class _QueuePage extends StatefulWidget {
 }
 
 class _QueuePageState extends State<_QueuePage> {
-  final _scroll = ScrollController();
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
+  ScrollController get _scroll => PrimaryScrollController.of(context);
 
   Future<void> _option(String option) async {
     final playback = widget.playback;
@@ -457,6 +453,7 @@ class _QueuePageState extends State<_QueuePage> {
                 ),
                 Expanded(
                   child: CustomScrollView(
+                    key: const ValueKey('up-next-list'),
                     controller: _scroll,
                     slivers: [
                       SliverPersistentHeader(

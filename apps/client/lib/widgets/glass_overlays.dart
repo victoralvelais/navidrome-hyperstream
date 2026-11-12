@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'glass_surface.dart';
+import 'pull_down_sheet.dart';
 
 Widget _inheritGlass(BuildContext source, Widget child) => _OverlayGlass(
   enabled: GlassScope.effectsEnabled(source),
@@ -31,6 +32,7 @@ Future<T?> showGlassSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = true,
   bool useSafeArea = true,
+  bool pullFromList = false,
   BoxConstraints? constraints,
 }) {
   final enabled = GlassScope.effectsEnabled(context);
@@ -47,20 +49,23 @@ Future<T?> showGlassSheet<T>({
       enabled: enabled,
       color: tint,
       child: Builder(
-        builder: (context) => Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-          child: GlassSurface(
-            radius: 32,
-            prominent: true,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: builder(context),
+        builder: (context) {
+          final surface = Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            child: GlassSurface(
+              radius: 32,
+              prominent: true,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Builder(builder: builder),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+          return pullFromList ? PullDownSheet(child: surface) : surface;
+        },
       ),
     ),
   );

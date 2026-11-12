@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_theme.dart';
 import '../../services/playback_service.dart';
 import '../../widgets/glass_surface.dart';
 
@@ -59,7 +60,9 @@ class _VolumeButtonState extends State<VolumeButton> {
     final buttonBottom = anchor.dy + box.size.height;
     _entry = OverlayEntry(
       builder: (overlayContext) {
-        final theme = Theme.of(overlayContext);
+        // The expanded volume control has one appearance in either app theme:
+        // dark empty track, pale fill, and a dark speaker over that fill.
+        final theme = hyperstreamTheme(Brightness.dark);
         final glass = GlassScope.effectsEnabled(overlayContext);
         final media = MediaQuery.of(overlayContext);
         final height = math.min(
@@ -185,8 +188,9 @@ class _VolumeButtonState extends State<VolumeButton> {
                                             widthFactor: 1,
                                             heightFactor: value,
                                             child: ColoredBox(
-                                              color: theme.colorScheme.onSurface
-                                                  .withValues(alpha: .87),
+                                              // A filled volume track stays pale in
+                                              // both themes, like the iOS control.
+                                              color: const Color(0xdff5f5f7),
                                             ),
                                           ),
                                         ),
@@ -201,7 +205,7 @@ class _VolumeButtonState extends State<VolumeButton> {
                                                   ? 'Unmute music'
                                                   : 'Mute music',
                                               color: value > .18
-                                                  ? theme.colorScheme.surface
+                                                  ? const Color(0xff0d0914)
                                                   : theme.colorScheme.onSurface,
                                               onPressed:
                                                   widget.playback.toggleMute,

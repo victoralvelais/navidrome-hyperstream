@@ -534,8 +534,20 @@ Future<void> main() async {
       await _capturePreview(tester, '${viewport.name}-queue-menu');
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Close queue'));
+      if (viewport.name == 'phone-light' || viewport.name == 'phone-dark') {
+        final list = find.byKey(const ValueKey('up-next-list'));
+        final pull = await tester.startGesture(
+          tester.getTopLeft(list) + const Offset(80, 100),
+        );
+        await pull.moveBy(const Offset(0, 20));
+        await pull.moveBy(const Offset(0, 260));
+        await tester.pump(const Duration(milliseconds: 400));
+        await pull.up();
+      } else {
+        await tester.tap(find.byTooltip('Close queue'));
+      }
       await tester.pumpAndSettle();
+      expect(find.text('Up next'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
 

@@ -85,8 +85,8 @@ void main() {
       if (difference(x, 97) > 40) warped++;
     }
     expect(warped, greaterThan(0));
-    // Eight logical pixels in from a straight edge is already unwarped.
-    for (var x = 67; x < 259; x++) {
+    // The slightly wider ten-point rim still leaves the center unwarped.
+    for (var x = 69; x < 257; x++) {
       expect(difference(x, 97), lessThan(4));
     }
     var outsideChanges = 0;

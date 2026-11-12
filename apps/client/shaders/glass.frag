@@ -62,12 +62,12 @@ void main() {
       roundedDistance(p - vec2(0.0, epsilon), halfSize, radius)
   );
   vec2 normal = gradient / max(length(gradient), 0.001);
-  float bevel = min(8.0 * uScale, min(halfSize.x, halfSize.y) * 0.35);
+  float bevel = min(10.0 * uScale, min(halfSize.x, halfSize.y) * 0.35);
   float t = clamp(inside / max(bevel, 0.001), 0.0, 1.0);
   // Quarter-circle lens: strong displacement at the lip, smoothly returning
   // to the unwarped center. The folded rim creates a distinct inner edge.
   float profile = 1.0 - sqrt(max(0.0, 1.0 - (1.0 - t) * (1.0 - t)));
-  float depth = min(8.0 * uScale, min(halfSize.x, halfSize.y) * 0.3);
+  float depth = min(10.0 * uScale, min(halfSize.x, halfSize.y) * 0.4);
   vec2 refracted = pixel - normal * profile * depth;
   float soften = uSoftness * (0.35 + 0.65 * smoothstep(0.0, 1.0, t));
   vec2 center = uBounds.xy + halfSize;
