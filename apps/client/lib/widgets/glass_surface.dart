@@ -78,6 +78,11 @@ class _GlassSurfaceState extends State<GlassSurface> {
         tint == null ? base : Color.lerp(base, tint, dark ? .35 : .16)!;
     final corners = BorderRadius.circular(widget.radius);
     final density = widget.prominent ? .18 : 0.0;
+    // A light neutral frost improves label contrast without hiding cover colors.
+    Color frosted(Color base, double alpha) => Color.alphaBlend(
+      scheme.surface.withValues(alpha: .12),
+      tinted(base).withValues(alpha: alpha + density),
+    );
     final surface = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: corners,
@@ -88,15 +93,12 @@ class _GlassSurfaceState extends State<GlassSurface> {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        tinted(const Color(0xff59616b))
-                            .withValues(alpha: .18 + density),
-                        tinted(const Color(0xff141a21))
-                            .withValues(alpha: .15 + density),
+                        frosted(const Color(0xff59616b), .18),
+                        frosted(const Color(0xff141a21), .15),
                       ]
                     : [
-                        tinted(Colors.white).withValues(alpha: .30 + density),
-                        tinted(const Color(0xfffaf8f3))
-                            .withValues(alpha: .22 + density),
+                        frosted(Colors.white, .30),
+                        frosted(const Color(0xfffaf8f3), .22),
                       ],
               )
             : null,
@@ -138,12 +140,16 @@ class _GlassSurfaceState extends State<GlassSurface> {
         borderRadius: corners,
         child: glass
             ? shader == null
-                  ? BackdropFilter(filter: blur, child: surface)
+                  ? BackdropFilter(
+                      filter: blur,
+                      blendMode: BlendMode.src,
+                      child: surface,
+                    )
                   : _GlassBackdrop(
                       shader: shader,
                       radius: widget.radius,
                       scale: MediaQuery.devicePixelRatioOf(context),
-                      softness: widget.prominent ? 2.5 : .7,
+                      softness: widget.prominent ? 2.5 : 1.0,
                       child: surface,
                     )
             : surface,
@@ -218,7 +224,9 @@ class _RenderGlassBackdrop extends RenderProxyBox {
 }
 
 class _GlassFilterLayer extends BackdropFilterLayer {
-  _GlassFilterLayer(this.filterForScene);
+  // Replace the captured backdrop instead of blending it over itself again in
+  // a sheet/menu opacity layer (which can produce doubled translucent content).
+  _GlassFilterLayer(this.filterForScene) : super(blendMode: BlendMode.src);
   final ImageFilter Function() filterForScene;
   // A parent's transform can move a retained child without calling its paint.
   @override

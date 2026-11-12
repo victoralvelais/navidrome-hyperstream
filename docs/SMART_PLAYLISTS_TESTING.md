@@ -126,7 +126,7 @@ real server metadata, large-library timing and device usability still need testi
   isolation. A first-ever install/cache miss still needs a complete sync.
 - On iPhone, scroll detailed covers/text beneath top/bottom glass, open a sheet
   and a popup, and rotate. Refraction should follow each rounded control edge,
-  with a clear center and separate inner/outer glints. Check a menu over another
+  with a lightly frosted center and separate inner/outer glints. Check a menu over another
   glass surface for feedback artifacts. Windows retains blur plus the layered
   rim because its renderer lacks ImageFilter.shader support. Reduce Transparency
   and high contrast must still give an opaque surface.
@@ -143,3 +143,22 @@ while directional outer/inner strokes provide separation on every renderer.
 [Flutter shader API](https://api.flutter.dev/flutter/dart-ui/ImageFilter/ImageFilter.shader.html),
 [Flutter runtime filter source](https://github.com/flutter/flutter/blob/master/engine/src/flutter/impeller/entity/contents/filters/runtime_effect_filter_contents.cc),
 [Liquid Glass Renderer refraction model](https://pub.dev/packages/liquid_glass_renderer#refraction).
+
+### Queue glass boundary follow-up (IMG_7065)
+
+The refraction shader now passes exterior pixels through unchanged, including
+rounded-corner cutouts; previously those pixels received maximum distortion and
+relied solely on the widget clip. Refraction is confined to an 8-point bevel with
+at most 8 points of displacement (previously 14/30). Every lens/diffusion sample is
+projected inside the rounded panel so neighboring rows cannot enter through the
+rim. A normalized 5-by-5 Gaussian replaces the cross-shaped five-sample diffusion.
+Shared glass adds a 12% neutral frost wash in both themes. The captured backdrop
+uses source replacement to avoid blending it over itself inside opacity layers,
+following [Flutter's backdrop blending guidance](https://api.flutter.dev/flutter/widgets/BackdropFilter-class.html).
+
+Check Up Next over detailed album art: the first upcoming song should not appear
+as an extra strip beyond the header, and outside corners/borders should remain
+undistorted. Scroll under the pinned header, open its menu, and rotate. Inspect
+light/dark labels and Reduce Transparency. Rendered regressions exercise the
+shader without an external clip, adjacent-color isolation at every rounded edge,
+and diffusion of fine detail; device compositing remains a sideload check.
