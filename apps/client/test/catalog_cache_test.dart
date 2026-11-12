@@ -60,12 +60,14 @@ void main() {
       final cache = FileCatalogCache(client, directory: () async => directory);
       final data = CatalogSnapshot(
         syncedAt: now,
+        syncedTrackCount: 0, // This track arrived locally after an empty scan.
         tracks: [song],
         listens: {'a': CachedListen(now, 9)},
         favorites: {'a': false},
       );
       await cache.write(data);
       final restored = (await cache.read())!;
+      expect(restored.syncedTrackCount, 0);
       final track = restored.tracks.single;
       expect(track.id, song.id);
       expect(track.duration, song.duration);
@@ -226,6 +228,33 @@ void main() {
       await second.refresh();
       expect(second.tracks.single.lastPlayedAt, now);
       expect(second.tracks.single.playCount, 9);
+    },
+  );
+
+  test(
+    'listens persist even when the account never opens a playlist page',
+    () async {
+      var calls = 0;
+      final client = fixtures.api((_) {
+        calls++;
+        return http.Response('', 500);
+      });
+      addTearDown(client.close);
+      final cache = MemoryCatalogCache()..saved = snapshot(now);
+      final first = RecentRadioService(client, now: () => now, cache: cache);
+      await Future<void>.delayed(
+        Duration.zero,
+      ); // Account restore, no ensureLoaded.
+      client.recordLocalListen(song, now);
+      await Future<void>.delayed(Duration.zero);
+      first.dispose(); // Flush the local update when leaving the account.
+      await Future<void>.delayed(Duration.zero);
+      final reopened = RecentRadioService(client, now: () => now, cache: cache);
+      addTearDown(reopened.dispose);
+      await reopened.ensureLoaded();
+      expect(reopened.tracks.single.lastPlayedAt, now);
+      expect(reopened.tracks.single.playCount, 9);
+      expect(calls, 0);
     },
   );
 

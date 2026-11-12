@@ -12,6 +12,10 @@ class LibraryCatalog extends ChangeNotifier {
     : _now = now ?? DateTime.now {
     _subscription = client.localListens.listen(_onListen);
     _favoritesSubscription = client.favoriteChanges.listen(_onFavorite);
+    // Restore existing metadata even if this session never opens a playlist.
+    // Otherwise listens on Library/Home could be lost on the next restart.
+    // A cache miss still waits for an explicit playlist visit before scanning.
+    if (_cache != null) unawaited(_restoreOnce());
   }
 
   static const syncInterval = Duration(minutes: 30);
@@ -123,7 +127,8 @@ class LibraryCatalog extends ChangeNotifier {
     if (lastSyncedAt == null) await _refreshing;
   }
 
-  Future<void> _restoreOnce() => _restoring ??= _restore();
+  Future<void> _restoreOnce() =>
+      _restoring ??= _restore().catchError((Object _) {});
 
   Future<void> _restore() async {
     final saved = await _cache?.read();
@@ -159,7 +164,7 @@ class LibraryCatalog extends ChangeNotifier {
     _tracks = incoming;
     _started = true;
     lastSyncedAt = saved.syncedAt;
-    lastSyncTrackCount = saved.tracks.length;
+    lastSyncTrackCount = saved.syncedTrackCount;
     _nextSyncAt = saved.syncedAt.add(syncInterval);
     _evaluate();
     if (changedWhileRestoring) _saveSoon();
@@ -184,6 +189,7 @@ class LibraryCatalog extends ChangeNotifier {
     if (cache == null || syncedAt == null) return;
     final snapshot = CatalogSnapshot(
       syncedAt: syncedAt,
+      syncedTrackCount: lastSyncTrackCount,
       tracks: tracks,
       listens: {
         for (final entry in _local.entries)

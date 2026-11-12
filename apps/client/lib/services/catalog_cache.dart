@@ -19,12 +19,15 @@ class CatalogSnapshot {
   CatalogSnapshot({
     required this.syncedAt,
     required List<Track> tracks,
+    int? syncedTrackCount,
     Map<String, CachedListen> listens = const {},
     Map<String, bool> favorites = const {},
-  }) : tracks = List.unmodifiable(tracks),
+  }) : syncedTrackCount = syncedTrackCount ?? tracks.length,
+       tracks = List.unmodifiable(tracks),
        listens = Map.unmodifiable(listens),
        favorites = Map.unmodifiable(favorites);
   final DateTime syncedAt;
+  final int syncedTrackCount;
   final List<Track> tracks;
   final Map<String, CachedListen> listens;
   final Map<String, bool> favorites;
@@ -105,6 +108,7 @@ class FileCatalogCache implements CatalogCache {
 String _encode(CatalogSnapshot value) => jsonEncode({
   'schemaVersion': 1,
   'syncedAt': value.syncedAt.toUtc().toIso8601String(),
+  'syncedTrackCount': value.syncedTrackCount,
   'tracks': [
     for (final track in value.tracks)
       {
@@ -178,6 +182,7 @@ CatalogSnapshot _decode(String raw) {
   });
   return CatalogSnapshot(
     syncedAt: syncedAt,
+    syncedTrackCount: data['syncedTrackCount'] as int?,
     tracks: tracks,
     listens: listens,
     favorites: (data['favorites'] as Map).cast<String, bool>(),

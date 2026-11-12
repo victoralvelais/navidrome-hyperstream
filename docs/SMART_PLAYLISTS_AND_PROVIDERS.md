@@ -88,6 +88,9 @@ submission outbox.
 The first open without a valid cache loads the complete catalog. Later visits and
 app restarts restore the last complete catalog from disk and re-evaluate dates
 immediately. A due background refresh does not block playing the cached list.
+An existing cache restores when its account opens, so listens made without visiting
+the playlist page still persist. An account with no cache waits for a playlist visit
+before requesting its initial full scan.
 Pull-to-refresh and F5 sync explicitly; after each attempt, schedule the next attempt 30 minutes
 later while the app is active. The schedule belongs to the account session, so
 it continues on other app pages. Pause scheduling in the background; resume
