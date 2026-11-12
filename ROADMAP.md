@@ -1,14 +1,22 @@
 # Navidrome Hyperstream: draft roadmap
 
 Status: UI/multiple-server release complete at 0.1.0+14; counted listening and
-Recent Radio shipped at 0.1.0+15. The follow-up keeps Recent Radio fixed at 30 days,
+Recent Radio shipped at 0.1.0+15. Release 0.1.0+17 keeps Recent Radio fixed at 30 days,
 updates it immediately from local listens, and syncs on refresh/every 30 minutes
-while active. A general smart-playlist editor and custom mixing remain unimplemented.
+while active. The next milestone implements saved Rules and Mix smart playlists,
+with shared condition groups, exclusions, track preview and ordered playback.
 Server imports remain an isolated prototype; addons remain later work.
 Updated: November 11, 2026.
 
 Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
 Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
+After reviewing Feishin-informed proposals, the user selected both a rule editor
+and a pool mixer as selectable editor types. Both use the same rule model and
+account catalog. Scoring, artist spacing, export and addons remain later work.
+See [smart-playlist device checks](docs/SMART_PLAYLISTS_TESTING.md).
+Pending Recent Radio UI note: show a progress bar and the total tracks being synced,
+replacing the growing fetched/search-count message. Verify a trustworthy total;
+do not display a fabricated percentage. This status change is recorded, not shipped.
 The follow-up navigation correction puts grouped settings directly on Home,
 with Library in the middle and Search on the right. Continue producing paired
 iOS sideload and Windows releases for user testing as milestones are completed.

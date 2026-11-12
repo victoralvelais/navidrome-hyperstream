@@ -13,10 +13,14 @@ class PlaylistsScreen extends StatelessWidget {
     required this.collections,
     required this.onSelected,
     this.onRecentRadio,
+    this.onSmartPlaylists,
+    this.onNewSmartPlaylist,
   });
   final LibraryCollections collections;
   final ValueChanged<MusicPlaylist> onSelected;
   final VoidCallback? onRecentRadio;
+  final VoidCallback? onSmartPlaylists;
+  final VoidCallback? onNewSmartPlaylist;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -45,6 +49,10 @@ class PlaylistsScreen extends StatelessWidget {
                         PopupMenuButton<String>(
                           tooltip: 'New playlist',
                           onSelected: (action) {
+                            if (action == 'smart') {
+                              onNewSmartPlaylist?.call();
+                              return;
+                            }
                             if (action == 'radio') {
                               onRecentRadio?.call();
                               return;
@@ -61,6 +69,11 @@ class PlaylistsScreen extends StatelessWidget {
                               value: 'manual',
                               child: Text('New playlist'),
                             ),
+                            if (onNewSmartPlaylist != null)
+                              const PopupMenuItem(
+                                value: 'smart',
+                                child: Text('New smart playlist'),
+                              ),
                             if (onRecentRadio != null)
                               const PopupMenuItem(
                                 value: 'radio',
@@ -102,6 +115,20 @@ class PlaylistsScreen extends StatelessWidget {
                   ),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: onRecentRadio,
+                ),
+              ),
+            if (onSmartPlaylists != null)
+              SliverToBoxAdapter(
+                child: ListTile(
+                  leading: const SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Icon(Icons.auto_awesome_outlined),
+                  ),
+                  title: const Text('Smart playlists'),
+                  subtitle: const Text('Rules and custom mixes'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: onSmartPlaylists,
                 ),
               ),
             SliverList.builder(

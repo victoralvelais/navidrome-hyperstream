@@ -69,10 +69,19 @@ page. Returning after an overdue interval runs one sync. Play radio uses the
 displayed order, and later list updates leave that playing queue unchanged. Failed
 syncs retain local updates and the last synced library with an error.
 
-Recent Radio is a fixed built-in feature, separate from the future smart-playlist
+Recent Radio is a fixed built-in feature, separate from the smart-playlist
 editor and custom mixing. The earlier editable name/window preferences are left
 untouched but no longer used. Neither the cache nor unconfirmed local activity is
 persisted across app restarts; there is no managed Navidrome playlist yet.
+
+**Library → Playlists → Smart playlists → +** opens the configurable editor.
+Choose **Rules** for nested all/any conditions and an order, or **Mix** for named
+pools with independent conditions, orders and percentage shares. Both support
+global exclusions, limits, preview and Play. Switching types preserves both
+configurations. Definitions save locally per server/account; they share Recent
+Radio's session catalog and listening/favorite updates, without extra scans.
+Preview displays the first 50 selected tracks; Play uses the full result. See
+[examples and acceptance checks](../../docs/SMART_PLAYLISTS_TESTING.md).
 
 **Home → Playback → Report listening history** is enabled by default. Tracks
 longer than 30 seconds count after half their duration or four minutes of actual

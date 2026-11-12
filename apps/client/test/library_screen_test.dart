@@ -324,6 +324,19 @@ Future<void> main() async {
       await _capturePreview(tester, '${viewport.name}-radio');
       await tester.tap(find.byTooltip('Back to playlists'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Smart playlists'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Smart playlists'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Rules select and order one list. Mix combines pools with their own conditions and shares.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Choose an album or artist to explore.'), findsNothing);
+      await tester.tap(find.byTooltip('Back to playlists'));
+      await tester.pumpAndSettle();
       await tester.tap(nav('Library'));
       await tester.pumpAndSettle();
       expect(find.text('Artists'), findsOneWidget);

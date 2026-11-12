@@ -41,11 +41,13 @@ class NavidromeClient {
   final http.Client _http;
   final Random _random = Random.secure();
   final _listens = StreamController<LocalListen>.broadcast();
+  final _favoriteChanges = StreamController<(String, bool)>.broadcast();
   bool _closed = false;
   String? serverType;
   String? serverVersion;
   bool openSubsonic = false;
   Stream<LocalListen> get localListens => _listens.stream;
+  Stream<(String, bool)> get favoriteChanges => _favoriteChanges.stream;
 
   void recordLocalListen(Track track, DateTime startedAt) {
     if (!_closed) _listens.add(LocalListen(track, startedAt.toUtc()));
@@ -476,6 +478,7 @@ class NavidromeClient {
     await _request(favorite ? 'star' : 'unstar', {
       album ? 'albumId' : 'id': id,
     });
+    if (!album && !_closed) _favoriteChanges.add((id, favorite));
   }
 
   // These URLs are passed only to the native player, never persisted or logged.
@@ -491,5 +494,6 @@ class NavidromeClient {
     _closed = true;
     _http.close();
     unawaited(_listens.close());
+    unawaited(_favoriteChanges.close());
   }
 }

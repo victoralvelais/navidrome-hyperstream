@@ -8,6 +8,7 @@ import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../../services/account_session.dart';
 import '../../services/recent_radio_service.dart';
+import '../../services/smart_playlist_store.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
 import '../favorites/favorites_screen.dart';
@@ -15,6 +16,7 @@ import '../player/player_controls.dart';
 import '../playlists/playlist_tracks.dart';
 import '../playlists/playlists_screen.dart';
 import '../playlists/recent_radio_screen.dart';
+import '../playlists/smart_playlists_screen.dart';
 import '../search/library_search.dart';
 import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
@@ -44,9 +46,13 @@ class _LibraryScreenState extends State<LibraryScreen>
   final _albums = <Album>[];
   final _browseKey = GlobalKey();
   final _settingsKey = GlobalKey<SettingsPageState>();
+  final _smartKey = GlobalKey<SmartPlaylistsScreenState>();
   ScrollDirection _scrollDirection = ScrollDirection.idle;
   late final LibraryCollections _collections;
   late final RecentRadioService _radio;
+  late final SmartPlaylistStore _smartStore;
+  bool _smartHasPage = false;
+  bool _createSmartOnOpen = false;
   Album? _selected;
   Artist? _artist;
   String? _playlistId;
@@ -66,6 +72,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.initState();
     _collections = LibraryCollections(widget.client);
     _radio = RecentRadioService(widget.client);
+    _smartStore = SmartPlaylistStore(widget.client);
     WidgetsBinding.instance.addObserver(this);
     _radio.setAppActive(
       WidgetsBinding.instance.lifecycleState == null ||
@@ -79,6 +86,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _collections.dispose();
+    _smartStore.dispose();
     _radio.dispose();
     super.dispose();
   }
@@ -97,16 +105,25 @@ class _LibraryScreenState extends State<LibraryScreen>
     _selected = null;
     _playlistId = null;
   });
-  void _back() => setState(() {
-    if (_selected != null || _playlistId != null) {
-      _selected = null;
-      _playlistId = null;
-    } else if (_artist != null) {
-      _artist = null;
-    } else {
-      _libraryPage = _libraryPage == 'Recent Radio' ? 'Playlists' : null;
+  void _back() {
+    if (_libraryPage == 'Smart playlists' &&
+        (_smartKey.currentState?.back() ?? false)) {
+      return;
     }
-  });
+    setState(() {
+      if (_selected != null || _playlistId != null) {
+        _selected = null;
+        _playlistId = null;
+      } else if (_artist != null) {
+        _artist = null;
+      } else {
+        _libraryPage =
+            ['Recent Radio', 'Smart playlists'].contains(_libraryPage)
+            ? 'Playlists'
+            : null;
+      }
+    });
+  }
 
   void _tab(int index) {
     FocusScope.of(context).unfocus();
@@ -119,6 +136,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       _playlistId = null;
       _artist = null;
       _libraryPage = null;
+      _smartHasPage = false;
     });
   }
 
@@ -126,12 +144,18 @@ class _LibraryScreenState extends State<LibraryScreen>
     setState(() {
       _section = _Section.library;
       _libraryPage = page;
+      _smartHasPage = false;
       _selected = null;
       _playlistId = null;
       _artist = null;
     });
     if (page == 'Playlists') _collections.refreshPlaylists();
     if (page == 'Favorites') _collections.refreshFavorites();
+  }
+
+  void _openSmart({bool create = false}) {
+    _createSmartOnOpen = create;
+    _openCategory('Smart playlists');
   }
 
   Future<void> _load({bool refresh = false}) async {
@@ -295,8 +319,20 @@ class _LibraryScreenState extends State<LibraryScreen>
       radio: _radio,
       playback: widget.playback,
     ),
+    'Smart playlists' => SmartPlaylistsScreen(
+      key: _smartKey,
+      catalog: _radio,
+      store: _smartStore,
+      playback: widget.playback,
+      createOnOpen: _createSmartOnOpen,
+      onPageChanged: (value) {
+        if (mounted) setState(() => _smartHasPage = value);
+      },
+    ),
     'Playlists' => PlaylistsScreen(
       collections: _collections,
+      onSmartPlaylists: () => _openSmart(),
+      onNewSmartPlaylist: () => _openSmart(create: true),
       onRecentRadio: () => _openCategory('Recent Radio'),
       onSelected: (playlist) => setState(() {
         _playlistId = playlist.id;
@@ -356,7 +392,9 @@ class _LibraryScreenState extends State<LibraryScreen>
     ],
   );
 
-  String get _backLabel => _selected != null && _artist != null
+  String get _backLabel => _libraryPage == 'Smart playlists' && _smartHasPage
+      ? 'Back to smart playlists'
+      : _selected != null && _artist != null
       ? 'Back to artist'
       : _hasSelection
       ? _section == _Section.search
@@ -366,7 +404,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             : _libraryPage == 'Favorites'
             ? 'Back to favorites'
             : 'Back to albums'
-      : _libraryPage == 'Recent Radio'
+      : ['Recent Radio', 'Smart playlists'].contains(_libraryPage)
       ? 'Back to playlists'
       : 'Back to library';
 
@@ -475,7 +513,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                                   if (wide &&
                                       bounds.maxWidth >= 760 &&
                                       _section != _Section.home &&
-                                      _libraryPage != 'Recent Radio') {
+                                      ![
+                                        'Recent Radio',
+                                        'Smart playlists',
+                                      ].contains(_libraryPage)) {
                                     return Row(
                                       children: [
                                         Expanded(child: _browsePane()),

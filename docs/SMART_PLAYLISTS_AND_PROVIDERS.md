@@ -1,12 +1,63 @@
 # Smart playlists and optional providers
 
-Design exploration, November 11, 2026. Baseline: released client **0.1.0+14**.
-Recent Radio and qualified listen reporting shipped in **0.1.0+15**. That is a
-built-in radio, not the requested general smart-playlist system. The follow-up
-keeps it hardcoded and separates it from the future editor and custom mixing.
+Design and implementation record, November 11, 2026. Previous release: **0.1.0+17**.
+Recent Radio and qualified listen reporting shipped in **0.1.0+15**; **0.1.0+17**
+keeps the radio fixed at 30 days, updates it locally from counted listens, and
+syncs on refresh/every 30 minutes while active. The user subsequently selected
+both **Rules** and **Mix** as editor types. The first configurable milestone is
+implemented; the scope below distinguishes it from the broader proposals.
 Grouped settings live directly on Home, with navigation ordered
 **Home / Library / Search**. The previous handoff remains a historical snapshot.
 See the [device test guide](RECENT_RADIO_TESTING.md) for acceptance and limits.
+
+## Selected milestone: Rules and Mix
+
+**Library → Playlists → Smart playlists → +**, or **Playlists → + → New smart
+playlist**, opens an editor with a type selector. Switching types preserves each
+type's settings. The name, exclusions and optional track limit are shared.
+
+- **Rules:** nested all/any conditions and one ordering. Latest activity uses
+  `max(addedAt, lastPlayedAt)`; ordinary choices are newest added, most recently
+  played, title, artist and least played. The starting example matches Recent
+  Radio, but the saved definition is independently editable.
+- **Mix:** 1–8 named pools, each with the same rule builder, its own order and a
+  whole-number share. Shares sum to 100%; 0% disables a pool. The starting example
+  is added within 30 days at 60%, played within 30 days at 40%; these are editable
+  examples, not new fixed radio semantics.
+- Available conditions: added/played date windows, never played, favorites,
+  play count, duration, title, artist and album. Global exclusions run before
+  ordering/mixing. Genre/year/rating, artist spacing, shuffle and scoring remain
+  later work.
+- Mix uses smooth weighted interleaving. Pool order resolves ties; sort ties use
+  track ID. Duplicate IDs are skipped without consuming another slot and charged
+  only to the pool that emitted the track. Preview reports requested shares and
+  actual contributions. Filling from remaining pools is on by default. Turning
+  it off stops as soon as any enabled pool has no distinct candidates; this can
+  make the playlist substantially shorter, including empty for an empty pool.
+- Preview shows up to 50 tracks with reasons; Play uses the entire selected
+  result. Changes never reorder an already playing queue. Evaluation above 5,000
+  catalog tracks runs in an isolate and discards superseded results.
+
+Definitions use versioned JSON in local preferences, keyed by the canonical
+server URI and username. Writes serialize and publish only after storage succeeds;
+malformed/newer unreadable data is preserved with editing disabled. This stores
+configuration only: no credentials, catalog persistence, cross-device sharing or
+Navidrome playlist publication. Account switching disposes the old catalog and
+preview listeners. The same account entered through a different server URL has a
+separate definition store, matching existing connection identity semantics.
+
+Recent Radio and all smart playlists share one account catalog and one 30-minute
+foreground schedule. Local qualified listens overlay both the last-played time
+and a provisional play-count floor; refresh takes the greater remote/local count
+until server history catches up, avoiding double counting. Successful song-favorite
+changes also update the catalog immediately. Neither operation triggers a scan.
+Local overlays remain session-only; reporting-disabled listens produce no overlay.
+Initial/full sync retains the existing Navidrome activity-metadata compatibility
+guard. Missing history must be investigated on the actual server, not silently
+treated as a complete recent-played library.
+
+See [smart-playlist device checks](SMART_PLAYLISTS_TESTING.md). The fixed Recent
+Radio entry and deferred addon architecture remain intact.
 
 ## Built-in Recent Radio: local updates and periodic sync
 
@@ -34,6 +85,30 @@ Overlay more recent local history until server history catches up. A subsequent
 complete scan owns catalog membership, including deletions. Incomplete/failed
 scans retain the current list and its actual last-sync timestamp. Stop timers and
 subscriptions on account disposal. List re-evaluation also removes expired dates.
+
+### Requested follow-up: sync status (recorded, not implemented)
+
+Replace the changing `Syncing library · N songs` message with a progress bar and
+the **total number of tracks being synced**, for example a bar above `12,430 tracks`.
+Do not display search offsets, page numbers, or a running fetched-count sentence.
+This is the catalog being synced, not the number of tracks that match Recent Radio.
+
+Use a determinate bar when a reliable total is known. The current `search3` paging
+response does not provide a catalog-total field, so the existing `loadedCount`
+cannot simply become the displayed total. Feishin obtains a total from the native
+Navidrome song-list response's `x-total-count` header, including a one-song count
+query. Investigate that path with the same account, accessible libraries and
+filters as the sync before using it. A missing count must stay unknown, not zero.
+[Feishin count implementation](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/api/navidrome/navidrome-controller.ts#L863),
+[OpenSubsonic search response](https://opensubsonic.netlify.app/docs/responses/searchresult3/).
+
+Until a trustworthy total is available, use an indeterminate bar and withhold the
+total rather than fabricate progress. A cached prior total must be identified as
+such if shown. Continue to the actual end of pagination even if the total changes
+during a sync; finish the bar only after the complete catalog is accepted. Keep
+the existing manual/30-minute schedule, local listen updates, failure recovery,
+and account isolation. The count-source investigation remains separate from the
+selected configuration milestone.
 
 ### Exact preset semantics
 
@@ -137,71 +212,215 @@ is submitted by this milestone.
 - API fixtures pass; installed-server and locked-device behavior still require
   device acceptance. Fixtures alone do not establish deployment compatibility.
 
-## Next real smart-playlist milestone: rules and custom mixing
+## Feishin implementation review
 
-Keep the fixed radio as its own entry. A separate **New smart playlist** editor
-must create multiple named, saved definitions, with independent added/played
-windows, an include combination (either/both), and selectable recent-activity or
-weighted added/played ordering. Preview results before saving; reopening a saved
-definition must retain its rules and mixing settings. This is the smallest useful
-builder to implement next. A renamed radio or exported static snapshot alone does
-not meet this milestone. Favorites/genres/exclusions and artist spacing can follow.
+Inspected the public `development` source at commit
+[`9182c91c525f83e8d5da3fbb4a0825a793934b28`](https://github.com/jeffvli/feishin/tree/9182c91c525f83e8d5da3fbb4a0825a793934b28)
+on November 11, 2026. This is a source review, not a running-app test or a claim
+that every feature is in the user's installed Feishin version. No Feishin code
+was executed or incorporated into Hyperstream.
 
-Keep rules separate from UI and network access. Version each declarative definition
-and store it under server/user/definition identity. Reject unknown schema versions
-without overwriting them. Reuse scoped catalog snapshots and local listen updates;
-keep the fixed radio independent. No companion is required for the editor.
-
-After that, add **Save to Navidrome**, creating an owned ordinary playlist with the
-preview's ordered IDs. Persist its ID and the ordered sequence last written
-alongside the definition. Show that it is generated and when it was refreshed.
-On refresh, read the remote sequence and ownership before writing. If another
-client edited it, pause automatic updates and offer Keep manual / Create copy /
-Explicitly regenerate. Do not adopt or replace an existing playlist by name.
-Serialize refreshes per definition, re-read after writes, and surface conflicts.
-The existing playlist API cannot guarantee an atomic compare-and-swap, so a race
-between checking and writing remains a documented limitation. A missing playlist
-or changed owner needs explicit recovery. A failed refresh preserves the last
-successful result and must not publish a partial or error-induced empty list.
-
-The editor's **Custom mix**, alongside **Recent activity**, should use:
-
-| Control | Proposed behavior |
+| Observed implementation | Useful guidance for Hyperstream |
 | --- | --- |
-| Added / played balance | Adjustable shares; no ratio has been selected by the user |
-| Pool ordering | Newest first, later a deterministic seeded shuffle |
-| Day windows | Separate added/played windows, initialized from the preset |
-| Variety | Optional artist spacing, then exclusions and pins |
-| Limit | Applied after deduplication and mixing |
-| Preview | Show requested shares, actual contributions and any relaxed constraints |
+| Recursive `all` / `any` groups contain conditions and child groups. | Start with a real expression tree, not a fixed list of recent-date toggles. |
+| A field/type catalog selects operators and controls for text, dates, numbers, booleans and playlist membership. It includes custom tags. | Share one typed field registry between validation, UI and evaluation; expose fields only when data is available. |
+| An ordered sort list serializes to signed, comma-separated field names. Limits can be a count or a percentage. | Keep membership, ordering and limiting distinct. |
+| Existing-playlist editing offers visual and JSON modes; its Preview button opens a JSON view. | Add a track-result preview with match reasons and ordering explanations before saving. JSON can be an advanced view later. |
+| Creation/editing converts the UI model to Navidrome `rules`, then sends it through the native API. | Separate the portable definition from its storage/execution adapter. |
 
-Use smooth weighted round-robin over the eligible added and played pools. At each
-step, add the active pools' weights to their scores; take the highest-scoring pool,
-emit its next unseen track, and subtract the total active weight from that pool's
-score. Break equal scores by a fixed pool order. Zero-weight pools are disabled.
+Sources: [recursive group UI](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/components/query-builder/index.tsx),
+[field/operator catalog](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/shared/api/navidrome/navidrome-types.ts),
+[sort/limit builder](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/features/playlists/components/playlist-query-builder.tsx),
+[visual/JSON editor](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/features/playlists/components/playlist-query-editor.tsx),
+[creation flow](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/features/playlists/components/create-playlist-form.tsx).
 
-A song in both pools appears once, charged to the pool that emitted it. Skip it
-in the other pool without consuming a slot or charging weight. Drop an exhausted
-pool and normalize over the remaining positive-weight pools, filling the remaining
-slots. If all enabled pools exhaust, return fewer tracks. The ratio describes
-contributions, not exclusive membership: an emitted song can match both rules.
-The preview should make that visible.
+The inspected API adapter uses `/api/playlist`, `/api/song` and
+`x-nd-authorization` bearer authentication. This is a separate integration from
+Hyperstream's current OpenSubsonic client and from the proposed `/api/v1` API;
+do not conflate them or assume existing salted Subsonic auth is sufficient.
+[Feishin native API adapter](https://github.com/jeffvli/feishin/blob/9182c91c525f83e8d5da3fbb4a0825a793934b28/src/renderer/api/navidrome/navidrome-api.ts).
 
-For illustration only, a 60/40 mix with distinct plentiful pools starts
-Added, Played, Added, Played, Added. Overlap and exhausted pools change the
-achievable ratio. Save a seed/refresh epoch for shuffled pool order, so previews
-do not move on every UI rebuild; avoid platform-dependent hash ordering. Artist
-spacing initially defaults off; later prefer feasible candidates and report any
-relaxation instead of silently discarding the whole result. Test overlap, 0/100
-shares, exhaustion and reproducibility before exposing the mix controls.
+Navidrome documents that these API-created rules live in its database and are
+available to other clients without producing an `.nsp` file. It evaluates native
+playlists when accessed, subject to its refresh delay; that is not the same as
+Hyperstream's 30-minute sync timer.
+[Native smart-playlist behavior](https://www.navidrome.org/docs/usage/features/smart-playlists/).
 
-Navidrome supports native rules from `.nsp` files or API-created playlists and
-documents date filters, multiple sort fields and refresh delay. Multiple-field
-sorting does not establish a computed maximum of two dates or weighted mixing.
-Use native rules only when their semantics match exactly; otherwise generate
-ordinary playlists. Verify the installed native API/authentication before writing
-rules; Subsonic playlist creation alone does not provide that contract.
-[Navidrome smart playlists](https://www.navidrome.org/docs/usage/features/smart-playlists/).
+### Where our requirements go further
+
+The inspected smart-playlist builder has no computed latest-of-two-dates sort,
+weighted pool mixer, or artist-spacing control. Its multiple-field sorting is
+lexicographic: the second field breaks ties in the first. That cannot stand in
+for sorting each song by `max(addedAt, lastPlayedAt)`.
+
+For example, a track added yesterday but never played would precede a track added
+last year and played today when sorting by addition first. Recent Radio requires
+the opposite. The selection expression is straightforward (`added OR played in
+30 days`); the computed ordering needs an additional operation. A 60/40 mix is a
+different operation again: it chooses contributions from two eligible pools.
+This limitation is an inference from the inspected editor/serialization and
+documented sort semantics, not a claim that every future server lacks extensions.
+
+## Configuration proposals and selection
+
+These originally compared alternative depths using a common rule model. The
+user selected **A and B as separate editor types**, with C reserved for later.
+The implemented subset is documented above; variety, scoring and export below
+are still design proposals.
+Recent Radio remains its own hardcoded feature under every option.
+
+| Proposal | What the listener configures | Strength | Tradeoff |
+| --- | --- | --- | --- |
+| **A. Rules plus ordering** | Nested all/any rules, exclusions, ordinary sort keys, latest-activity ordering, optional limit. | Familiar Feishin-style editing; a fully configurable equivalent of Recent Radio is possible. | One combined candidate list cannot express deliberate shares from several pools. |
+| **B. Rules plus a pool mixer — recommended** | Named pools, each using A's rules and its own ordering; merge by latest activity or interleave with adjustable shares; then variety and limit. | Supports Recent Radio, arbitrary added/played balances, and discovery/favorite mixtures without scripts. | Must explain overlap, exhausted pools and approximate shares. More controls, best organized in stages. |
+| **C. Rules plus scoring expressions** | Filters plus typed expressions such as recency decay, favorite boosts and play-count penalties; sort by the resulting score. | Handles nuanced ranking beyond preset sorts and fixed mixing ratios. | Harder to explain, tune and preview. Scores do not guarantee a mix percentage. Highest implementation/validation cost. |
+
+### A: familiar rule groups with computed ordering
+
+Example configuration, expressed as UI choices:
+
+```text
+Include ANY
+  Added within 30 days
+  Played within 30 days
+Exclude
+  Duration shorter than 45 seconds
+Order
+  Latest of: Added date, Last played date — newest first
+Limit
+  All matching tracks
+```
+
+This is a genuine saved rule definition, independently named and editable. It
+can express the current radio by removing the duration exclusion, but does not
+change the fixed Recent Radio entry. Normal sorts and the computed latest-date
+sort use the same ordered-list interface; users need not enter a formula.
+
+### B: compose pools with the same rule builder
+
+An illustrative mix (shares and limits are examples, not selected defaults):
+
+| Pool | Conditions | Within-pool order | Requested share |
+| --- | --- | --- | --- |
+| New discoveries | Added within 14 days; play count below 3 | Newest added | 50% |
+| Current rotation | Played within 30 days | Most recently played | 30% |
+| Rediscover | Favorite; not played within 90 days, including never played | Stable shuffle | 20% |
+
+Then deduplicate by server track ID, optionally space artists, and take at most
+100 tracks. The same model must also offer **Merge by latest activity** over the
+added and played pools; weighted interleaving must not be mislabeled as the
+original Recent Radio algorithm.
+
+Proposed mobile flow: **Choose songs → Arrange the mix → Variety & limit → Preview**.
+Each pool is a card with a plain-language summary and an Edit rules action. Nested
+groups open into their own editor on narrow screens, avoiding deep horizontal
+indentation. Desktop can keep the settings and resulting tracks side by side.
+Simple playlists start with one pool; advanced controls expand when needed.
+
+Preview shows actual tracks, why they match, the pool that supplied each slot,
+requested versus achievable shares, and any relaxed spacing. Separate **matched**
+count from final **selected** count. Saving a definition must not create or modify
+a server playlist implicitly. Playing uses that exact result snapshot.
+
+Define mixing behavior before implementation:
+
+- Use smooth weighted round-robin for proportional interleaving, not independent
+  random draws. Break equal scores by saved pool order; zero-weight pools are off.
+- A track matching several pools appears once and is charged only to the pool
+  that emits it. Skip duplicates in other pools without consuming their turns.
+- If a pool runs out, offer a policy: fill from remaining pools (recommended
+  default), or stop when the requested distribution cannot continue. Report the
+  achieved contributions rather than promising exact quotas for every prefix.
+- Apply global exclusions before selection, deduplication during selection, and
+  the final limit after mixing. Do not truncate each pool before building the mix.
+- Artist spacing, when added, checks the candidate against recently emitted
+  artist IDs. Define primary versus any credited artist explicitly. Backfill from
+  feasible candidates; offer strict stop versus relaxed spacing with a notice.
+- Shuffle uses a stored seed/epoch. Local listen updates must not accidentally
+  reseed every unrelated track. An explicit Reshuffle action changes the seed.
+- A sample such as 60/40 with ample disjoint pools begins Added, Played, Added,
+  Played, Added. Overlap, scarcity and spacing can alter the achieved distribution.
+
+### C: advanced scoring, without executable scripts
+
+For listeners who eventually need more than B, expose a bounded expression editor:
+typed date/number fields, latest/earliest, arithmetic, normalization and recency
+decay. An example ranks recently added music more highly, boosts favorites, and
+reduces the score of overplayed tracks. Preview explains each score contribution.
+Treat this as a later ordering option using the same saved model; avoid a separate
+Python/JavaScript execution environment. It is not needed for the initial mixer.
+
+## Proposed execution and persistence
+
+Keep the model independent of Feishin's UI and Navidrome's JSON: a versioned
+definition with identity, server/user scope, rule tree, pools, ordering/mixing,
+optional variety, limit, and shuffle/update policy. Use typed nodes rather than
+SQL snippets. Define missing dates/fields, case matching, timezone boundaries,
+invalid input and tie-breaking once. Empty/unfinished conditions must not silently
+turn into a whole-library match. Preserve unknown definitions as read-only.
+
+```mermaid
+flowchart LR
+  UI[Rule and mix editor] --> D[Versioned definition]
+  D --> V[Validate fields and semantics]
+  Catalog[Scoped catalog and local listens] --> Eval[Hyperstream evaluator]
+  V --> Eval
+  Eval --> Preview[Track preview and explanations]
+  Preview --> Saved[Save definition and play snapshot]
+  V -. exact native mapping later .-> ND[Navidrome smart rules]
+  Eval -. optional publish later .-> Copy[Generated server playlist]
+```
+
+**Start with the Hyperstream evaluator** for the chosen editor. Reuse the catalog
+and local listen feed across definitions so opening or editing a rule never scans
+the entire server again. Build immutable catalog snapshots with a revision and
+one UTC evaluation time. Discard stale preview work when the rule/account changes.
+For large libraries, evaluate off the UI thread and measure representative sizes.
+Persist definitions per account; do not confuse this with syncing definitions
+between devices. A metadata cache is a separate decision and must retain its age
+and completeness. The present radio cache is session-only.
+
+**Add a native Navidrome adapter where the complete definition maps exactly.**
+It can eventually provide server-managed rules available to other clients. It
+needs tested authentication, fields/operators, date boundaries, sort behavior and
+version compatibility. Do not silently replace a computed sort with two field
+sorts, or publish only the filter half of a mix as if it were equivalent. Fields
+available only on the server must be labeled or unavailable in local execution.
+The new API v1 documentation is explicitly work in progress and is separate from
+Feishin's current adapter.
+[API v1 status](https://www.navidrome.org/docs/developers/api-v1/).
+
+**Offer an explicit generated server copy for advanced mixes later.** This is an
+ordinary ordered playlist; its rule source remains Hyperstream. Store the remote
+playlist ID and last written sequence. Read ownership and contents before updates;
+pause on outside edits and offer keep manual/copy/regenerate. Never adopt a playlist
+by name. Serialize writes, verify them, and document the remaining check/write race.
+Failure or incomplete candidate data must not overwrite a server playlist.
+
+Native rules can be evaluated by Navidrome when another client accesses them.
+Hyperstream-only mixes update while the app is running; keeping their generated
+copies fresh with all apps closed would require the later companion. Do not make
+addons or Docker a prerequisite for configuration.
+
+## Milestone sequence
+
+1. Implemented: typed rule/pool model and evaluator. Prove exact Recent Radio
+   membership/order, nested all/any logic, weighted mixing, overlap, shortages,
+   date boundaries, deterministic ties and account isolation with focused tests.
+2. Implemented: separate **New smart playlist** flow with multiple named saved definitions,
+   reusable all/any groups, global exclusions, latest-activity ordering or weighted
+   mixing, a track limit, an actual result preview and Play. Use available title,
+   artist, duration, favorite, added/played and play-count data first. Genre/year/
+   rating need explicit model/API support; do not expose empty placeholder fields.
+   Keep pool count extensible rather than encoding only “added versus played.”
+3. Follow with artist spacing, stable shuffle, richer metadata and explicit
+   Navidrome export/native-rule editing. Keep unknown imported rules intact.
+   Produce paired sideload releases with implemented milestones as already agreed.
+
+Acceptance includes saving/reopening multiple different configurations, producing
+both the exact radio equivalent and a multi-pool mix, explaining scarce/overlapping
+results, preserving the active queue, and updating local activity without a fresh
+catalog scan. Next is device acceptance of both editor types and their results.
 
 ## Providers: adopt an HTTP contract, keep library publication controlled
 
@@ -310,16 +529,17 @@ shipped workflow in review; App Store approval remains unproven.
 
 ## Implementation order
 
-1. Verify installed-server activity fields and implement counted listening plus
-   the Recent Radio preview/Play milestone above.
-2. Save definitions and owned generated playlists, with conflict-aware refresh
-   while the app is active; then add the custom mix controls.
-3. Prove one authorized provider's streaming and server import paths separately.
-   Add authenticated companion pairing and import jobs around that proof.
-4. Add companion scheduling, deployment packaging and optional provider discovery.
-   Revisit native-rule optimization and a Navidrome event bridge only when useful.
+1. Validate the selected Rules and Mix editors on the sideloaded devices. Keep
+   fixed-radio acceptance open and the requested total/progress status pending.
+2. Refine the selected model/editor using device feedback. Continue paired test
+   releases; keep configuration and generated results distinct.
+3. Extend variety/metadata and add explicit generated playlist publishing or native
+   rule integration with compatibility checks and conflict-aware updates.
+4. Later, prove one authorized provider's streaming and import paths separately,
+   then add companion pairing, scheduling and deployment packaging. Addons remain
+   deferred by the user's direction.
 
 Unresolved evidence: installed Navidrome version/field semantics, full-library
 performance, provider permissions/compatibility, secure companion identity binding,
-Windows Docker publication behavior, and live indexing. None requires delaying
-the independent Home navigation correction.
+Windows Docker publication behavior, and live indexing. The Home navigation
+correction is already shipped; these proposals preserve it.

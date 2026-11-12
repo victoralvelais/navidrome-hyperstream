@@ -41,8 +41,11 @@ foreground schedule syncs the catalog. Qualified listens are also reported to
 Navidrome, with a toggle under Home > Playback. See the
 [device test guide](docs/RECENT_RADIO_TESTING.md) and
 [smart playlists and optional providers](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
-A general smart-playlist editor, custom mixing, managed Navidrome playlist saving,
-and addons remain future work.
+Smart playlists offer **Rules** (nested conditions plus ordering) and **Mix**
+(named pools with their own conditions, order and percentage shares). Both support
+exclusions, limits, track preview and playback; definitions save on this device
+for each server/account. See the [smart-playlist test guide](docs/SMART_PLAYLISTS_TESTING.md).
+Managed Navidrome playlist saving, artist spacing, scoring and addons remain future work.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,

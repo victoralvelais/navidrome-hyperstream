@@ -92,20 +92,23 @@ class Track {
   final bool invalidActivityDates;
 
   /// Overlay local activity without claiming a server play-count change.
-  Track withLastPlayedAt(DateTime value) => Track(
-    id: id,
-    title: title,
-    artist: artist,
-    album: album,
-    duration: duration,
-    number: number,
-    coverArt: coverArt,
-    starred: starred,
-    addedAt: addedAt,
-    lastPlayedAt: value,
-    playCount: playCount,
-    invalidActivityDates: invalidActivityDates,
-  );
+  Track withLastPlayedAt(DateTime value) => withActivity(playedAt: value);
+
+  Track withActivity({DateTime? playedAt, int? playCount, bool? favorite}) =>
+      Track(
+        id: id,
+        title: title,
+        artist: artist,
+        album: album,
+        duration: duration,
+        number: number,
+        coverArt: coverArt,
+        starred: favorite ?? starred,
+        addedAt: addedAt,
+        lastPlayedAt: playedAt ?? lastPlayedAt,
+        playCount: playCount ?? this.playCount,
+        invalidActivityDates: invalidActivityDates,
+      );
 }
 
 /// Activity dates must specify a timezone; never interpret server time as local.
