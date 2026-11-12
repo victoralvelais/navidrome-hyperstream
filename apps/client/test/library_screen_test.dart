@@ -520,6 +520,12 @@ Future<void> main() async {
             .coverArt,
         covers.isEmpty ? null : 'two',
       );
+      if (viewport.size.width >= 950) {
+        expect(
+          tester.getRect(find.byTooltip('Back to albums')).left,
+          greaterThanOrEqualTo(viewport.size.width - 370),
+        );
+      }
       await _capturePreview(tester, '${viewport.name}-album');
       if (find.byTooltip('Expand navigation').evaluate().isNotEmpty) {
         await tester.tap(find.byTooltip('Expand navigation'));

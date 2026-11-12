@@ -556,6 +556,12 @@ class _LibraryScreenState extends State<LibraryScreen>
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 950;
     final busy = _disconnecting || (widget.accountSession?.busy ?? false);
+    final splitDetail =
+        wide &&
+        MediaQuery.sizeOf(context).width - 80 >= 760 &&
+        _hasSelection &&
+        _section != _Section.home &&
+        !['Recent Radio', 'Playlists'].contains(_libraryPage);
     return PopScope(
       canPop: !_canBack,
       onPopInvokedWithResult: (didPop, _) {
@@ -719,7 +725,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ),
                       Positioned(
                         top: 0,
-                        left: wide ? 80 : 0,
+                        left: splitDetail
+                            ? MediaQuery.sizeOf(context).width - 370
+                            : wide
+                            ? 80
+                            : 0,
                         right: 0,
                         child: AbsorbPointer(
                           absorbing: busy,
