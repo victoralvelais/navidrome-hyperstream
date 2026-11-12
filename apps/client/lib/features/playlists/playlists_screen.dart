@@ -1,168 +1,256 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/pull_to_refresh.dart';
-
 import '../../models/library.dart';
+import '../../models/playlist_icon.dart';
+import '../../models/smart_playlist.dart';
 import '../../services/library_collections.dart';
+import '../../services/playlist_icon_store.dart';
+import '../../services/smart_playlist_store.dart';
+import '../../widgets/floating_chrome.dart';
+import '../../widgets/playlist_icon_picker.dart';
+import '../../widgets/pull_to_refresh.dart';
 import '../library/cover_art.dart';
 import 'playlist_dialogs.dart';
 
-class PlaylistsScreen extends StatelessWidget {
+class NewPlaylistMenu extends StatelessWidget {
+  const NewPlaylistMenu({
+    super.key,
+    required this.collections,
+    required this.onNewSmartPlaylist,
+  });
+  final LibraryCollections collections;
+  final VoidCallback onNewSmartPlaylist;
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    tooltip: 'New playlist',
+    onSelected: (action) {
+      if (action == 'smart') {
+        onNewSmartPlaylist();
+      } else {
+        editPlaylistName(
+          context,
+          onSave: (name) async {
+            await collections.createPlaylist(name);
+          },
+        );
+      }
+    },
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'manual', child: Text('New playlist')),
+      PopupMenuItem(value: 'smart', child: Text('New smart playlist')),
+    ],
+    icon: const Icon(Icons.add_rounded),
+  );
+}
+
+class PlaylistsScreen extends StatefulWidget {
   const PlaylistsScreen({
     super.key,
     required this.collections,
+    required this.smartStore,
+    required this.icons,
     required this.onSelected,
-    this.onRecentRadio,
-    this.onSmartPlaylists,
-    this.onNewSmartPlaylist,
+    required this.onSmartSelected,
+    required this.onRecentRadio,
+    required this.onNewSmartPlaylist,
   });
   final LibraryCollections collections;
+  final SmartPlaylistStore smartStore;
+  final PlaylistIconStore icons;
   final ValueChanged<MusicPlaylist> onSelected;
-  final VoidCallback? onRecentRadio;
-  final VoidCallback? onSmartPlaylists;
-  final VoidCallback? onNewSmartPlaylist;
+  final ValueChanged<SmartPlaylistDefinition> onSmartSelected;
+  final VoidCallback onRecentRadio;
+  final VoidCallback onNewSmartPlaylist;
+  @override
+  State<PlaylistsScreen> createState() => _PlaylistsScreenState();
+}
+
+class _PlaylistsScreenState extends State<PlaylistsScreen> {
+  final _search = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    widget.smartStore.load();
+    widget.icons.load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: collections,
+    listenable: Listenable.merge([widget.collections, widget.smartStore]),
     builder: (context, _) {
-      final playlists = collections.playlists ?? [];
+      final query = _search.text.trim().toLowerCase();
+      bool matches(String name) => name.toLowerCase().contains(query);
+      final smart = widget.smartStore.items
+          .where((item) => matches(item.name))
+          .toList();
+      final manual = (widget.collections.playlists ?? <MusicPlaylist>[])
+          .where((item) => matches(item.name))
+          .toList();
+      final radio = matches('Recent Radio');
       return PullToRefresh(
-        onRefresh: collections.refreshPlaylists,
+        onRefresh: widget.collections.refreshPlaylists,
         child: CustomScrollView(
+          key: const PageStorageKey('playlists'),
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  PageChrome.insetOf(context) + 16,
+                  24,
+                  16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            'Playlists',
-                            style: Theme.of(context).textTheme.headlineLarge,
+                          child: ExcludeSemantics(
+                            excluding: PageChrome.compactTitleOf(context),
+                            child: Opacity(
+                              opacity: PageChrome.compactTitleOf(context)
+                                  ? 0
+                                  : 1,
+                              child: Text(
+                                'Playlists',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineLarge,
+                              ),
+                            ),
                           ),
                         ),
-                        PopupMenuButton<String>(
-                          tooltip: 'New playlist',
-                          onSelected: (action) {
-                            if (action == 'smart') {
-                              onNewSmartPlaylist?.call();
-                              return;
-                            }
-                            if (action == 'radio') {
-                              onRecentRadio?.call();
-                              return;
-                            }
-                            editPlaylistName(
-                              context,
-                              onSave: (name) async {
-                                await collections.createPlaylist(name);
-                              },
-                            );
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'manual',
-                              child: Text('New playlist'),
-                            ),
-                            if (onNewSmartPlaylist != null)
-                              const PopupMenuItem(
-                                value: 'smart',
-                                child: Text('New smart playlist'),
-                              ),
-                            if (onRecentRadio != null)
-                              const PopupMenuItem(
-                                value: 'radio',
-                                child: Text('Recent Radio'),
-                              ),
-                          ],
-                          icon: const Icon(Icons.add_rounded),
-                        ),
+                        if (!PageChrome.present(context))
+                          NewPlaylistMenu(
+                            collections: widget.collections,
+                            onNewSmartPlaylist: widget.onNewSmartPlaylist,
+                          ),
                       ],
                     ),
-                    if (collections.playlistsLoading)
-                      const LinearProgressIndicator(),
-                    if (collections.playlistsError case final String error)
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search Playlists',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: query.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear playlist search',
+                                onPressed: () => setState(_search.clear),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: .07),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    if (widget.collections.playlistsLoading ||
+                        !widget.smartStore.loaded)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: LinearProgressIndicator(),
+                      ),
+                    if (widget.collections.playlistsError
+                        case final String error)
                       Text(error),
-                    if (!collections.playlistsLoading &&
-                        collections.playlistsError == null &&
-                        playlists.isEmpty)
+                    if (widget.smartStore.error case final String error)
+                      Text(error),
+                    if (!radio && smart.isEmpty && manual.isEmpty)
                       const Padding(
                         padding: EdgeInsets.only(top: 24),
-                        child: Text(
-                          'Your playlists will appear here. Create one to get started.',
-                        ),
+                        child: Text('No matching playlists.'),
                       ),
                   ],
                 ),
               ),
             ),
-            if (onRecentRadio != null)
-              SliverToBoxAdapter(
-                child: ListTile(
-                  leading: const SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Icon(Icons.radio_rounded),
+            SliverList.list(
+              children: [
+                for (final item in smart)
+                  _row(
+                    context,
+                    name: item.name,
+                    id: 'smart:${item.id}',
+                    fallback: PlaylistIcon.sparkles,
+                    subtitle: item.type == SmartPlaylistType.rules
+                        ? 'Smart playlist \u00b7 Rules'
+                        : 'Smart playlist \u00b7 Mix',
+                    onTap: () => widget.onSmartSelected(item),
                   ),
-                  title: const Text('Recent Radio'),
-                  subtitle: const Text(
-                    'Recently added and played · Auto-updating preview',
+                if (radio)
+                  _row(
+                    context,
+                    name: 'Recent Radio',
+                    id: 'radio',
+                    fallback: PlaylistIcon.radio,
+                    onTap: widget.onRecentRadio,
                   ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: onRecentRadio,
-                ),
-              ),
-            if (onSmartPlaylists != null)
-              SliverToBoxAdapter(
-                child: ListTile(
-                  leading: const SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Icon(Icons.auto_awesome_outlined),
-                  ),
-                  title: const Text('Smart playlists'),
-                  subtitle: const Text('Rules and custom mixes'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: onSmartPlaylists,
-                ),
-              ),
-            SliverList.builder(
-              itemCount: playlists.length,
-              itemBuilder: (context, index) {
-                final playlist = playlists[index];
-                return ListTile(
-                  leading: SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: CoverArt(
-                      client: collections.client,
-                      id: playlist.coverArt,
+                for (final item in manual)
+                  _row(
+                    context,
+                    name: item.name,
+                    id: 'playlist:${item.id}',
+                    fallback: PlaylistIcon.music,
+                    subtitle: '${item.songCount} songs',
+                    artwork: CoverArt(
+                      client: widget.collections.client,
+                      id: item.coverArt,
                     ),
+                    onTap: () => widget.onSelected(item),
                   ),
-                  title: Text(
-                    playlist.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    '${playlist.songCount} songs${playlist.owner.isEmpty ? '' : ' · ${playlist.owner}'}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => onSelected(playlist),
-                );
-              },
+              ],
             ),
             const SliverToBoxAdapter(child: DockSpacer()),
           ],
         ),
       );
     },
+  );
+  Widget _row(
+    BuildContext context, {
+    required String name,
+    required String id,
+    required PlaylistIcon fallback,
+    required VoidCallback onTap,
+    String? subtitle,
+    Widget? artwork,
+  }) => Column(
+    children: [
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+        leading: PlaylistIconTile(
+          store: widget.icons,
+          id: id,
+          name: name,
+          fallback: fallback,
+          artwork: artwork,
+        ),
+        title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: subtitle == null
+            ? null
+            : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      ),
+      const Padding(
+        padding: EdgeInsets.only(left: 100, right: 24),
+        child: Divider(height: 1),
+      ),
+    ],
   );
 }

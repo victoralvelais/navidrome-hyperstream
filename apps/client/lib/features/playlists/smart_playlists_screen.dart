@@ -3,100 +3,117 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/smart_playlist.dart';
+import '../../models/playlist_icon.dart';
 import '../../services/library_catalog.dart';
 import '../../services/playback_service.dart';
 import '../../services/smart_playlist_preview.dart';
 import '../../services/smart_playlist_store.dart';
+import '../../services/playlist_icon_store.dart';
+import '../../widgets/edge_back_gesture.dart';
+import '../../widgets/floating_chrome.dart';
+import '../../widgets/playlist_icon_picker.dart';
 import '../../widgets/pull_to_refresh.dart';
 import 'smart_playlist_editor.dart';
 import 'smart_playlist_results.dart';
 
-class SmartPlaylistsScreen extends StatefulWidget {
-  const SmartPlaylistsScreen({
-    super.key,
-    required this.catalog,
-    required this.store,
-    required this.playback,
-    required this.onPageChanged,
-    this.createOnOpen = false,
-  });
-  final LibraryCatalog catalog;
-  final SmartPlaylistStore store;
-  final PlaybackService playback;
-  final ValueChanged<bool> onPageChanged;
-  final bool createOnOpen;
-  @override
-  State<SmartPlaylistsScreen> createState() => SmartPlaylistsScreenState();
+Future<String?> editSmartPlaylist(
+  BuildContext context, {
+  SmartPlaylistDefinition? initial,
+  required LibraryCatalog catalog,
+  required SmartPlaylistStore store,
+  required PlaybackService playback,
+}) async {
+  await store.load();
+  if (!context.mounted) return null;
+  if (!store.canWrite) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(store.error ?? 'Saved playlists are unavailable.'),
+      ),
+    );
+    return null;
+  }
+  return Navigator.push<String>(
+    context,
+    MenuPageRoute(
+      builder: (_) => SmartPlaylistEditor(
+        initial:
+            initial ??
+            SmartPlaylistDefinition.initial(SmartPlaylistStore.newId()),
+        catalog: catalog,
+        store: store,
+        playback: playback,
+      ),
+    ),
+  );
 }
 
-class SmartPlaylistsScreenState extends State<SmartPlaylistsScreen> {
+class SmartPlaylistScreen extends StatefulWidget {
+  const SmartPlaylistScreen({
+    super.key,
+    required this.id,
+    required this.catalog,
+    required this.store,
+    required this.icons,
+    required this.playback,
+    required this.onDeleted,
+  });
+  final String id;
+  final LibraryCatalog catalog;
+  final SmartPlaylistStore store;
+  final PlaylistIconStore icons;
+  final PlaybackService playback;
+  final VoidCallback onDeleted;
+  @override
+  State<SmartPlaylistScreen> createState() => SmartPlaylistScreenState();
+}
+
+class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
   late final _preview = SmartPlaylistPreview(widget.catalog);
-  String? _selected;
+  SmartPlaylistDefinition? get definition =>
+      widget.store.items.where((item) => item.id == widget.id).firstOrNull;
   @override
   void initState() {
     super.initState();
-    unawaited(_open());
+    widget.store.addListener(_updated);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(widget.catalog.ensureLoaded());
+      _updated();
+    });
   }
 
-  Future<void> _open() async {
-    await widget.store.load();
-    if (!mounted) return;
-    unawaited(widget.catalog.ensureLoaded());
-    if (widget.createOnOpen && widget.store.canWrite) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_edit());
-      });
-    }
+  void _updated() {
+    final value = definition;
+    if (value != null) unawaited(_preview.update(value));
   }
 
   @override
   void dispose() {
+    widget.store.removeListener(_updated);
     _preview.dispose();
     super.dispose();
   }
 
-  bool back() {
-    if (_selected == null) return false;
-    _preview.clear();
-    setState(() => _selected = null);
-    widget.onPageChanged(false);
-    return true;
-  }
-
-  void _select(SmartPlaylistDefinition definition) {
-    setState(() => _selected = definition.id);
-    widget.onPageChanged(true);
-    unawaited(widget.catalog.ensureLoaded());
-    unawaited(_preview.update(definition));
-  }
-
-  Future<void> _edit([SmartPlaylistDefinition? initial]) async {
-    final id = await Navigator.push<String>(
+  Future<void> edit() async {
+    if (definition == null) return;
+    await editSmartPlaylist(
       context,
-      MaterialPageRoute(
-        builder: (_) => SmartPlaylistEditor(
-          initial:
-              initial ??
-              SmartPlaylistDefinition.initial(SmartPlaylistStore.newId()),
-          catalog: widget.catalog,
-          store: widget.store,
-          playback: widget.playback,
-        ),
-      ),
+      initial: definition,
+      catalog: widget.catalog,
+      store: widget.store,
+      playback: widget.playback,
     );
-    if (!mounted || id == null) return;
-    final definition = widget.store.items
-        .where((item) => item.id == id)
-        .firstOrNull;
-    if (definition != null) _select(definition);
   }
 
-  Future<void> _delete(SmartPlaylistDefinition definition) async {
+  Future<void> delete() async {
+    final value = definition;
+    if (value == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete smart playlist?'),
-        content: Text('Delete “${definition.name}” from this device?'),
+        content: Text('Delete "${value.name}" from this device?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -109,10 +126,17 @@ class SmartPlaylistsScreenState extends State<SmartPlaylistsScreen> {
         ],
       ),
     );
-    if (confirmed == true &&
-        await widget.store.remove(definition.id) &&
-        mounted) {
-      back();
+    if (confirmed != true) return;
+    final removed = await widget.store.remove(value.id);
+    if (!mounted) return;
+    if (removed) {
+      widget.onDeleted();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.store.error ?? 'Could not delete playlist.'),
+        ),
+      );
     }
   }
 
@@ -120,110 +144,54 @@ class SmartPlaylistsScreenState extends State<SmartPlaylistsScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([widget.store, widget.catalog, _preview]),
     builder: (context, _) {
-      final definition = widget.store.items
-          .where((item) => item.id == _selected)
-          .firstOrNull;
+      final value = definition;
+      if (value == null) {
+        return const Center(child: Text('Playlist unavailable.'));
+      }
       return PullToRefresh(
         onRefresh: widget.catalog.refresh,
         child: ListView(
-          key: ValueKey(_selected ?? 'smart-playlists'),
+          key: ValueKey(widget.id),
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            PageChrome.insetOf(context) + 16,
+            24,
+            24,
+          ),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    definition?.name ?? 'Smart playlists',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                  ),
-                ),
-                if (definition == null)
-                  IconButton(
-                    tooltip: 'New smart playlist',
-                    onPressed: widget.store.canWrite ? () => _edit() : null,
-                    icon: const Icon(Icons.add_rounded),
-                  )
-                else
-                  PopupMenuButton<String>(
-                    tooltip: 'Playlist options',
-                    onSelected: (action) {
-                      if (action == 'edit') {
-                        unawaited(_edit(definition));
-                      } else {
-                        unawaited(_delete(definition));
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        enabled: widget.store.canWrite,
-                        child: const Text('Edit configuration'),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        enabled: widget.store.canWrite,
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PlaylistIconTile(
+                store: widget.icons,
+                id: 'smart:${value.id}',
+                name: value.name,
+                fallback: PlaylistIcon.sparkles,
+              ),
             ),
-            const SizedBox(height: 12),
-            if (!widget.store.loaded) const LinearProgressIndicator(),
-            if (widget.store.error != null)
-              Text(
-                widget.store.error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            if (definition == null) ...[
-              const Text(
-                'Rules select and order one list. Mix combines pools with their own conditions and shares.',
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Saved on this device for the current server and account.',
-              ),
-              const SizedBox(height: 16),
-              if (widget.store.loaded &&
-                  widget.store.items.isEmpty &&
-                  widget.store.canWrite)
-                const Text('Create a smart playlist with the plus button.'),
-              for (final item in widget.store.items)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    item.type == SmartPlaylistType.rules
-                        ? Icons.filter_alt_outlined
-                        : Icons.shuffle_rounded,
-                  ),
-                  title: Text(item.name),
-                  subtitle: Text(
-                    item.type == SmartPlaylistType.rules
-                        ? 'Rules · ${item.order.label}'
-                        : 'Mix · ${item.pools.length} pools',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _select(item),
+            const SizedBox(height: 16),
+            Text(value.name, style: Theme.of(context).textTheme.headlineLarge),
+            const SizedBox(height: 8),
+            Text(
+              value.type == SmartPlaylistType.rules
+                  ? 'Rules \u00b7 ${value.order.label}'
+                  : 'Mix \u00b7 ${value.pools.length} pools',
+            ),
+            if (!PageChrome.present(context))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: edit,
+                  child: const Text('Edit configuration'),
                 ),
-            ] else ...[
-              Text(
-                definition.type == SmartPlaylistType.rules
-                    ? 'Rules · ${definition.order.label}'
-                    : 'Mix · ${definition.pools.length} pools',
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Local listening updates automatically. Pull to sync the library; it also syncs every 30 minutes while active.',
-              ),
-              const SizedBox(height: 20),
-              SmartPlaylistResults(
-                catalog: widget.catalog,
-                preview: _preview,
-                playback: widget.playback,
-                definition: definition,
-              ),
-            ],
+            const SizedBox(height: 20),
+            SmartPlaylistResults(
+              catalog: widget.catalog,
+              preview: _preview,
+              playback: widget.playback,
+              definition: value,
+            ),
             const DockSpacer(),
           ],
         ),

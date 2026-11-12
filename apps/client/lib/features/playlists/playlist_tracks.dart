@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/floating_chrome.dart';
 
 import '../../models/library.dart';
 import '../../services/library_collections.dart';
@@ -19,15 +20,17 @@ class PlaylistTracks extends StatefulWidget {
     required this.playlistId,
     required this.collections,
     required this.playback,
+    this.onLoaded,
   });
+  final ValueChanged<MusicPlaylist>? onLoaded;
   final String playlistId;
   final LibraryCollections collections;
   final PlaybackService playback;
   @override
-  State<PlaylistTracks> createState() => _PlaylistTracksState();
+  State<PlaylistTracks> createState() => PlaylistTracksState();
 }
 
-class _PlaylistTracksState extends State<PlaylistTracks> {
+class PlaylistTracksState extends State<PlaylistTracks> {
   MusicPlaylist? _playlist;
   bool _loading = false;
   bool _editing = false;
@@ -62,6 +65,7 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
       );
       if (mounted && revision == _revision) {
         setState(() => _playlist = playlist);
+        widget.onLoaded?.call(playlist);
       }
     } on NavidromeException catch (error) {
       if (mounted && revision == _revision) {
@@ -84,6 +88,30 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
     } finally {
       if (mounted) setState(() => _editing = false);
     }
+  }
+
+  void rename() {
+    final playlist = _playlist;
+    if (playlist == null ||
+        _editing ||
+        _loading ||
+        playlist.owner != widget.collections.client.username) {
+      return;
+    }
+    editPlaylistName(
+      context,
+      initialName: playlist.name,
+      onSave: (name) => widget.collections.renamePlaylist(playlist.id, name),
+    );
+  }
+
+  void addSongs() {
+    if (_playlist?.owner != widget.collections.client.username ||
+        _editing ||
+        _loading) {
+      return;
+    }
+    _addSongs();
   }
 
   void _addSongs() => showModalBottomSheet<void>(
@@ -150,7 +178,7 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(
-                top: 16,
+                top: PageChrome.insetOf(context) + 16,
                 bottom: MediaQuery.paddingOf(context).bottom + 16,
               ),
               itemCount: (playlist?.tracks.length ?? 0) + 1,
@@ -196,7 +224,7 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
                             icon: const Icon(Icons.play_arrow_rounded),
                             label: const Text('Play playlist'),
                           ),
-                          if (editable)
+                          if (editable && !PageChrome.present(context))
                             TextButton.icon(
                               onPressed: _editing || _loading
                                   ? null
@@ -206,7 +234,7 @@ class _PlaylistTracksState extends State<PlaylistTracks> {
                               ),
                               label: const Text('Add songs'),
                             ),
-                          if (editable)
+                          if (editable && !PageChrome.present(context))
                             TextButton(
                               onPressed: _editing || _loading
                                   ? null

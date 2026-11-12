@@ -1,6 +1,7 @@
 # Smart playlists and optional providers
 
-Design and implementation record, November 11, 2026. Previous release: **0.1.0+18**.
+Design and implementation record, updated November 12, 2026. The matched sideload
+release is recorded in `releases/latest.json`.
 Recent Radio and qualified listen reporting shipped in **0.1.0+15**; **0.1.0+17**
 keeps the radio fixed at 30 days, updates it locally from counted listens, and
 syncs on refresh/every 30 minutes while active. The user subsequently selected
@@ -10,10 +11,18 @@ Grouped settings live directly on Home, with navigation ordered
 **Home / Library / Search**. The previous handoff remains a historical snapshot.
 See the [device test guide](RECENT_RADIO_TESTING.md) for acceptance and limits.
 
+The November 12 UI follow-up puts saved smart playlists at the top of the same
+searchable playlist list as server playlists and Recent Radio. The plus menu has
+only New playlist and New smart playlist. Sparkles is the default smart icon;
+users can choose icons per playlist, stored separately in account-scoped local
+preferences. Existing definition JSON is unchanged. Floating headers, compact
+icon/label selection capsules, left-edge Back and artwork-derived page/glass
+colors follow the supplied IMG_7046, IMG_7047 and IMG_7049 references. Recent
+Radio has no introductory description or idle sync status.
+
 ## Selected milestone: Rules and Mix
 
-**Library → Playlists → Smart playlists → +**, or **Playlists → + → New smart
-playlist**, opens an editor with a type selector. Switching types preserves each
+**Library → Playlists → + → New smart playlist** opens an editor with a type selector. Switching types preserves each
 type's settings. The name, exclusions and optional track limit are shared.
 
 - **Rules:** nested all/any conditions and one ordering. Latest activity uses
@@ -120,7 +129,9 @@ distinct fetched IDs divided by the total, capped at 99% until the final empty
 page and metadata validation succeed. If fetched IDs exceed the count, the stale
 total is withdrawn and sync continues. A successful sync sets the actual distinct
 remote-track total and 100%; session-only listen additions are not included in
-that synced count. Failure hides completion and retains the previous catalog.
+that synced count. The UI now hides the bar and total as soon as syncing stops,
+on success or failure; the actual count remains available in the catalog model.
+Failure retains the previous catalog and its error/retry controls.
 
 The existing manual/30-minute schedule, local updates, failure recovery and account
 isolation remain unchanged. Only a sync attempt makes a count lookup; listens,

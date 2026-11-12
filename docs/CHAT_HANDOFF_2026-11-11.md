@@ -4,6 +4,11 @@ Prepared 2026-11-11. This is a snapshot of the completed work, user preferences,
 and the next exploration. Read the repository before making changes; this file
 does not turn proposals into approved requirements.
 
+For subsequent implementations and the November 12 playlist/UI follow-up, read
+[the current implementation record](SMART_PLAYLISTS_AND_PROVIDERS.md) and
+[device checks](SMART_PLAYLISTS_TESTING.md). `releases/latest.json` identifies the
+latest collected pair. The release and proposals below remain a historical snapshot.
+
 ## Start here
 
 - Workspace: `D:\Users\Eisen Uchiha\Engineering\Personal\navidrome-hyperstream`

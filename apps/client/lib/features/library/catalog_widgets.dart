@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/floating_chrome.dart';
 import '../../widgets/pull_to_refresh.dart';
 
 import '../../models/library.dart';
@@ -204,7 +205,12 @@ class _CatalogPageState extends State<CatalogPage> {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              PageChrome.insetOf(context) + 12,
+              24,
+              16,
+            ),
             child: Text(
               widget.artist?.name ?? widget.kind,
               style: Theme.of(context).textTheme.headlineLarge,

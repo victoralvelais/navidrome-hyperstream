@@ -2,7 +2,7 @@
 
 Recent Radio stays a fixed built-in radio with immediate local listening updates
 and a separate 30-minute catalog sync schedule. Its sync status now shows a progress
-bar and the catalog total. Configurable Rules and Mix playlists are a separate
+bar and the catalog total only while syncing. Its introductory description is removed. Configurable Rules and Mix playlists are a separate
 feature with their own [device checks](SMART_PLAYLISTS_TESTING.md).
 
 Use the matched IPA/Windows pair referenced by `releases/latest.json`. The IPA
@@ -11,7 +11,7 @@ extracted bundle. Older releases remain available for comparison.
 
 ## Try local activity and sync
 
-1. Open Library > Playlists > Recent Radio (also available from the plus menu).
+1. Open Library > Playlists > Recent Radio.
    The first visit loads the full catalog. There is no name/window editor: the
    rule is added OR played within 30 days, newest activity first, ties by track ID.
 2. Play an older song from Search, an album, or a playlist. For a three-minute
@@ -39,14 +39,14 @@ extracted bundle. Older releases remain available for comparison.
 2. Compare the total with the same account's accessible, non-missing songs in
    Navidrome. This is the full catalog, not the subset matching the 30-day radio.
 3. The bar stays below 100% until paging and metadata validation finish. A complete
-   successful sync shows the actual distinct track count and a full bar, including
-   `0 tracks` for an empty library. The last-sync time advances only on success.
+   successful sync hides the bar and total, including for an empty library.
+   The last-sync time advances only on success; no idle full bar remains.
 4. If the optional native count endpoint is unavailable, blocked or too slow,
    expect an indeterminate bar with “Syncing library” and no guessed number.
-   Catalog syncing and sign-in still work. An actual total appears on completion.
+   Catalog syncing and sign-in still work. The status disappears on completion.
 5. If tracks are added during sync and fetched tracks exceed the original count,
-   the stale total is withdrawn; paging continues to the end. The completed total
-   reflects the pages actually accepted. A failed sync does not show completion.
+   the stale total is withdrawn; paging continues to the end. The status hides
+   when the attempt stops. Failure retains the prior catalog and shows an error.
 6. Check a non-admin account with limited library access, reverse-proxy subpaths,
    and different saved servers. Counts and native sessions must stay account-scoped.
    Qualified listens still update immediately, without either a scan or count lookup.

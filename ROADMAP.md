@@ -3,10 +3,10 @@
 Status: UI/multiple-server release complete at 0.1.0+14; counted listening and
 Recent Radio shipped at 0.1.0+15. Release 0.1.0+17 keeps Recent Radio fixed at 30 days,
 updates it immediately from local listens, and syncs on refresh/every 30 minutes
-while active. The next milestone implements saved Rules and Mix smart playlists,
+while active. Saved Rules and Mix smart playlists are implemented,
 with shared condition groups, exclusions, track preview and ordered playback.
 Server imports remain an isolated prototype; addons remain later work.
-Updated: November 11, 2026.
+Updated: November 12, 2026.
 
 Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
 Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
@@ -18,6 +18,9 @@ Recent Radio's status follow-up is implemented: a progress bar plus the current
 catalog total replaces the growing fetched/search-count message. A bounded native
 Navidrome count query uses the same account and excludes missing tracks. If no
 reliable count is available, progress stays indeterminate until sync completes.
+The status hides when syncing stops. The UI follow-up unifies smart and ordinary
+playlists in one searchable list, adds selectable icons, floating title/corner
+controls, left-edge Back, compact tab highlights and artwork-derived glass tint.
 The follow-up navigation correction puts grouped settings directly on Home,
 with Library in the middle and Search on the right. Continue producing paired
 iOS sideload and Windows releases for user testing as milestones are completed.

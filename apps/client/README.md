@@ -43,7 +43,17 @@ random picks refresh as a new selection. Type a query to use normal search.
 
 Pull down at the top of library lists to reload, including empty/short lists.
 There are no refresh toolbar buttons. F5 reloads the focused browsing list on
-Windows. Playlist creation is a small plus beside the Playlists heading.
+Windows. The floating plus menu on Playlists contains only New playlist and
+New smart playlist. One searchable list places saved smart playlists first,
+then Recent Radio and ordinary server playlists. Tap any row's icon to choose
+another; smart playlists default to Sparkles. Icon choices are device-local and
+isolated by server/account. Default restores the original icon or server cover.
+
+Swipe right from the left edge to go back through menus, including nested rule
+and pool editors; unsaved changes still require the existing discard decision.
+Floating corner controls join into a title bar when the large heading scrolls
+away. Mobile tab highlights enclose both icon and label. Album/playlist covers
+supply the full-page background and glass tint, with opaque accessibility fallbacks.
 
 **Home** uses grouped Appearance, Playback, and Servers pages.
 Servers supports adding named connections, switching, and removing saved servers.
@@ -59,7 +69,7 @@ and server imports are not connected to this UI yet.
 
 ## Playlists and favorites
 
-**Library → Playlists → Recent Radio** (also available from the plus menu) reads
+**Library → Playlists → Recent Radio** reads
 the complete song catalog on first open and includes songs added or played within
 30 days. It sorts by the later timestamp and explains each match. A counted listen
 updates the list locally before the server acknowledges the report, without any
@@ -69,17 +79,17 @@ page. Returning after an overdue interval runs one sync. Play radio uses the
 displayed order, and later list updates leave that playing queue unchanged. Failed
 syncs retain local updates and the last synced library with an error.
 
-Sync status shows a progress bar and the total tracks in the catalog. A native
+Only while syncing, the status shows a progress bar and the total tracks in the catalog. A native
 Navidrome count lookup uses the existing account; if unavailable, the bar stays
-indeterminate without displaying a guessed total. On success it shows the actual
-synced total. Local listens and page revisits never trigger a count request.
+indeterminate without displaying a guessed total. The bar and total disappear
+when syncing stops. Recent Radio also omits its introductory description. Local listens and page revisits never trigger a count request.
 
 Recent Radio is a fixed built-in feature, separate from the smart-playlist
 editor and custom mixing. The earlier editable name/window preferences are left
 untouched but no longer used. Neither the cache nor unconfirmed local activity is
 persisted across app restarts; there is no managed Navidrome playlist yet.
 
-**Library → Playlists → Smart playlists → +** opens the configurable editor.
+**Library → Playlists → + → New smart playlist** opens the configurable editor.
 Choose **Rules** for nested all/any conditions and an order, or **Mix** for named
 pools with independent conditions, orders and percentage shares. Both support
 global exclusions, limits, preview and Play. Switching types preserves both

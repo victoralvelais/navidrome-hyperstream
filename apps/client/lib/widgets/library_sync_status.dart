@@ -9,13 +9,8 @@ class LibrarySyncStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!catalog.loading &&
-        (catalog.lastSyncedAt == null || catalog.error != null)) {
-      return const SizedBox.shrink();
-    }
-    final total = catalog.loading
-        ? catalog.syncTotal
-        : catalog.lastSyncTrackCount;
+    if (!catalog.loading) return const SizedBox.shrink();
+    final total = catalog.syncTotal;
     final text = total == null
         ? 'Syncing library'
         : '${MaterialLocalizations.of(context).formatDecimal(total)} ${total == 1 ? 'track' : 'tracks'}';
@@ -26,9 +21,7 @@ class LibrarySyncStatus extends StatelessWidget {
         children: [
           LinearProgressIndicator(
             value: catalog.syncProgress,
-            semanticsLabel: catalog.loading
-                ? 'Syncing library${total == null ? '' : ', $text'}'
-                : 'Library synced, $text',
+            semanticsLabel: 'Syncing library${total == null ? '' : ', $text'}',
           ),
           const SizedBox(height: 8),
           Text(text),

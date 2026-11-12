@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/library.dart';
 import '../../services/navidrome_client.dart';
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/edge_back_gesture.dart';
 import '../library/catalog_widgets.dart';
 import '../library/cover_art.dart';
 
@@ -220,72 +221,75 @@ class _DiscoverPageState extends State<DiscoverPage> {
   );
 
   @override
-  Widget build(BuildContext context) => PullToRefresh(
-    onRefresh: _load,
-    child: CustomScrollView(
-      controller: _scroll,
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        if (_selection == null) ...[
-          _heading('Browse your library'),
-          _grid([
-            for (var i = 0; i < _categories.length; i++)
-              _tile(_categories[i].$1, _categories[i].$2, i),
-          ]),
-          if (_genres.isNotEmpty) ...[
-            _heading('Genres'),
+  Widget build(BuildContext context) => EdgeBackGesture(
+    onBack: _selection == null ? null : () => _select(null),
+    child: PullToRefresh(
+      onRefresh: _load,
+      child: CustomScrollView(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          if (_selection == null) ...[
+            _heading('Browse your library'),
             _grid([
-              for (var i = 0; i < _genres.length; i++)
-                _tile(_genres[i], 'byGenre', i, genre: _genres[i]),
+              for (var i = 0; i < _categories.length; i++)
+                _tile(_categories[i].$1, _categories[i].$2, i),
             ]),
-          ],
-        ] else ...[
-          SliverToBoxAdapter(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _select(null),
-                icon: const Icon(Icons.chevron_left_rounded),
-                label: const Text('Back to discover'),
-              ),
-            ),
-          ),
-          _heading(_selection!.$1),
-          AlbumGrid(
-            albums: _albums,
-            client: widget.client,
-            onSelected: widget.onAlbum,
-          ),
-          if (!_busy && _error == null && _albums.isEmpty)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No albums here yet. Try another category.'),
-              ),
-            ),
-          if (_more)
+            if (_genres.isNotEmpty) ...[
+              _heading('Genres'),
+              _grid([
+                for (var i = 0; i < _genres.length; i++)
+                  _tile(_genres[i], 'byGenre', i, genre: _genres[i]),
+              ]),
+            ],
+          ] else ...[
             SliverToBoxAdapter(
-              child: TextButton(
-                onPressed: _busy ? null : () => _load(more: true),
-                child: const Text('More albums'),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _select(null),
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  label: const Text('Back to discover'),
+                ),
               ),
             ),
+            _heading(_selection!.$1),
+            AlbumGrid(
+              albums: _albums,
+              client: widget.client,
+              onSelected: widget.onAlbum,
+            ),
+            if (!_busy && _error == null && _albums.isEmpty)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No albums here yet. Try another category.'),
+                ),
+              ),
+            if (_more)
+              SliverToBoxAdapter(
+                child: TextButton(
+                  onPressed: _busy ? null : () => _load(more: true),
+                  child: const Text('More albums'),
+                ),
+              ),
+          ],
+          if (_busy) const SliverToBoxAdapter(child: LinearProgressIndicator()),
+          if (_error != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Text(_error!),
+                    TextButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            ),
+          const SliverToBoxAdapter(child: DockSpacer()),
         ],
-        if (_busy) const SliverToBoxAdapter(child: LinearProgressIndicator()),
-        if (_error != null)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Text(_error!),
-                  TextButton(onPressed: _load, child: const Text('Retry')),
-                ],
-              ),
-            ),
-          ),
-        const SliverToBoxAdapter(child: DockSpacer()),
-      ],
+      ),
     ),
   );
 }

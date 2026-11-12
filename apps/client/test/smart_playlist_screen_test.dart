@@ -1,3 +1,8 @@
+import 'package:hyperstream_client/features/playlists/playlists_screen.dart';
+import 'package:hyperstream_client/services/library_collections.dart';
+import 'package:hyperstream_client/services/playlist_icon_store.dart';
+import 'package:hyperstream_client/widgets/floating_chrome.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -34,7 +39,7 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
       maxScrolls: 40,
     );
   }
-  await tester.ensureVisible(finder);
+  await Scrollable.ensureVisible(tester.element(finder), alignment: .35);
   await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
@@ -105,11 +110,19 @@ Future<void> main() async {
           },
         );
         final playback = PlaybackService(player: FakePlayer());
+        final collections = LibraryCollections(client);
+        final icons = PlaylistIconStore(
+          client,
+          read: (_) async => null,
+          write: (_, _) async {},
+        );
         addTearDown(() async {
           final disposing = playback.dispose();
           await tester.pump();
           await disposing;
           store.dispose();
+          collections.dispose();
+          icons.dispose();
           client.close();
         });
         await tester.pumpWidget(
@@ -122,18 +135,19 @@ Future<void> main() async {
               ),
               child: child!,
             ),
-            home: Scaffold(
-              body: SmartPlaylistsScreen(
-                catalog: catalog,
-                store: store,
-                playback: playback,
-                onPageChanged: (_) {},
-              ),
+            home: _PlaylistHarness(
+              catalog: catalog,
+              store: store,
+              icons: icons,
+              collections: collections,
+              playback: playback,
             ),
           ),
         );
         await tester.pumpAndSettle();
-        await tapVisible(tester, find.byTooltip('New smart playlist'));
+        await tapVisible(tester, find.byTooltip('New playlist'));
+        expect(find.byType(PopupMenuItem<String>), findsNWidgets(2));
+        await tapVisible(tester, find.text('New smart playlist'));
         await tester.enterText(field('Playlist name'), 'My recent mix');
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
@@ -240,7 +254,8 @@ Future<void> main() async {
         await tapVisible(tester, find.text('Delete'));
         await tapVisible(tester, find.text('Delete'));
         expect(store.items, isEmpty);
-        expect(find.text('Smart playlists'), findsOneWidget);
+        expect(find.text('Playlists'), findsOneWidget);
+        expect(find.text('Smart playlists'), findsNothing);
         expect(tester.takeException(), isNull);
         await playback.pause();
         await tester.pumpWidget(const SizedBox());
@@ -249,4 +264,80 @@ Future<void> main() async {
       },
     );
   }
+}
+
+class _PlaylistHarness extends StatefulWidget {
+  const _PlaylistHarness({
+    required this.catalog,
+    required this.store,
+    required this.icons,
+    required this.collections,
+    required this.playback,
+  });
+  final LibraryCatalog catalog;
+  final SmartPlaylistStore store;
+  final PlaylistIconStore icons;
+  final LibraryCollections collections;
+  final PlaybackService playback;
+  @override
+  State<_PlaylistHarness> createState() => _PlaylistHarnessState();
+}
+
+class _PlaylistHarnessState extends State<_PlaylistHarness> {
+  String? selected;
+  final detailKey = GlobalKey<SmartPlaylistScreenState>();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: selected == null
+        ? null
+        : FloatingAppBar(
+            title: 'Playlist',
+            actions: [
+              PopupMenuButton<String>(
+                tooltip: 'Playlist options',
+                onSelected: (action) {
+                  if (action == 'edit') detailKey.currentState?.edit();
+                  if (action == 'delete') detailKey.currentState?.delete();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text('Edit configuration'),
+                  ),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
+            ],
+          ),
+    body: selected == null
+        ? PlaylistsScreen(
+            collections: widget.collections,
+            smartStore: widget.store,
+            icons: widget.icons,
+            onSelected: (_) {},
+            onRecentRadio: () {},
+            onSmartSelected: (item) => setState(() => selected = item.id),
+            onNewSmartPlaylist: () async {
+              final id = await editSmartPlaylist(
+                context,
+                catalog: widget.catalog,
+                store: widget.store,
+                playback: widget.playback,
+              );
+              if (mounted && id != null) setState(() => selected = id);
+            },
+          )
+        : PageChrome(
+            topInset: 0,
+            child: SmartPlaylistScreen(
+              key: detailKey,
+              id: selected!,
+              catalog: widget.catalog,
+              store: widget.store,
+              icons: widget.icons,
+              playback: widget.playback,
+              onDeleted: () => setState(() => selected = null),
+            ),
+          ),
+  );
 }

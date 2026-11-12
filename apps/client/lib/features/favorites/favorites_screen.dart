@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/floating_chrome.dart';
 import '../../widgets/pull_to_refresh.dart';
 
 import '../../models/library.dart';
@@ -36,7 +37,12 @@ class FavoritesScreen extends StatelessWidget {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    PageChrome.insetOf(context) + 16,
+                    24,
+                    24,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

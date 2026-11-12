@@ -1,3 +1,7 @@
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:hyperstream_client/widgets/floating_chrome.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,6 +21,10 @@ import 'support/collection_server.dart';
 import 'support/fake_player.dart';
 
 Future<void> main() async {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
   const previewFont = String.fromEnvironment('PREVIEW_FONT');
   if (previewFont.isNotEmpty) {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -95,7 +103,10 @@ Future<void> main() async {
         expect(find.byIcon(Icons.logout), findsNothing);
 
         Future<void> tap(Finder finder) async {
-          await tester.ensureVisible(finder);
+          await Scrollable.ensureVisible(
+            tester.element(finder),
+            alignment: .35,
+          );
           await tester.pumpAndSettle();
           await tester.tap(finder);
           await tester.pumpAndSettle();
@@ -118,7 +129,7 @@ Future<void> main() async {
         await tap(
           find.descendant(
             of: find.byWidgetPredicate(
-              (w) => w is NavigationBar || w is NavigationRail,
+              (w) => w is FloatingNavigation || w is NavigationRail,
             ),
             matching: find.text('Library'),
           ),
@@ -135,7 +146,7 @@ Future<void> main() async {
         await tap(
           find.descendant(
             of: find.byWidgetPredicate(
-              (w) => w is NavigationBar || w is NavigationRail,
+              (w) => w is FloatingNavigation || w is NavigationRail,
             ),
             matching: find.text('Library'),
           ),
@@ -180,7 +191,7 @@ Future<void> main() async {
         await tap(
           find.descendant(
             of: find.byWidgetPredicate(
-              (w) => w is NavigationBar || w is NavigationRail,
+              (w) => w is FloatingNavigation || w is NavigationRail,
             ),
             matching: find.text('Library'),
           ),
@@ -233,18 +244,9 @@ Future<void> main() async {
         expect(server.playlists['owned']!['songs'], ['one', 'two', 'one']);
         // Editing the saved playlist does not unexpectedly replace the current queue.
         expect(playback.queue.value.length, 4);
-        await tester.scrollUntilVisible(
-          find.text('Rename playlist').hitTestable(),
-          -180,
-          scrollable: find
-              .descendant(
-                of: find.byType(PlaylistTracks),
-                matching: find.byType(Scrollable),
-              )
-              .last,
-        );
+        await tap(find.byTooltip('Playlist options'));
         await tap(find.text('Add songs'));
-        await tester.enterText(find.byType(TextField), 'Second');
+        await tester.enterText(find.byType(TextField).last, 'Second');
         await tester.pump(const Duration(milliseconds: 400));
         await tester.pumpAndSettle();
         await tap(find.byTooltip('Add Second song to playlist'));
@@ -256,8 +258,9 @@ Future<void> main() async {
         ]);
         expect(playback.queue.value.length, 4);
         await tap(find.byTooltip('Close add songs'));
+        await tap(find.byTooltip('Playlist options'));
         await tap(find.text('Rename playlist'));
-        await tester.enterText(find.byType(TextField), 'Evening mix');
+        await tester.enterText(find.byType(TextField).last, 'Evening mix');
         await tap(find.text('Save'));
         expect(server.playlists['owned']!['name'], 'Evening mix');
         await tap(find.byTooltip('Back to playlists'));
@@ -270,7 +273,7 @@ Future<void> main() async {
                     of: find.byType(PlaylistsScreen),
                     matching: find.byType(Scrollable),
                   )
-                  .last,
+                  .first,
             )
             .position
             .jumpTo(0);
@@ -283,7 +286,7 @@ Future<void> main() async {
         }
         await tap(find.text('Save'));
         expect(find.text('Enter a playlist name.'), findsOneWidget);
-        await tester.enterText(find.byType(TextField), 'Fresh playlist');
+        await tester.enterText(find.byType(TextField).last, 'Fresh playlist');
         await tap(find.text('Save'));
         tester.view.resetViewInsets();
         await tester.pumpAndSettle();
@@ -295,7 +298,7 @@ Future<void> main() async {
                 of: find.byType(PlaylistsScreen),
                 matching: find.byType(Scrollable),
               )
-              .last,
+              .first,
         );
         expect(find.text('Fresh playlist'), findsOneWidget);
         await tap(find.text('Shared set'));
@@ -314,12 +317,15 @@ Future<void> main() async {
         await tap(
           find.descendant(
             of: find.byWidgetPredicate(
-              (w) => w is NavigationBar || w is NavigationRail,
+              (w) => w is FloatingNavigation || w is NavigationRail,
             ),
             matching: find.text('Home'),
           ),
         );
-        await tester.ensureVisible(find.text('Disconnect from server'));
+        await Scrollable.ensureVisible(
+          tester.element(find.text('Disconnect from server')),
+          alignment: .35,
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Disconnect from server'));
         // The real app replaces this screen on disconnect. This fixture keeps

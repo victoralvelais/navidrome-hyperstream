@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/floating_chrome.dart';
+import '../../widgets/edge_back_gesture.dart';
 import '../../models/smart_playlist.dart';
 
 class SmartRuleEditor extends StatelessWidget {
@@ -46,7 +48,7 @@ class SmartRuleEditor extends StatelessWidget {
 
   Future<void> _group(BuildContext context, [int? index]) async {
     final value = await Navigator.of(context).push<SmartGroup>(
-      MaterialPageRoute(
+      MenuPageRoute(
         builder: (_) => _GroupPage(
           initial: index == null
               ? SmartGroup(
@@ -162,8 +164,8 @@ class _GroupPageState extends State<_GroupPage> {
   late SmartGroup _group = widget.initial;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Rule group'),
+    appBar: FloatingAppBar(
+      title: 'Rule group',
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, _group),

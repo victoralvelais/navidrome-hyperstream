@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/floating_chrome.dart';
 import '../../widgets/pull_to_refresh.dart';
 
 import '../../models/library.dart';
@@ -91,7 +92,7 @@ class _AlbumTracksState extends State<AlbumTracks> {
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(
-                top: 24,
+                top: PageChrome.insetOf(context) + 16,
                 bottom: MediaQuery.paddingOf(context).bottom + 24,
               ),
               itemCount: tracks.length + 1,

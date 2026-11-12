@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/account_session.dart';
 import '../../services/playback_service.dart';
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/floating_chrome.dart';
 import '../connect/connection_screen.dart';
 import '../player/volume_controls.dart';
 
@@ -25,6 +26,7 @@ class SettingsPage extends StatefulWidget {
 
 class SettingsPageState extends State<SettingsPage> {
   String? _page;
+  String get pageTitle => _page ?? 'Home';
   bool back() {
     if (_page == null) return false;
     setState(() => _page = null);
@@ -134,14 +136,14 @@ class SettingsPageState extends State<SettingsPage> {
         key: ValueKey(_page),
         padding: EdgeInsets.fromLTRB(
           20,
-          8,
+          PageChrome.insetOf(context) + 8,
           20,
           MediaQuery.paddingOf(context).bottom + 32,
         ),
         children: [
           Row(
             children: [
-              if (_page != null)
+              if (_page != null && !PageChrome.present(context))
                 IconButton(
                   tooltip: 'Back to home',
                   onPressed: back,

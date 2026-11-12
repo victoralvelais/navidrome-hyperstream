@@ -1,3 +1,8 @@
+import 'package:hyperstream_client/features/library/artwork_backdrop.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:hyperstream_client/widgets/floating_chrome.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,6 +27,10 @@ import 'package:hyperstream_client/services/account_store.dart';
 import 'support/preview_artwork.dart';
 
 Future<void> main() async {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
   if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) _PreviewBinding();
   // Optional local font for readable preview images; CI needs no external files.
   const previewFont = String.fromEnvironment('PREVIEW_FONT');
@@ -126,7 +135,25 @@ Future<void> main() async {
                 'type': 'navidrome',
                 'openSubsonic': true,
                 if (request.url.path.endsWith('getPlaylists.view'))
-                  'playlists': {},
+                  'playlists': {
+                    'playlist': [
+                      for (var i = 0; i < 18; i++)
+                        {
+                          'id': 'playlist-$i',
+                          'name':
+                              [
+                                'Evening rotation',
+                                'Focus sessions',
+                                'Weekend favorites',
+                              ][i % 3] +
+                              (i < 3 ? '' : ' ${i + 1}'),
+                          'owner': 'test',
+                          'songCount': 20 + i,
+                          if (covers.isNotEmpty)
+                            'coverArt': ['one', 'two', 'three', 'four'][i % 4],
+                        },
+                    ],
+                  },
                 if (request.url.path.endsWith('getGenres.view'))
                   'genres': {
                     'genre': [
@@ -282,7 +309,7 @@ Future<void> main() async {
       expect(find.text('Home'), findsNWidgets(2));
       Finder nav(String label) => find.descendant(
         of: find.byWidgetPredicate(
-          (w) => w is NavigationBar || w is NavigationRail,
+          (w) => w is FloatingNavigation || w is NavigationRail,
         ),
         matching: find.text(label),
       );
@@ -290,11 +317,7 @@ Future<void> main() async {
       expect(find.text('Recently added'), findsNothing);
       if (viewport.size.width < 950) {
         expect(
-          tester
-              .widgetList<NavigationDestination>(
-                find.byType(NavigationDestination),
-              )
-              .map((destination) => destination.label),
+          FloatingNavigation.destinations.map((destination) => destination.$1),
           ['Home', 'Library', 'Search'],
         );
       } else {
@@ -315,7 +338,10 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Playlists'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Recent Radio'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Recent Radio')),
+        alignment: .35,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Recent Radio'));
       await tester.pumpAndSettle();
@@ -324,18 +350,48 @@ Future<void> main() async {
       await _capturePreview(tester, '${viewport.name}-radio');
       await tester.tap(find.byTooltip('Back to playlists'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Smart playlists'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Smart playlists'));
-      await tester.pumpAndSettle();
+      expect(find.text('Smart playlists'), findsNothing);
       expect(
-        find.text(
-          'Rules select and order one list. Mix combines pools with their own conditions and shares.',
-        ),
+        find.widgetWithText(TextField, 'Search Playlists'),
         findsOneWidget,
       );
-      expect(find.text('Choose an album or artist to explore.'), findsNothing);
-      await tester.tap(find.byTooltip('Back to playlists'));
+      await _capturePreview(tester, '${viewport.name}-playlists');
+      await tester.tap(find.byTooltip('New playlist'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PopupMenuItem<String>), findsNWidgets(2));
+      expect(find.text('New smart playlist'), findsOneWidget);
+      await tester.tap(find.text('New smart playlist'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Playlist name'),
+        'My Recent Radio',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.text('My Recent Radio'), findsOneWidget);
+      await tester.dragFrom(const Offset(12, 180), const Offset(120, 4));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(TextField, 'Search Playlists'),
+        findsOneWidget,
+      );
+      expect(find.text('My Recent Radio'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-playlists-saved');
+      final playlistsScroll = find
+          .descendant(
+            of: find.byKey(const PageStorageKey('playlists')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      tester.state<ScrollableState>(playlistsScroll).position.jumpTo(90);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FloatingTopBar>(find.byType(FloatingTopBar)).title,
+        'Playlists',
+      );
+      await _capturePreview(tester, '${viewport.name}-playlists-scrolled');
+      tester.state<ScrollableState>(playlistsScroll).position.jumpTo(0);
       await tester.pumpAndSettle();
       await tester.tap(nav('Library'));
       await tester.pumpAndSettle();
@@ -367,7 +423,10 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Northline'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Artist album'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Artist album')),
+        alignment: .35,
+      );
       await tester.tap(find.text('Artist album'));
       await tester.pumpAndSettle();
       expect(find.text('Play album'), findsOneWidget);
@@ -403,7 +462,10 @@ Future<void> main() async {
       expect(find.text('Now playing'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-player');
-      await tester.ensureVisible(find.byTooltip('Music volume').last);
+      await Scrollable.ensureVisible(
+        tester.element(find.byTooltip('Music volume').last),
+        alignment: .35,
+      );
       await tester.tap(find.byTooltip('Music volume').last);
       await tester.pumpAndSettle();
       expect(
@@ -426,7 +488,10 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(player.seekCalls, 1);
       expect(player.position, const Duration(seconds: 45));
-      await tester.ensureVisible(find.byTooltip('Show queue'));
+      await Scrollable.ensureVisible(
+        tester.element(find.byTooltip('Show queue')),
+        alignment: .35,
+      );
       await tester.tap(find.byTooltip('Show queue'));
       await tester.pumpAndSettle();
       expect(find.text('Up next'), findsOneWidget);
@@ -436,7 +501,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
-        find.text('After Hours').hitTestable(),
+        find.text('Soft Focus').hitTestable(),
         200,
         scrollable: find
             .descendant(
@@ -445,10 +510,16 @@ Future<void> main() async {
             )
             .first,
       );
-      await tester.tap(find.text('After Hours'));
+      await tester.tap(find.text('Soft Focus'));
       await tester.pumpAndSettle();
       expect(find.text('Play album'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      expect(
+        tester
+            .widget<ArtworkBackdrop>(find.byType(ArtworkBackdrop).first)
+            .coverArt,
+        covers.isEmpty ? null : 'two',
+      );
       await _capturePreview(tester, '${viewport.name}-album');
       if (find.byTooltip('Expand navigation').evaluate().isNotEmpty) {
         await tester.tap(find.byTooltip('Expand navigation'));
@@ -459,7 +530,10 @@ Future<void> main() async {
       expect(find.text('Appearance'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-settings');
-      await tester.ensureVisible(find.text('Servers'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Servers')),
+        alignment: .35,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Servers'));
       await tester.pumpAndSettle();
@@ -489,8 +563,9 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-search');
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('search-filter-songs')),
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const ValueKey('search-filter-songs'))),
+        alignment: .35,
       );
       await tester.tap(find.byKey(const ValueKey('search-filter-songs')));
       await tester.pumpAndSettle();
@@ -506,12 +581,16 @@ Future<void> main() async {
       expect(find.text('Search song'), findsOneWidget);
       tester.view.physicalSize = viewport.size;
       await tester.pumpAndSettle();
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('search-filter-albums')),
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const ValueKey('search-filter-albums'))),
+        alignment: .35,
       );
       await tester.tap(find.byKey(const ValueKey('search-filter-albums')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Search album'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Search album')),
+        alignment: .35,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Search album'));
       await tester.pumpAndSettle();
@@ -522,12 +601,16 @@ Future<void> main() async {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'Search',
       );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('search-filter-songs')),
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const ValueKey('search-filter-songs'))),
+        alignment: .35,
       );
       await tester.tap(find.byKey(const ValueKey('search-filter-songs')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Search song'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Search song')),
+        alignment: .35,
+      );
       await tester.tap(find.text('Search song'));
       await tester.pumpAndSettle();
       expect(playback.mediaItem.value?.id, 'result-song');

@@ -57,5 +57,27 @@ real server metadata, large-library timing and device usability still need testi
   pool editing/reordering, discard confirmation, preview, save, delete and Back.
 - Recent Radio stays a separate hardcoded 30-day entry. Its sync status now shows
   a progress bar plus the catalog total. Smart-playlist syncs use the same status.
-  When the optional count lookup fails, the bar stays indeterminate; the actual
-  total appears after a complete successful sync. No fetched-count sentence appears.
+  When the optional count lookup fails, the bar stays indeterminate. The bar and
+  total disappear when syncing stops. No fetched-count sentence appears.
+
+## Unified playlist UI and navigation (November 12)
+
+- Open Playlists: saved smart playlists appear first in the same list as server
+  playlists and Recent Radio. The plus menu has exactly New playlist and New
+  smart playlist. Search filters all entries by name; clear restores them.
+- Tap a playlist's icon, choose another, then restart. Verify persistence and
+  server/account isolation. Default restores Sparkles for a smart playlist,
+  Radio for Recent Radio, or the server cover for an ordinary playlist. These
+  choices do not modify server artwork or the saved Rules/Mix definitions.
+- Open a saved smart playlist directly. Its corner menu offers Edit configuration,
+  Choose icon and Delete. Ordinary owned playlists retain Add songs and Rename
+  in their corner menu. Shared playlists remain read-only on the server.
+- Scroll Playlists: the large title moves into the glass top bar. At the top,
+  Back and plus occupy separate glass circles. Check enlarged text and rotation.
+- Swipe right starting at the left edge: return one menu. Interior/vertical drags
+  must not go back. In a dirty smart editor, the existing discard prompt appears.
+- Check the full floating dock: each selected capsule encloses its icon and label.
+  Scroll down/up to check the existing collapsed player and previous/next controls.
+- While one album plays, open a differently colored album or playlist. The selected
+  cover should tint the page and floating controls without changing the queue.
+  Verify light/dark mode, disabled glass and increased contrast.

@@ -17,6 +17,16 @@ class GlassScope extends InheritedWidget {
   bool updateShouldNotify(GlassScope oldWidget) => enabled != oldWidget.enabled;
 }
 
+/// Artwork tint flows through the full page and its floating controls.
+class ArtworkTint extends InheritedWidget {
+  const ArtworkTint({super.key, required this.color, required super.child});
+  final Color? color;
+  static Color? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ArtworkTint>()?.color;
+  @override
+  bool updateShouldNotify(ArtworkTint oldWidget) => color != oldWidget.color;
+}
+
 class GlassSurface extends StatelessWidget {
   const GlassSurface({super.key, required this.child, this.radius = 28});
   final Widget child;
@@ -27,6 +37,9 @@ class GlassSurface extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = scheme.brightness == Brightness.dark;
     final glass = GlassScope.effectsEnabled(context);
+    final tint = ArtworkTint.of(context);
+    Color tinted(Color base) =>
+        tint == null ? base : Color.lerp(base, tint, dark ? .35 : .16)!;
     final corners = BorderRadius.circular(radius);
     final surface = DecoratedBox(
       decoration: BoxDecoration(
@@ -38,12 +51,12 @@ class GlassSurface extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        const Color(0xff59616b).withValues(alpha: .42),
-                        const Color(0xff141a21).withValues(alpha: .36),
+                        tinted(const Color(0xff59616b)).withValues(alpha: .46),
+                        tinted(const Color(0xff141a21)).withValues(alpha: .42),
                       ]
                     : [
-                        Colors.white.withValues(alpha: .68),
-                        const Color(0xfffaf8f3).withValues(alpha: .48),
+                        tinted(Colors.white).withValues(alpha: .72),
+                        tinted(const Color(0xfffaf8f3)).withValues(alpha: .56),
                       ],
               )
             : null,

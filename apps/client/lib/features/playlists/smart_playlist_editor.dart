@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../widgets/floating_chrome.dart';
+import '../../widgets/edge_back_gesture.dart';
 import '../../models/smart_playlist.dart';
 import '../../services/library_catalog.dart';
 import '../../services/playback_service.dart';
@@ -163,7 +165,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   Future<void> _editPool([int? index]) async {
     final pool = await Navigator.push<SmartPool>(
       context,
-      MaterialPageRoute(
+      MenuPageRoute(
         builder: (_) => _PoolPage(
           initial: index == null
               ? SmartPool(
@@ -192,8 +194,8 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
       if (!didPop) unawaited(_close());
     },
     child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Smart playlist'),
+      appBar: FloatingAppBar(
+        title: 'Smart playlist',
         actions: [
           TextButton(
             onPressed: _saving || !widget.store.canWrite ? null : _save,
@@ -479,8 +481,8 @@ class _PoolPageState extends State<_PoolPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Mix pool'),
+    appBar: FloatingAppBar(
+      title: 'Mix pool',
       actions: [TextButton(onPressed: _done, child: const Text('Done'))],
     ),
     body: Center(

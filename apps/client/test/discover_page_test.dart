@@ -71,7 +71,7 @@ void main() {
       expect(find.text('Album 2'), findsOneWidget);
       await tester.tap(find.text('Album 2'));
       expect(selected, 'album');
-      await tester.tap(find.text('Back to discover'));
+      await tester.dragFrom(const Offset(12, 180), const Offset(110, 4));
       await tester.pumpAndSettle();
       expect(find.text('Rock'), findsOneWidget);
     },

@@ -111,7 +111,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(radio.syncProgress, 1);
       expect(radio.lastSyncTrackCount, 4);
-      expect(find.text('4 tracks'), findsOneWidget);
+      expect(find.text('4 tracks'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.textContaining('Added or played in the last'), findsNothing);
       expect(find.text('4 songs · 30 days'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       radio.dispose();
@@ -119,7 +121,7 @@ void main() {
     },
   );
   testWidgets(
-    'unknown count animates without a fetched total, then shows the actual catalog size',
+    'unknown count animates only during sync and disappears after completion',
     (tester) async {
       final end = Completer<http.Response>();
       final client = countClient((request) {
@@ -155,7 +157,8 @@ void main() {
       );
       end.complete(envelope({'searchResult3': {}}));
       await tester.pumpAndSettle();
-      expect(find.text('1 track'), findsOneWidget);
+      expect(find.text('1 track'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(radio.syncProgress, 1);
       await tester.pumpWidget(const SizedBox());
       radio.dispose();

@@ -6,6 +6,7 @@ import '../../models/recent_radio.dart';
 import '../../services/playback_service.dart';
 import '../../services/recent_radio_service.dart';
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/floating_chrome.dart';
 import '../../widgets/library_sync_status.dart';
 import '../library/cover_art.dart';
 
@@ -56,17 +57,18 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  PageChrome.insetOf(context) + 16,
+                  24,
+                  24,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Recent Radio',
                       style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Added or played in the last 30 days, ordered by your latest activity.',
                     ),
                     const SizedBox(height: 24),
                     FilledButton.icon(
@@ -77,9 +79,6 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
                       label: const Text('Play radio'),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Counted listens update immediately. Pull down to sync, or let it sync every 30 minutes while the app is active.',
-                    ),
                     if (!widget.playback.preferences.reportListens)
                       const Padding(
                         padding: EdgeInsets.only(top: 12),
