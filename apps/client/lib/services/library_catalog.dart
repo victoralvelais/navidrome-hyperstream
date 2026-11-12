@@ -4,10 +4,11 @@ import 'package:flutter/foundation.dart';
 
 import '../models/library.dart';
 import 'navidrome_client.dart';
+import 'catalog_cache.dart';
 
 /// Shared account catalog for radio and smart playlists. Local changes never scan.
 class LibraryCatalog extends ChangeNotifier {
-  LibraryCatalog(this.client, {DateTime Function()? now})
+  LibraryCatalog(this.client, {DateTime Function()? now, this._cache})
     : _now = now ?? DateTime.now {
     _subscription = client.localListens.listen(_onListen);
     _favoritesSubscription = client.favoriteChanges.listen(_onFavorite);
@@ -16,6 +17,9 @@ class LibraryCatalog extends ChangeNotifier {
   static const syncInterval = Duration(minutes: 30);
   final NavidromeClient client;
   final DateTime Function() _now;
+  final CatalogCache? _cache;
+  Future<void>? _restoring;
+  Timer? _saveTimer;
   late final StreamSubscription<LocalListen> _subscription;
   late final StreamSubscription<(String, bool)> _favoritesSubscription;
   Map<String, Track> _tracks = {};
@@ -63,6 +67,7 @@ class LibraryCatalog extends ChangeNotifier {
     _local[listen.track.id] = (listen, ++_revision, minimumCount);
     _tracks[track.id] = _overlay(track, listen, minimumCount);
     _evaluate();
+    _saveSoon();
     _notify();
   }
 
@@ -73,6 +78,7 @@ class LibraryCatalog extends ChangeNotifier {
     if (track == null) return;
     _tracks[track.id] = track.withActivity(favorite: change.$2);
     _evaluate();
+    _saveSoon();
     _notify();
   }
 
@@ -104,21 +110,102 @@ class LibraryCatalog extends ChangeNotifier {
     revision++;
   }
 
-  /// First visit loads the catalog. Further visits only re-evaluate cached dates.
-  Future<void> ensureLoaded() {
-    if (_disposed) return Future.value();
+  /// A saved catalog is immediately playable, even while a due sync runs.
+  Future<void> ensureLoaded() async {
+    if (_disposed) return;
+    await _restoreOnce();
+    if (_disposed) return;
     if (!_started) return refresh();
     if (revision > 0) {
       _evaluate();
       _notify();
     }
-    return _refreshing ?? Future.value();
+    if (lastSyncedAt == null) await _refreshing;
+  }
+
+  Future<void> _restoreOnce() => _restoring ??= _restore();
+
+  Future<void> _restore() async {
+    final saved = await _cache?.read();
+    if (_disposed || saved == null || saved.syncedAt.isAfter(_now())) return;
+    final changedWhileRestoring = _local.isNotEmpty || _favorites.isNotEmpty;
+    final incoming = {for (final track in saved.tracks) track.id: track};
+    for (final entry in saved.listens.entries) {
+      final track = incoming[entry.key];
+      if (track == null || _local.containsKey(entry.key)) continue;
+      _local[entry.key] = (
+        LocalListen(track, entry.value.startedAt),
+        0,
+        entry.value.minimumCount,
+      );
+    }
+    for (final entry in _local.entries) {
+      final (listen, _, count) = entry.value;
+      incoming[entry.key] = _overlay(
+        incoming[entry.key] ?? listen.track,
+        listen,
+        count,
+      );
+    }
+    for (final entry in saved.favorites.entries) {
+      _favorites.putIfAbsent(entry.key, () => entry.value);
+    }
+    for (final entry in _favorites.entries) {
+      final track = incoming[entry.key];
+      if (track != null) {
+        incoming[entry.key] = track.withActivity(favorite: entry.value);
+      }
+    }
+    _tracks = incoming;
+    _started = true;
+    lastSyncedAt = saved.syncedAt;
+    lastSyncTrackCount = saved.tracks.length;
+    _nextSyncAt = saved.syncedAt.add(syncInterval);
+    _evaluate();
+    if (changedWhileRestoring) _saveSoon();
+    _schedule();
+    _notify();
+  }
+
+  void _saveSoon() {
+    if (_cache == null || lastSyncedAt == null) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(
+      const Duration(seconds: 1),
+      () => unawaited(flushCache()),
+    );
+  }
+
+  Future<void> flushCache() async {
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    final cache = _cache;
+    final syncedAt = lastSyncedAt;
+    if (cache == null || syncedAt == null) return;
+    final snapshot = CatalogSnapshot(
+      syncedAt: syncedAt,
+      tracks: tracks,
+      listens: {
+        for (final entry in _local.entries)
+          entry.key: CachedListen(entry.value.$1.startedAt, entry.value.$3),
+      },
+      favorites: _favorites,
+    );
+    try {
+      await cache.write(snapshot);
+    } on Object {
+      if (!_disposed) {
+        error = 'The library is available, but its on-device cache could not be saved.';
+        _notify();
+      }
+    }
   }
 
   /// Owned by the account screen, so scheduling continues on other app pages.
   void setAppActive(bool active) {
     if (_disposed) return;
     _appActive = active;
+    if (!active && _saveTimer != null) unawaited(flushCache());
     _schedule();
   }
 
@@ -138,6 +225,8 @@ class LibraryCatalog extends ChangeNotifier {
   }
 
   Future<void> _refresh() async {
+    await _restoreOnce();
+    if (_disposed) return;
     _started = true;
     _timer?.cancel();
     loading = true;
@@ -191,6 +280,7 @@ class LibraryCatalog extends ChangeNotifier {
       syncTotal = tracks.length;
       lastSyncedAt = _now();
       _evaluate();
+      unawaited(flushCache());
     } on Object catch (failure) {
       if (!_disposed) {
         error = failure is NavidromeException ? failure.message : 'The library could not sync. Your current list is still available.';
@@ -206,6 +296,7 @@ class LibraryCatalog extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_saveTimer != null) unawaited(flushCache());
     _disposed = true;
     _timer?.cancel();
     unawaited(_subscription.cancel());

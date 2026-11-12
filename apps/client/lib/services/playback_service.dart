@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -30,11 +31,13 @@ class PlaybackService extends BaseAudioHandler {
     DateTime Function()? listeningTime,
     Future<Uri?> Function(NavidromeClient, String)? artworkLoader,
     DateTime Function()? timerClock,
+    Random? random,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession,
        _artworkLoader = artworkLoader ?? SystemArtwork().load,
-       _timerClock = timerClock ?? DateTime.now {
+       _timerClock = timerClock ?? DateTime.now,
+       _random = random ?? Random() {
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
       now: listeningTime ?? DateTime.now,
@@ -100,6 +103,7 @@ class PlaybackService extends BaseAudioHandler {
   bool _playWhenReady = false;
   final Future<Uri?> Function(NavidromeClient, String) _artworkLoader;
   final DateTime Function() _timerClock;
+  final Random _random;
   final Set<int> _requestedArtwork = {};
   final ValueNotifier<SleepTimerState?> sleepTimer = ValueNotifier(null);
   Timer? _sleepTick;
@@ -251,10 +255,12 @@ class PlaybackService extends BaseAudioHandler {
     List<Track> tracks,
     int index, {
     String? coverArtId,
+    bool shuffle = false,
   }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
     }
+    if (shuffle) index = _random.nextInt(tracks.length);
     final revision = ++_revision;
     cancelSleepTimer();
     _requestedArtwork.clear();
@@ -268,6 +274,8 @@ class PlaybackService extends BaseAudioHandler {
       _loading = true;
       try {
         await _player.pause();
+        if (revision != _revision) return;
+        await _player.setShuffleModeEnabled(false);
         if (revision != _revision) return;
         final items = tracks
             .map(
@@ -300,6 +308,14 @@ class PlaybackService extends BaseAudioHandler {
           initialPosition: Duration.zero,
         );
         if (revision != _revision) return;
+        if (shuffle) {
+          // just_audio puts the selected random starting track first in its
+          // shuffle traversal, while retaining the collection's original order.
+          await _player.shuffle();
+          if (revision != _revision) return;
+          await _player.setShuffleModeEnabled(true);
+          if (revision != _revision) return;
+        }
         _loading = false;
         _listeningClient = client;
         _listeningTracks = List.unmodifiable(tracks);

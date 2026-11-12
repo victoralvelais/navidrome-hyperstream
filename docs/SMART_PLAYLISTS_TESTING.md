@@ -106,3 +106,40 @@ real server metadata, large-library timing and device usability still need testi
   Reduce Transparency while a sheet is open and check the opaque fallback.
 - Verify the violet gradient/golden sparkle app icon after installing the new
   IPA/Windows package. Home and launch/sign-in screens use the same mark and name.
+
+
+## Device feedback follow-up: cache, lens edges and collection controls
+
+- Sign-in/startup/Home: the violet mark remains square and centered. Default
+  controls use violet and gold; artwork-derived page colors still apply.
+- Albums, ordinary playlists, Rules/Mix results and Recent Radio: a circular
+  Shuffle sits left of a centered Play pill. Albums retain Favorite on the right.
+  Play restores the displayed order even after a shuffled session; Shuffle picks
+  a random starting song and the native player shuffles the rest. Duplicates in
+  an ordinary playlist remain distinct positions.
+- Sync once, close/reopen, then open Radio/a smart playlist. Results should appear
+  from disk. Within 30 minutes no scan is required; an overdue scan runs behind
+  the usable list. Play while syncing, interrupt the network, and confirm the
+  cached list remains available. Refresh still requests full reconciliation.
+- Count a listen, wait a second and restart. The song's local activity should
+  remain without a rescan or replaying the scrobble. Switch server/user and check
+  isolation. A first-ever install/cache miss still needs a complete sync.
+- On iPhone, scroll detailed covers/text beneath top/bottom glass, open a sheet
+  and a popup, and rotate. Refraction should follow each rounded control edge,
+  with a clear center and separate inner/outer glints. Check a menu over another
+  glass surface for feedback artifacts. Windows retains blur plus the layered
+  rim because its renderer lacks ImageFilter.shader support. Reduce Transparency
+  and high contrast must still give an opaque surface.
+- A rendered shader regression verifies a translated lens over a striped image;
+  widget previews cover five viewport/theme combinations. Physical-device
+  Impeller compositing and large-library responsiveness still need sideload checks.
+
+Technical references: Flutter's ImageFilter.shader requires a texture-size uniform
+and input sampler; that texture size is not the widget's shape bounds. Shape
+coordinates now update during scene composition (including retained transforms),
+and the filter no longer composes a padded
+blur before refraction. A quarter-circle bevel displaces the background inward,
+while directional outer/inner strokes provide separation on every renderer.
+[Flutter shader API](https://api.flutter.dev/flutter/dart-ui/ImageFilter/ImageFilter.shader.html),
+[Flutter runtime filter source](https://github.com/flutter/flutter/blob/master/engine/src/flutter/impeller/entity/contents/filters/runtime_effect_filter_contents.cc),
+[Liquid Glass Renderer refraction model](https://pub.dev/packages/liquid_glass_renderer#refraction).

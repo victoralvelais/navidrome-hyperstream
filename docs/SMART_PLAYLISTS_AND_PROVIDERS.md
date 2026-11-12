@@ -35,8 +35,8 @@ type's settings. The name, exclusions and optional track limit are shared.
   examples, not new fixed radio semantics.
 - Available conditions: added/played date windows, never played, favorites,
   play count, duration, title, artist and album. Global exclusions run before
-  ordering/mixing. Genre/year/rating, artist spacing, shuffle and scoring remain
-  later work.
+  ordering/mixing. Genre/year/rating, artist spacing, configurable random ordering
+  and scoring remain later work. Collection playback now offers Shuffle separately.
 - Mix uses smooth weighted interleaving. Pool order resolves ties; sort ties use
   track ID. Duplicate IDs are skipped without consuming another slot and charged
   only to the pool that emitted the track. Preview reports requested shares and
@@ -50,8 +50,9 @@ type's settings. The name, exclusions and optional track limit are shared.
 Definitions use versioned JSON in local preferences, keyed by the canonical
 server URI and username. Writes serialize and publish only after storage succeeds;
 malformed/newer unreadable data is preserved with editing disabled. This stores
-configuration only: no credentials, catalog persistence, cross-device sharing or
-Navidrome playlist publication. Account switching disposes the old catalog and
+configuration only: no credentials, cross-device sharing or Navidrome playlist
+publication. A separate rebuildable disk cache now stores catalog metadata.
+Account switching disposes the old catalog and
 preview listeners. The same account entered through a different server URL has a
 separate definition store, matching existing connection identity semantics.
 
@@ -60,7 +61,8 @@ foreground schedule. Local qualified listens overlay both the last-played time
 and a provisional play-count floor; refresh takes the greater remote/local count
 until server history catches up, avoiding double counting. Successful song-favorite
 changes also update the catalog immediately. Neither operation triggers a scan.
-Local overlays remain session-only; reporting-disabled listens produce no overlay.
+Local overlays persist with the cached catalog; reporting-disabled listens produce
+no overlay. Cached listen records are never replayed as network submissions.
 Initial/full sync retains the existing Navidrome activity-metadata compatibility
 guard. Missing history must be investigated on the actual server, not silently
 treated as a complete recent-played library.
@@ -80,14 +82,30 @@ playback client's local event stream before the scrobble request completes.
 Merge it into an account-scoped in-memory catalog and re-evaluate immediately.
 This requires no catalog read or per-song request. Local activity can therefore
 appear before the server confirms it; the existing Playback notice still reports
-uncertain submissions. Local activity is session-only, not an offline outbox.
+uncertain submissions. Local activity persists with the catalog, not as an offline
+submission outbox.
 
-The first open loads the complete catalog. Later visits reuse it. Pull-to-refresh
-and F5 sync explicitly; after each attempt, schedule the next attempt 30 minutes
+The first open without a valid cache loads the complete catalog. Later visits and
+app restarts restore the last complete catalog from disk and re-evaluate dates
+immediately. A due background refresh does not block playing the cached list.
+Pull-to-refresh and F5 sync explicitly; after each attempt, schedule the next attempt 30 minutes
 later while the app is active. The schedule belongs to the account session, so
 it continues on other app pages. Pause scheduling in the background; resume
 with one sync if overdue. Neither reopening the page nor a short background trip
-forces a new scan. Closed-app scheduling belongs to the later companion.
+forces a new scan. A restored cache uses its saved successful-sync time to schedule
+the next refresh. Closed-app scheduling belongs to the later companion.
+
+Catalog cache files live in application support, scoped by a SHA-256 digest of
+canonical server URI and username. Version 1 stores track metadata, last successful
+sync time, pending local activity floors and favorite overlays; it stores no
+credentials, signed URLs or audio. JSON encoding/decoding runs in an isolate.
+Writes serialize per account and replace the previous file atomically. Local
+changes debounce saves for one second and flush when the account pauses/disposes.
+Missing, corrupt or incompatible caches fall back to a full scan. A failed scan
+never replaces the last complete snapshot. This removes the repeated startup
+wait, but periodic/manual reconciliation still reads the full catalog so deletions
+and activity from other clients are discovered. Incremental server queries remain
+future work requiring installed-server compatibility evidence.
 
 Coalesce concurrent syncs and retain local events that arrive during a scan.
 Overlay more recent local history until server history catches up. A subsequent

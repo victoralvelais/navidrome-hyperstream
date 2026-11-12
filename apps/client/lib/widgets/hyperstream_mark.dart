@@ -8,11 +8,15 @@ class HyperstreamMark extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: 'Hyperstream icon',
     image: true,
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(size * .23),
-      child: CustomPaint(
-        size: Size.square(size),
-        painter: const HyperstreamMarkPainter(),
+    child: Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox.square(
+        dimension: size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * .23),
+          child: CustomPaint(painter: const HyperstreamMarkPainter()),
+        ),
       ),
     ),
   );

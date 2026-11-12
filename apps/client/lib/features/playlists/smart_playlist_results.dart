@@ -1,3 +1,5 @@
+import '../../widgets/collection_play_controls.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -22,11 +24,16 @@ class SmartPlaylistResults extends StatelessWidget {
   final PlaybackService playback;
   final SmartPlaylistDefinition? definition;
 
-  void _play(SmartPlaylistResult result, [int index = 0]) => unawaited(
+  void _play(
+    SmartPlaylistResult result, [
+    int index = 0,
+    bool shuffle = false,
+  ]) => unawaited(
     playback.playAlbum(
       catalog.client,
       result.matches.map((match) => match.track).toList(),
       index,
+      shuffle: shuffle,
     ),
   );
 
@@ -81,16 +88,17 @@ class SmartPlaylistResults extends StatelessWidget {
               ),
           ],
           const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: result.matches.isEmpty || preview.busy
+          CollectionPlayControls(
+            onPlay: result.matches.isEmpty || preview.busy
                 ? null
                 : () => _play(result),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Play playlist'),
+            onShuffle: result.matches.isEmpty || preview.busy
+                ? null
+                : () => _play(result, 0, true),
           ),
           const SizedBox(height: 8),
           const Text(
-            'Playing uses this order. Later updates leave the playing queue unchanged.',
+            'Play uses this order; Shuffle randomizes it. Later updates leave the playing queue unchanged.',
           ),
           if (result.matches.isEmpty)
             const Padding(

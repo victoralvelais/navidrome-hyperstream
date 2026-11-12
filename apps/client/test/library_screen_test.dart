@@ -376,7 +376,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Recent Radio'));
       await tester.pumpAndSettle();
-      expect(find.text('Play radio'), findsOneWidget);
+      expect(find.text('Play'), findsOneWidget);
       expect(find.text('Choose an album or artist to explore.'), findsNothing);
       await _capturePreview(tester, '${viewport.name}-radio');
       await tester.tap(find.byTooltip('Back to playlists'));
@@ -460,7 +460,7 @@ Future<void> main() async {
       );
       await tester.tap(find.text('Artist album'));
       await tester.pumpAndSettle();
-      expect(find.text('Play album'), findsOneWidget);
+      expect(find.text('Play'), findsOneWidget);
       await tester.tap(find.byTooltip('Back to artist'));
       await tester.pumpAndSettle();
       expect(find.text('Artist album'), findsOneWidget);
@@ -551,7 +551,7 @@ Future<void> main() async {
       );
       await tester.tap(find.text('Soft Focus'));
       await tester.pumpAndSettle();
-      expect(find.text('Play album'), findsOneWidget);
+      expect(find.text('Play'), findsOneWidget);
       expect(tester.takeException(), isNull);
       expect(
         tester
@@ -639,7 +639,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Search album'));
       await tester.pumpAndSettle();
-      expect(find.text('Play album'), findsOneWidget);
+      expect(find.text('Play'), findsOneWidget);
       await tester.tap(find.byTooltip('Back to search'));
       await tester.pumpAndSettle();
       expect(

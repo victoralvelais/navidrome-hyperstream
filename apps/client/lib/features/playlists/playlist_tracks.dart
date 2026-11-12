@@ -1,3 +1,4 @@
+import '../../widgets/collection_play_controls.dart';
 import '../../widgets/glass_overlays.dart';
 
 import 'package:audio_service/audio_service.dart';
@@ -206,25 +207,22 @@ class PlaylistTracksState extends State<PlaylistTracks> {
                           ),
                           Text('${playlist.tracks.length} songs'),
                           const SizedBox(height: 16),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface,
-                              foregroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .surface,
-                              shape: const StadiumBorder(),
-                            ),
-                            onPressed: playlist.tracks.isEmpty
+                          CollectionPlayControls(
+                            onPlay: playlist.tracks.isEmpty
                                 ? null
                                 : () => widget.playback.playAlbum(
                                     widget.collections.client,
                                     playlist.tracks,
                                     0,
                                   ),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Play playlist'),
+                            onShuffle: playlist.tracks.isEmpty
+                                ? null
+                                : () => widget.playback.playAlbum(
+                                    widget.collections.client,
+                                    playlist.tracks,
+                                    0,
+                                    shuffle: true,
+                                  ),
                           ),
                           if (editable && !PageChrome.present(context))
                             TextButton.icon(

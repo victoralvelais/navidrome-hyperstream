@@ -3,7 +3,7 @@ import 'library_catalog.dart';
 
 /// The fixed radio and editable playlists share this session's activity catalog.
 class RecentRadioService extends LibraryCatalog {
-  RecentRadioService(super.client, {super.now});
+  RecentRadioService(super.client, {super.now, super.cache});
   static const definition = RecentRadioDefinition();
   RadioPreview? _preview;
   int _previewRevision = -1;

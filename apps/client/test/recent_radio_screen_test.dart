@@ -117,9 +117,9 @@ Future<void> main() async {
             ),
           );
         }
-        await tester.ensureVisible(find.text('Play radio'));
+        await tester.ensureVisible(find.text('Play'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Play radio'));
+        await tester.tap(find.text('Play'));
         await tester.pumpAndSettle();
         expect(playback.queue.value.map((t) => t.id), ['played', 'added']);
         reversed = true;

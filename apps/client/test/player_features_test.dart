@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,7 @@ void main() {
     service = PlaybackService(
       player: player,
       timerClock: () => now,
+      random: Random(17),
       artworkLoader: (_, id) => (art[id] ??= Completer<Uri?>()).future,
     );
     client = NavidromeClient(
@@ -49,6 +51,28 @@ void main() {
   tearDown(() async {
     await service.dispose();
     client.close();
+  });
+
+  test('collection shuffle randomizes its start and Play restores the original order', () async {
+    final expected = Random(17);
+    final starts = <int>{};
+    for (var i = 0; i < 8; i++) {
+      await service.playAlbum(client, tracks, 0, shuffle: true);
+      final selected = expected.nextInt(tracks.length);
+      starts.add(player.currentIndex!);
+      expect(player.currentIndex, selected);
+      expect(service.mediaItem.value!.id, tracks[selected].id);
+      expect(player.shuffleModeEnabled, true);
+      expect(
+        service.queue.value.map((item) => item.id),
+        tracks.map((track) => track.id),
+      );
+    }
+    expect(starts.length, greaterThan(1));
+    await service.playAlbum(client, tracks, 0);
+    expect(player.shuffleModeEnabled, false);
+    expect(player.currentIndex, 0);
+    expect(service.upcomingIndices, [1, 2, 3]);
   });
 
   test('local system artwork follows the current item and rejects stale replacements', () async {

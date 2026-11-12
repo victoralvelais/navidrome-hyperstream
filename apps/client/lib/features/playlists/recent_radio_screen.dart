@@ -1,3 +1,5 @@
+import '../../widgets/collection_play_controls.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -35,13 +37,15 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
     return '${labels.formatShortDate(local)} ${labels.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
   }
 
-  void _play(RadioPreview preview, [int index = 0]) => unawaited(
-    widget.playback.playAlbum(
-      widget.radio.client,
-      preview.matches.map((match) => match.track).toList(),
-      index,
-    ),
-  );
+  void _play(RadioPreview preview, [int index = 0, bool shuffle = false]) =>
+      unawaited(
+        widget.playback.playAlbum(
+          widget.radio.client,
+          preview.matches.map((match) => match.track).toList(),
+          index,
+          shuffle: shuffle,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -71,12 +75,13 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
                       style: Theme.of(context).textTheme.headlineLarge,
                     ),
                     const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: preview == null || preview.matches.isEmpty
+                    CollectionPlayControls(
+                      onPlay: preview == null || preview.matches.isEmpty
                           ? null
                           : () => _play(preview),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Text('Play radio'),
+                      onShuffle: preview == null || preview.matches.isEmpty
+                          ? null
+                          : () => _play(preview, 0, true),
                     ),
                     const SizedBox(height: 16),
                     if (!widget.playback.preferences.reportListens)

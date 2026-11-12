@@ -185,7 +185,7 @@ Future<void> main() async {
         }
         await tapVisible(tester, find.text('Preview tracks'));
         expect(find.text('2 matched · 2 selected'), findsOneWidget);
-        await tapVisible(tester, find.text('Play playlist'));
+        await tapVisible(tester, find.text('Play'));
         expect(playback.queue.value.map((t) => t.id), ['old', 'new']);
         await tapVisible(tester, find.text('Mix'));
         await tapVisible(tester, find.text('Recently added · 60%'));
@@ -216,7 +216,7 @@ Future<void> main() async {
           );
         }
         await tapVisible(tester, find.text('Preview tracks'));
-        await tapVisible(tester, find.text('Play playlist'));
+        await tapVisible(tester, find.text('Play'));
         expect(playback.queue.value.map((t) => t.id), ['new', 'old']);
         failSave = true;
         await tapVisible(tester, find.text('Save'));

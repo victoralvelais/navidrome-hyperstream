@@ -11,7 +11,7 @@ import '../../services/playback_service.dart';
 import 'cover_art.dart';
 import 'collection_actions.dart';
 import 'artwork_backdrop.dart';
-import '../../widgets/glass_surface.dart';
+import '../../widgets/collection_play_controls.dart';
 
 class AlbumTracks extends StatefulWidget {
   const AlbumTracks({
@@ -144,48 +144,25 @@ class _AlbumTracksState extends State<AlbumTracks> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 16),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface,
-                                foregroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .surface,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 28,
-                                  vertical: 16,
+                        CollectionPlayControls(
+                          onPlay: tracks.isEmpty
+                              ? null
+                              : () => widget.onPlay(tracks, 0),
+                          onShuffle: tracks.isEmpty
+                              ? null
+                              : () => widget.playback.playAlbum(
+                                  widget.client,
+                                  tracks,
+                                  0,
+                                  coverArtId: widget.album.coverArt,
+                                  shuffle: true,
                                 ),
-                                shape: const StadiumBorder(),
-                              ),
-                              onPressed: tracks.isEmpty
-                                  ? null
-                                  : () => widget.onPlay(tracks, 0),
-                              icon: const Icon(Icons.play_arrow),
-                              label: Text(
-                                tracks.isEmpty
-                                    ? 'No tracks in this album'
-                                    : 'Play album',
-                              ),
-                            ),
-                            if (widget.collections != null)
-                              GlassSurface(
-                                radius: 30,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(2),
-                                  child: FavoriteButton(
-                                    collections: widget.collections!,
-                                    album: widget.album,
-                                  ),
+                          trailing: widget.collections == null
+                              ? null
+                              : FavoriteButton(
+                                  collections: widget.collections!,
+                                  album: widget.album,
                                 ),
-                              ),
-                          ],
                         ),
                       ],
                     ),

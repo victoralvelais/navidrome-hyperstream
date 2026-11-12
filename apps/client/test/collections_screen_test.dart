@@ -198,7 +198,7 @@ Future<void> main() async {
         );
         await tap(find.text('Playlists'));
         await tap(find.text('Weekend'));
-        await tap(find.text('Play playlist'));
+        await tap(find.text('Play'));
         expect(
           tester
               .widgetList<ListTile>(

@@ -251,13 +251,16 @@ void main() {
     'dispose during count prevents catalog fetch and late status publication',
     () async {
       final gate = Completer<http.Response>();
+      final entered = Completer<void>();
       var requests = 0;
       final client = countClient((_) {
         requests++;
+        if (!entered.isCompleted) entered.complete();
         return gate.future;
       });
       final radio = RecentRadioService(client);
       final pending = radio.refresh();
+      await entered.future;
       radio.dispose();
       gate.complete(login());
       await pending;

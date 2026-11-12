@@ -5,17 +5,19 @@ ThemeData hyperstreamTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
-        seedColor: const Color(0xfffa365a),
+        seedColor: const Color(0xff7944ea),
         brightness: brightness,
       ).copyWith(
-        primary: dark ? const Color(0xffff526f) : const Color(0xffd92048),
-        onPrimary: Colors.white,
+        primary: dark ? const Color(0xffc39aff) : const Color(0xff6835c7),
+        onPrimary: dark ? const Color(0xff271044) : Colors.white,
+        secondary: dark ? const Color(0xffffd878) : const Color(0xff805600),
+        onSecondary: dark ? const Color(0xff322300) : Colors.white,
         onSurface: dark ? const Color(0xfff5f5f7) : const Color(0xff151518),
         onSurfaceVariant: dark
             ? const Color(0xffb9bbc5)
             : const Color(0xff656570),
-        surface: dark ? const Color(0xff08080a) : const Color(0xfff7f7fa),
-        surfaceContainer: dark ? const Color(0xff141416) : Colors.white,
+        surface: dark ? const Color(0xff0d0914) : const Color(0xfffbf8ff),
+        surfaceContainer: dark ? const Color(0xff1a1426) : Colors.white,
         surfaceContainerHighest: dark
             ? const Color(0xff303036)
             : const Color(0xffeeedf1),

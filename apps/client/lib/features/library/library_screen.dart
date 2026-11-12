@@ -14,6 +14,7 @@ import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../../services/account_session.dart';
 import '../../services/recent_radio_service.dart';
+import '../../services/catalog_cache.dart';
 import '../../services/smart_playlist_store.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
@@ -84,7 +85,10 @@ class _LibraryScreenState extends State<LibraryScreen>
   void initState() {
     super.initState();
     _collections = LibraryCollections(widget.client);
-    _radio = RecentRadioService(widget.client);
+    _radio = RecentRadioService(
+      widget.client,
+      cache: FileCatalogCache(widget.client),
+    );
     _smartStore = SmartPlaylistStore(widget.client);
     _icons = PlaylistIconStore(widget.client);
     _smartStore.load();
