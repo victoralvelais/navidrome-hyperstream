@@ -5,6 +5,7 @@ import AVKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var appearanceChannel: FlutterMethodChannel?
+  private var artworkChannel: FlutterMethodChannel?
   private var transparencyObserver: NSObjectProtocol?
   override func application(
     _ application: UIApplication,
@@ -17,6 +18,25 @@ import AVKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HyperstreamAppearance") else { return }
     registrar.register(HyperstreamRouteFactory(), withId: "dev.hyperstream/audio_route_picker")
+    let artwork = FlutterMethodChannel(name: "dev.hyperstream/system_artwork", binaryMessenger: registrar.messenger())
+    artworkChannel = artwork
+    artwork.setMethodCallHandler { call, result in
+      guard call.method == "decodePNG" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let bytes = call.arguments as? FlutterStandardTypedData else {
+        result(nil)
+        return
+      }
+      let input = bytes.data
+      DispatchQueue.global(qos: .utility).async {
+        let png = autoreleasepool { SystemArtwork.pngData(input) }
+        DispatchQueue.main.async {
+          result(png.map { FlutterStandardTypedData(bytes: $0) })
+        }
+      }
+    }
     let share = FlutterMethodChannel(name: "dev.hyperstream/share", binaryMessenger: registrar.messenger())
     share.setMethodCallHandler { call, result in
       guard call.method == "shareText", let text = call.arguments as? String else {

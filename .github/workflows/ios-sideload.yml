@@ -66,6 +66,15 @@ jobs:
           flutter analyze --no-pub
           flutter test --no-pub
 
+      - name: Verify native artwork conversion without Flutter rendering
+        run: |
+          mkdir -p build/ci
+          xcrun --sdk macosx swiftc -parse-as-library \
+            -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            ios/Runner/SystemArtwork.swift ../../tools/check_system_artwork.swift \
+            -o build/ci/check-system-artwork
+          build/ci/check-system-artwork
+
       - name: Build for physical iPhones and iPads
         # Release mode supports launching from the home screen without a debugger.
         # Flutter manages this project's Swift Package Manager dependencies.

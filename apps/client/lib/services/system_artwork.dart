@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'navidrome_client.dart';
@@ -13,6 +15,29 @@ class SystemArtwork {
     : _directory = directory ?? getTemporaryDirectory;
   final Future<Directory> Function() _directory;
   final Map<String, Future<Uri?>> _pending = {};
+  static const _native = MethodChannel('dev.hyperstream/system_artwork');
+
+  Future<Uint8List?> _png(Uint8List bytes) async {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // Impeller image readback can wait for foreground GPU availability.
+      // Image I/O produces the same local PNG without a Flutter frame/texture.
+      return _native.invokeMethod<Uint8List>('decodePNG', bytes);
+    }
+    final codec = await ui.instantiateImageCodec(bytes, targetWidth: 512);
+    try {
+      final frame = await codec.getNextFrame();
+      try {
+        final png = await frame.image.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        return png?.buffer.asUint8List();
+      } finally {
+        frame.image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
+  }
 
   Future<Uri?> load(NavidromeClient client, String id) {
     final key = sha256
@@ -39,25 +64,19 @@ class SystemArtwork {
       if (await file.exists()) return file.uri;
       final bytes = await client.coverArt(id);
       if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) return null;
-      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 512);
+      final png = await _png(bytes);
+      if (png == null || png.isEmpty) return null;
+      final temporary = File('${file.path}.part');
       try {
-        final frame = await codec.getNextFrame();
-        try {
-          final png = await frame.image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
-          if (png == null) return null;
-          await file.writeAsBytes(png.buffer.asUint8List(), flush: true);
-        } finally {
-          frame.image.dispose();
-        }
+        await temporary.writeAsBytes(png, flush: true);
+        await temporary.rename(file.path);
       } finally {
-        codec.dispose();
+        if (await temporary.exists()) await temporary.delete();
       }
       // A small artwork cache, separate from downloads or library files.
       final entries = await cache
           .list()
-          .where((e) => e is File)
+          .where((e) => e is File && e.path.endsWith('.png'))
           .cast<File>()
           .toList();
       if (entries.length > 48) {

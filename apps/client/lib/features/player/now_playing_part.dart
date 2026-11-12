@@ -184,6 +184,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                   onPressed: () => showGlassSheet<void>(
                                     context: context,
                                     pullFromList: true,
+                                    padBottomSafeArea: false,
                                     builder: (_) => _QueuePage(
                                       playback: playback,
                                       client: widget.client,
@@ -693,32 +694,35 @@ class _QueuePageState extends State<_QueuePage> {
                 // Blank areas between controls must not select a covered song.
                 child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                        child: _SeekBar(
-                          playback: playback,
-                          item: item,
-                          state: state,
-                        ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _Previous(playback: playback, state: state),
-                          _PlayButton(
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                          child: _SeekBar(
                             playback: playback,
                             item: item,
                             state: state,
                           ),
-                          _Next(playback: playback, state: state),
-                        ],
-                      ),
-                      _SleepStatus(playback: playback),
-                      _PlayerErrors(playback: playback, state: state),
-                    ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _Previous(playback: playback, state: state),
+                            _PlayButton(
+                              playback: playback,
+                              item: item,
+                              state: state,
+                            ),
+                            _Next(playback: playback, state: state),
+                          ],
+                        ),
+                        _SleepStatus(playback: playback),
+                        _PlayerErrors(playback: playback, state: state),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -32,6 +32,7 @@ Future<T?> showGlassSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = true,
   bool useSafeArea = true,
+  bool padBottomSafeArea = true,
   bool pullFromList = false,
   BoxConstraints? constraints,
 }) {
@@ -57,6 +58,7 @@ Future<T?> showGlassSheet<T>({
               prominent: true,
               child: SafeArea(
                 top: false,
+                bottom: padBottomSafeArea,
                 child: Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Builder(builder: builder),

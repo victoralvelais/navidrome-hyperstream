@@ -336,3 +336,43 @@ The new search regression verifies actual overlap and hit testing beneath the
 field, continued typing/focus across discovery/results, and access to the final
 result. Light/dark queue, scrolled discovery, Home and Library previews were
 inspected; they use the desktop test renderer, not native iOS refraction.
+
+### Background system artwork and the queue bottom safe area
+
+IMG_7076 shows a remaining gap below the playback footer. The queue sheet now
+extends its list and footer surface through the bottom safe area; only the
+footer's interactive content is inset above the home indicator. This removes
+the separate strip and square list edge below the rounded footer. Other sheets
+keep their existing safe-area behavior. Phone layout checks now include a
+34-point bottom inset and assert both the shared bottom edge and control clearance.
+
+The report of artwork appearing only after reopening has a likely app-side cause:
+system covers previously used `dart:ui` decode/readback to create a PNG. Flutter's
+[Impeller encoding implementation](https://github.com/flutter/flutter/blob/master/engine/src/flutter/lib/ui/painting/image_encoding_impeller.cc)
+can defer readback until GPU availability returns. This matches the symptom but
+is not a physical-device trace or proof of a LiveContainer limitation.
+
+iOS now converts downloaded cover bytes through Image I/O on a native utility
+queue, without Flutter textures or frames, then publishes the same private local
+PNG to audio_service. Image I/O bounds the thumbnail to 512 pixels and applies
+orientation. The 8 MiB input limit, account-scoped cache, stale-item protection
+and silent handling of missing/invalid artwork remain. Cache files are published
+by rename only after their contents are complete. Windows retains its existing
+decoder. No authenticated artwork URL is exposed to system metadata.
+
+The Dart regression simulates a paused lifecycle and verifies native conversion,
+deduplicated requests, local file publication/cache reuse and invalid-cover
+handling. The Mac release job also compiles and runs the production converter
+without Flutter: PNG/JPEG conversion, rotated JPEG, size bounds, malformed input
+and a background utility worker. This does not simulate a locked physical iPhone.
+
+Device check: play a queue with covers not yet cached, lock the phone, and advance
+several tracks from the lock screen/Control Center without returning to Hyperstream.
+Artwork should update after the cover request completes. Also test automatic
+track advancement. Check the full queue bottom edge while scrolling in both
+themes; controls must remain above the home indicator and the last row reachable.
+
+Local validation: 205 Flutter tests pass, formatting/static analysis are clean,
+and all five viewport preview flows pass with the new bottom-inset checks.
+Light/dark phone queue previews were inspected. Native converter validation is
+an additional required step of the paired release workflow.

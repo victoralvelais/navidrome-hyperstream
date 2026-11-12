@@ -19,6 +19,7 @@ import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/widgets/glass_settings.dart';
+import 'package:hyperstream_client/widgets/glass_surface.dart';
 
 import 'support/fake_player.dart';
 import 'support/account_fakes.dart';
@@ -318,8 +319,15 @@ Future<void> main() async {
             darkTheme: hyperstreamTheme(Brightness.dark),
             themeMode: playback.preferences.themeMode,
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.linear(viewport.scale)),
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(viewport.scale),
+                padding: EdgeInsets.only(
+                  bottom: viewport.size.width < 950 ? 34 : 0,
+                ),
+                viewPadding: EdgeInsets.only(
+                  bottom: viewport.size.width < 950 ? 34 : 0,
+                ),
+              ),
               child: GlassSettings(
                 preferences: playback.preferences,
                 child: child!,
@@ -530,6 +538,21 @@ Future<void> main() async {
       expect(find.byTooltip('Queue options'), findsOneWidget);
       final queueList = find.byKey(const ValueKey('up-next-list'));
       final queuePlayer = find.byKey(const ValueKey('queue-player-overlay'));
+      final queueSurface = find
+          .ancestor(of: queuePlayer, matching: find.byType(GlassSurface))
+          .last;
+      expect(
+        tester.getRect(queuePlayer).bottom,
+        closeTo(tester.getRect(queueSurface).bottom, .1),
+        reason: 'The list and player must fill the outer sheet, including the bottom safe area.',
+      );
+      if (viewport.size.width < 950) {
+        expect(
+          tester.getRect(find.byTooltip('Next track').last).bottom,
+          lessThanOrEqualTo(tester.getRect(queuePlayer).bottom - 34),
+          reason: 'Keep only the controls above the home indicator.',
+        );
+      }
       expect(
         tester.getRect(queueList).bottom,
         closeTo(tester.getRect(queuePlayer).bottom, .1),
