@@ -328,11 +328,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Material(
-              color: Theme.of(context).colorScheme.surfaceContainer
-                  .withValues(alpha: .65),
-              borderRadius: BorderRadius.circular(22),
-              clipBehavior: Clip.antiAlias,
+            child: GlassSurface(
+              radius: 24,
               child: Column(
                 children: [
                   for (final entry in const [
@@ -753,35 +750,36 @@ class _LibraryScreenState extends State<LibraryScreen>
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: 0,
-                        left: splitDetail
-                            ? MediaQuery.sizeOf(context).width - 370
-                            : wide
-                            ? 80
-                            : 0,
-                        right: 0,
-                        child: AbsorbPointer(
-                          absorbing: busy,
-                          child: ListenableBuilder(
-                            listenable: _smartStore,
-                            builder: (context, _) => FloatingTopBar(
-                              title: _compactTitle ? _title : null,
-                              leading: _canBack
-                                  ? IconButton(
-                                      tooltip: _backLabel,
-                                      onPressed: _back,
-                                      icon: const Icon(
-                                        Icons.arrow_back_ios_new_rounded,
-                                        size: 20,
-                                      ),
-                                    )
-                                  : null,
-                              trailing: _topActions(),
+                      if (_section != _Section.search || _hasSelection)
+                        Positioned(
+                          top: 0,
+                          left: splitDetail
+                              ? MediaQuery.sizeOf(context).width - 370
+                              : wide
+                              ? 80
+                              : 0,
+                          right: 0,
+                          child: AbsorbPointer(
+                            absorbing: busy,
+                            child: ListenableBuilder(
+                              listenable: _smartStore,
+                              builder: (context, _) => FloatingTopBar(
+                                title: _compactTitle ? _title : null,
+                                leading: _canBack
+                                    ? IconButton(
+                                        tooltip: _backLabel,
+                                        onPressed: _back,
+                                        icon: const Icon(
+                                          Icons.arrow_back_ios_new_rounded,
+                                          size: 20,
+                                        ),
+                                      )
+                                    : null,
+                                trailing: _topActions(),
+                              ),
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),

@@ -528,6 +528,49 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(find.text('Up next'), findsOneWidget);
       expect(find.byTooltip('Queue options'), findsOneWidget);
+      final queueList = find.byKey(const ValueKey('up-next-list'));
+      final queuePlayer = find.byKey(const ValueKey('queue-player-overlay'));
+      expect(
+        tester.getRect(queueList).bottom,
+        closeTo(tester.getRect(queuePlayer).bottom, .1),
+        reason: 'The list viewport must continue beneath the player.',
+      );
+      final queueScroll = tester
+          .state<ScrollableState>(
+            find
+                .descendant(of: queueList, matching: find.byType(Scrollable))
+                .first,
+          )
+          .position;
+      queueScroll.jumpTo(queueScroll.maxScrollExtent);
+      await tester.pumpAndSettle();
+      final lastQueueRow = find.descendant(
+        of: queueList,
+        matching: find.byKey(const ValueKey(12)),
+      );
+      expect(
+        tester.getRect(lastQueueRow).bottom,
+        lessThanOrEqualTo(tester.getRect(queuePlayer).top),
+        reason: 'The final track must scroll fully above the player controls.',
+      );
+      expect(lastQueueRow.hitTestable(), findsOneWidget);
+      queueScroll.jumpTo(0);
+      await tester.pumpAndSettle();
+      final playerBounds = tester.getRect(queuePlayer);
+      for (final tile in tester.widgetList<ListTile>(
+        find.descendant(of: queueList, matching: find.byType(ListTile)),
+      )) {
+        final row = find.byWidget(tile);
+        final point = const Alignment(.9, 0).withinRect(tester.getRect(row));
+        if (playerBounds.contains(point)) {
+          expect(
+            row.hitTestable(at: const Alignment(.9, 0)),
+            findsNothing,
+            reason:
+                'Covered queue rows must not receive taps through the player.',
+          );
+        }
+      }
       await _capturePreview(tester, '${viewport.name}-queue');
       await tester.tap(find.byTooltip('Queue options'));
       await tester.pumpAndSettle();
@@ -615,6 +658,21 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       expect(find.text('Browse your library'), findsOneWidget);
       await _capturePreview(tester, '${viewport.name}-discover');
+      final discoveryScroll = tester
+          .state<ScrollableState>(
+            find
+                .byWidgetPredicate(
+                  (w) =>
+                      w is Scrollable && w.axisDirection == AxisDirection.down,
+                )
+                .first,
+          )
+          .position;
+      discoveryScroll.jumpTo(discoveryScroll.maxScrollExtent.clamp(0, 260));
+      await tester.pumpAndSettle();
+      await _capturePreview(tester, '${viewport.name}-discover-scrolled');
+      discoveryScroll.jumpTo(0);
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Search');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();

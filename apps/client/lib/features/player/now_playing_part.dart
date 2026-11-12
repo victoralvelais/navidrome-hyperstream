@@ -419,260 +419,309 @@ class _QueuePageState extends State<_QueuePage> {
             final upcoming = playback.upcomingIndices;
             final shuffle = state.shuffleMode != AudioServiceShuffleMode.none;
             final busy = state.processingState == AudioProcessingState.loading;
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 4, 12),
-                  child: Row(
-                    children: [
-                      SizedBox.square(
-                        dimension: 52,
-                        child: CoverArt(
-                          client: widget.client,
-                          id: item?.extras?['coverArtId'] as String?,
-                          radius: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: _TrackLabels(item: item)),
-                      if (track != null && widget.collections != null) ...[
-                        if (MediaQuery.sizeOf(context).width >= 360)
-                          FavoriteButton(
-                            collections: widget.collections!,
-                            song: track,
+            return Scaffold(
+              backgroundColor: Colors.transparent,
+              extendBody: true,
+              body: Builder(
+                builder: (context) => Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 4, 12),
+                      child: Row(
+                        children: [
+                          SizedBox.square(
+                            dimension: 52,
+                            child: CoverArt(
+                              client: widget.client,
+                              id: item?.extras?['coverArtId'] as String?,
+                              radius: 12,
+                            ),
                           ),
-                        widget.trackActions(track),
-                      ],
-                      IconButton(
-                        tooltip: 'Close queue',
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: CustomScrollView(
-                    key: const ValueKey('up-next-list'),
-                    controller: _scroll,
-                    slivers: [
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _QueueHeader(
-                          child: GlassSurface(
-                            radius: 24,
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                left: 16,
-                                right: 4,
+                          const SizedBox(width: 12),
+                          Expanded(child: _TrackLabels(item: item)),
+                          if (track != null && widget.collections != null) ...[
+                            if (MediaQuery.sizeOf(context).width >= 360)
+                              FavoriteButton(
+                                collections: widget.collections!,
+                                song: track,
                               ),
-                              child: Row(
-                                children: [
-                                  const Expanded(
-                                    child: Text('Up next', maxLines: 1),
+                            widget.trackActions(track),
+                          ],
+                          IconButton(
+                            tooltip: 'Close queue',
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: CustomScrollView(
+                        key: const ValueKey('up-next-list'),
+                        controller: _scroll,
+                        slivers: [
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _QueueHeader(
+                              child: GlassSurface(
+                                radius: 24,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 16,
+                                    right: 4,
                                   ),
-                                  IconButton(
-                                    tooltip: shuffle
-                                        ? 'Turn shuffle off'
-                                        : 'Shuffle queue',
-                                    isSelected: shuffle,
-                                    icon: const Icon(Icons.shuffle_rounded),
-                                    onPressed: busy
-                                        ? null
-                                        : () => playback.setShuffleMode(
-                                            shuffle
-                                                ? AudioServiceShuffleMode.none
-                                                : AudioServiceShuffleMode.all,
+                                  child: Row(
+                                    children: [
+                                      const Expanded(
+                                        child: Text('Up next', maxLines: 1),
+                                      ),
+                                      IconButton(
+                                        tooltip: shuffle
+                                            ? 'Turn shuffle off'
+                                            : 'Shuffle queue',
+                                        isSelected: shuffle,
+                                        icon: const Icon(Icons.shuffle_rounded),
+                                        onPressed: busy
+                                            ? null
+                                            : () => playback.setShuffleMode(
+                                                shuffle
+                                                    ? AudioServiceShuffleMode
+                                                          .none
+                                                    : AudioServiceShuffleMode
+                                                          .all,
+                                              ),
+                                      ),
+                                      IconButton(
+                                        tooltip: switch (state.repeatMode) {
+                                          AudioServiceRepeatMode.none =>
+                                            'Repeat off',
+                                          AudioServiceRepeatMode.one =>
+                                            'Repeat one',
+                                          _ => 'Repeat all',
+                                        },
+                                        isSelected:
+                                            state.repeatMode !=
+                                            AudioServiceRepeatMode.none,
+                                        icon: Icon(
+                                          state.repeatMode ==
+                                                  AudioServiceRepeatMode.one
+                                              ? Icons.repeat_one_rounded
+                                              : Icons.repeat_rounded,
+                                        ),
+                                        onPressed: busy
+                                            ? null
+                                            : () => playback.setRepeatMode(
+                                                switch (state.repeatMode) {
+                                                  AudioServiceRepeatMode.none =>
+                                                    AudioServiceRepeatMode.all,
+                                                  AudioServiceRepeatMode.all =>
+                                                    AudioServiceRepeatMode.one,
+                                                  _ =>
+                                                    AudioServiceRepeatMode.none,
+                                                },
+                                              ),
+                                      ),
+                                      GlassPopupMenuButton<String>(
+                                        tooltip: 'Queue options',
+                                        icon: const Icon(
+                                          Icons.more_horiz_rounded,
+                                        ),
+                                        onSelected: _option,
+                                        itemBuilder: (_) => [
+                                          menuAction(
+                                            'info',
+                                            'Player info',
+                                            Icons.info_outline_rounded,
                                           ),
-                                  ),
-                                  IconButton(
-                                    tooltip: switch (state.repeatMode) {
-                                      AudioServiceRepeatMode.none =>
-                                        'Repeat off',
-                                      AudioServiceRepeatMode.one =>
-                                        'Repeat one',
-                                      _ => 'Repeat all',
-                                    },
-                                    isSelected:
-                                        state.repeatMode !=
-                                        AudioServiceRepeatMode.none,
-                                    icon: Icon(
-                                      state.repeatMode ==
-                                              AudioServiceRepeatMode.one
-                                          ? Icons.repeat_one_rounded
-                                          : Icons.repeat_rounded,
-                                    ),
-                                    onPressed: busy
-                                        ? null
-                                        : () => playback.setRepeatMode(
-                                            switch (state.repeatMode) {
-                                              AudioServiceRepeatMode.none =>
-                                                AudioServiceRepeatMode.all,
-                                              AudioServiceRepeatMode.all =>
-                                                AudioServiceRepeatMode.one,
-                                              _ => AudioServiceRepeatMode.none,
-                                            },
+                                          menuAction(
+                                            'top',
+                                            'Scroll to next track',
+                                            Icons.vertical_align_top_rounded,
                                           ),
-                                  ),
-                                  GlassPopupMenuButton<String>(
-                                    tooltip: 'Queue options',
-                                    icon: const Icon(Icons.more_horiz_rounded),
-                                    onSelected: _option,
-                                    itemBuilder: (_) => [
-                                      menuAction(
-                                        'info',
-                                        'Player info',
-                                        Icons.info_outline_rounded,
-                                      ),
-                                      menuAction(
-                                        'top',
-                                        'Scroll to next track',
-                                        Icons.vertical_align_top_rounded,
-                                      ),
-                                      menuAction(
-                                        'save',
-                                        'Add queue to playlist',
-                                        Icons.playlist_add_rounded,
-                                        enabled:
-                                            widget.collections != null &&
-                                            queue.data!.isNotEmpty,
-                                      ),
-                                      menuAction(
-                                        'lyrics',
-                                        'Show lyrics',
-                                        Icons.lyrics_outlined,
-                                        enabled: track != null,
-                                      ),
-                                      menuAction(
-                                        'speed',
-                                        'Playback rate',
-                                        Icons.speed_rounded,
-                                      ),
-                                      menuAction(
-                                        'sleep',
-                                        'Sleep timer',
-                                        Icons.bedtime_outlined,
-                                        enabled: track != null,
-                                      ),
-                                      const PopupMenuDivider(),
-                                      menuAction(
-                                        'clear',
-                                        'Clear queue',
-                                        Icons.clear_all_rounded,
+                                          menuAction(
+                                            'save',
+                                            'Add queue to playlist',
+                                            Icons.playlist_add_rounded,
+                                            enabled:
+                                                widget.collections != null &&
+                                                queue.data!.isNotEmpty,
+                                          ),
+                                          menuAction(
+                                            'lyrics',
+                                            'Show lyrics',
+                                            Icons.lyrics_outlined,
+                                            enabled: track != null,
+                                          ),
+                                          menuAction(
+                                            'speed',
+                                            'Playback rate',
+                                            Icons.speed_rounded,
+                                          ),
+                                          menuAction(
+                                            'sleep',
+                                            'Sleep timer',
+                                            Icons.bedtime_outlined,
+                                            enabled: track != null,
+                                          ),
+                                          const PopupMenuDivider(),
+                                          menuAction(
+                                            'clear',
+                                            'Clear queue',
+                                            Icons.clear_all_rounded,
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                      if (upcoming.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(child: Text('You’re all caught up.')),
-                        ),
-                      SliverReorderableList(
-                        itemCount: upcoming.length,
-                        onReorderItem: (from, to) {
-                          playback.moveUpcoming(upcoming[from], upcoming[to]);
-                        },
-                        itemBuilder: (context, position) {
-                          final index = upcoming[position];
-                          final next = queue.data![index];
-                          final song = playback.trackAt(index);
-                          return ListTile(
-                            key: ValueKey(index),
-                            contentPadding: const EdgeInsets.only(
-                              left: 16,
-                              right: 4,
-                            ),
-                            leading: SizedBox.square(
-                              dimension: 44,
-                              child: CoverArt(
-                                client: widget.client,
-                                id: next.extras?['coverArtId'] as String?,
-                                radius: 10,
+                          if (upcoming.isEmpty)
+                            const SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                child: Text('You’re all caught up.'),
                               ),
                             ),
-                            title: Text(
-                              next.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              next.artist ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface
-                                    .withValues(alpha: .82),
-                              ),
-                            ),
-                            onTap: busy
-                                ? null
-                                : () => playback.skipToQueueItem(index),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (song != null && widget.collections != null)
-                                  if (MediaQuery.sizeOf(context).width >= 360)
-                                    FavoriteButton(
-                                      collections: widget.collections!,
-                                      song: song,
-                                    ),
-                                GlassPopupMenuButton<String>(
-                                  tooltip: 'Queue actions for ${next.title}',
-                                  icon: const Icon(Icons.more_horiz_rounded),
-                                  enabled: !busy,
-                                  itemBuilder: (_) => [
-                                    menuAction(
-                                      'remove',
-                                      'Remove from queue',
-                                      Icons.remove_circle_outline_rounded,
-                                    ),
-                                  ],
-                                  onSelected: (_) =>
-                                      playback.removeUpcoming(index),
+                          SliverReorderableList(
+                            itemCount: upcoming.length,
+                            onReorderItem: (from, to) {
+                              playback.moveUpcoming(
+                                upcoming[from],
+                                upcoming[to],
+                              );
+                            },
+                            itemBuilder: (context, position) {
+                              final index = upcoming[position];
+                              final next = queue.data![index];
+                              final song = playback.trackAt(index);
+                              return ListTile(
+                                key: ValueKey(index),
+                                contentPadding: const EdgeInsets.only(
+                                  left: 16,
+                                  right: 4,
                                 ),
-                                if (!shuffle && !busy)
-                                  ReorderableDragStartListener(
-                                    index: position,
-                                    child: const Tooltip(
-                                      message: 'Drag to reorder',
-                                      child: Padding(
-                                        padding: EdgeInsets.all(10),
-                                        child: Icon(
-                                          Icons.drag_handle_rounded,
-                                          size: 20,
+                                leading: SizedBox.square(
+                                  dimension: 44,
+                                  child: CoverArt(
+                                    client: widget.client,
+                                    id: next.extras?['coverArtId'] as String?,
+                                    radius: 10,
+                                  ),
+                                ),
+                                title: Text(
+                                  next.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  next.artist ?? '',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: .82),
+                                  ),
+                                ),
+                                onTap: busy
+                                    ? null
+                                    : () => playback.skipToQueueItem(index),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (song != null &&
+                                        widget.collections != null)
+                                      if (MediaQuery.sizeOf(context).width >=
+                                          360)
+                                        FavoriteButton(
+                                          collections: widget.collections!,
+                                          song: song,
+                                        ),
+                                    GlassPopupMenuButton<String>(
+                                      tooltip:
+                                          'Queue actions for ${next.title}',
+                                      icon: const Icon(
+                                        Icons.more_horiz_rounded,
+                                      ),
+                                      enabled: !busy,
+                                      itemBuilder: (_) => [
+                                        menuAction(
+                                          'remove',
+                                          'Remove from queue',
+                                          Icons.remove_circle_outline_rounded,
+                                        ),
+                                      ],
+                                      onSelected: (_) =>
+                                          playback.removeUpcoming(index),
+                                    ),
+                                    if (!shuffle && !busy)
+                                      ReorderableDragStartListener(
+                                        index: position,
+                                        child: const Tooltip(
+                                          message: 'Drag to reorder',
+                                          child: Padding(
+                                            padding: EdgeInsets.all(10),
+                                            child: Icon(
+                                              Icons.drag_handle_rounded,
+                                              size: 20,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                              ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: MediaQuery.paddingOf(context).bottom + 8,
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              bottomNavigationBar: GlassSurface(
+                key: const ValueKey('queue-player-overlay'),
+                radius: 28,
+                // Blank areas between controls must not select a covered song.
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                        child: _SeekBar(
+                          playback: playback,
+                          item: item,
+                          state: state,
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _Previous(playback: playback, state: state),
+                          _PlayButton(
+                            playback: playback,
+                            item: item,
+                            state: state,
+                          ),
+                          _Next(playback: playback, state: state),
+                        ],
+                      ),
+                      _SleepStatus(playback: playback),
+                      _PlayerErrors(playback: playback, state: state),
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                  child: _SeekBar(playback: playback, item: item, state: state),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _Previous(playback: playback, state: state),
-                    _PlayButton(playback: playback, item: item, state: state),
-                    _Next(playback: playback, state: state),
-                  ],
-                ),
-                _SleepStatus(playback: playback),
-                _PlayerErrors(playback: playback, state: state),
-              ],
+              ),
             );
           },
         ),

@@ -28,8 +28,9 @@ http.Response results({
 void main() {
   Future<void> mount(
     WidgetTester tester,
-    Future<http.Response> Function(http.Request) handler,
-  ) async {
+    Future<http.Response> Function(http.Request) handler, {
+    bool discover = false,
+  }) async {
     final client = NavidromeClient(
       serverUrl: 'https://music.example.com',
       username: 'test',
@@ -48,6 +49,7 @@ void main() {
         theme: hyperstreamTheme(Brightness.dark),
         home: Scaffold(
           body: LibrarySearch(
+            discover: discover,
             client: client,
             playback: playback,
             onAlbumSelected: (_) {},
@@ -62,6 +64,94 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
   }
+
+  testWidgets(
+    'search stays pinned over discovery and results without losing focus',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester, (request) async {
+        if (request.url.path.endsWith('search3.view')) {
+          return results(
+            songs: List.generate(
+              20,
+              (i) => {'id': '$i', 'title': 'Song $i', 'artist': 'Artist'},
+            ),
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'subsonic-response': {
+              'status': 'ok',
+              'genres': {
+                'genre': [
+                  for (var i = 0; i < 8; i++)
+                    {'value': 'Genre $i', 'albumCount': 1},
+                ],
+              },
+              'albumList2': {'album': []},
+            },
+          }),
+          200,
+        );
+      }, discover: true);
+      await tester.pumpAndSettle();
+      final field = find.byType(TextField);
+      final fieldBounds = tester.getRect(field);
+      ScrollPosition position() => tester
+          .state<ScrollableState>(
+            find
+                .byWidgetPredicate(
+                  (w) =>
+                      w is Scrollable && w.axisDirection == AxisDirection.down,
+                )
+                .first,
+          )
+          .position;
+      final tile = find.text('Recently added');
+      position().jumpTo(tester.getRect(tile).center.dy - fieldBounds.center.dy);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(field), fieldBounds);
+      expect(tester.getRect(tile).overlaps(fieldBounds), isTrue);
+      expect(
+        tile.hitTestable(),
+        findsNothing,
+        reason:
+            'The pinned search editor must receive taps over a covered tile.',
+      );
+
+      await tester.tap(field);
+      await tester.pump();
+      final editor = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(editor.widget.focusNode.hasFocus, isTrue);
+      await query(tester, 'song');
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<EditableTextState>(find.byType(EditableText)),
+        same(editor),
+      );
+      expect(editor.widget.focusNode.hasFocus, isTrue);
+      final song = find.text('Song 0');
+      position().jumpTo(tester.getRect(song).center.dy - fieldBounds.center.dy);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(field), fieldBounds);
+      expect(tester.getRect(song).overlaps(fieldBounds), isTrue);
+      expect(song.hitTestable(), findsNothing);
+      position().jumpTo(position().maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(find.text('Song 19').hitTestable(), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<EditableTextState>(find.byType(EditableText)),
+        same(editor),
+      );
+      expect(editor.widget.focusNode.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'debounces typing and ignores stale success or failure after query changes',
@@ -153,7 +243,11 @@ void main() {
       });
       await query(tester, 'album');
       await tester.pumpAndSettle();
-      final scrollable = find.byType(Scrollable).last;
+      final scrollable = find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .first;
       await tester.scrollUntilVisible(
         find.text('More albums'),
         400,

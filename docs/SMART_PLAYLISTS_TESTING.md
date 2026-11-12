@@ -296,3 +296,43 @@ clean, and all five viewport preview flows pass. Light/dark phone queue and
 player previews were inspected. These captures use Flutter's desktop test
 renderer; they do not prove physical iOS platform-view composition or Impeller
 refraction.
+
+### Scroll-through controls and matching navigation glass
+
+The follow-up references IMG_7071, IMG_7072 and IMG_7073. Shared blur is reduced
+another step to 6 points for controls and 8 for prominent sheets. The full-panel
+tint and bounded refraction from the preceding release remain.
+
+Up Next now extends its list behind a glass playback footer. The footer's measured
+height supplies trailing scroll space, including text scaling, sleep status and
+playback messages, so the last track can move completely above the controls.
+The footer also blocks taps in gaps between controls from selecting covered songs.
+The current-track row, pinned queue options, reorder handles and pull-to-dismiss
+behavior are retained.
+
+Search uses a pinned sliver containing its title, glass search field and filters.
+Discovery tiles and results scroll underneath instead of being clipped below a
+separate column. The search header owns its top bar to avoid a duplicate page
+title; detail pages retain the existing Back/navigation bar. The same editor
+element moves between discovery and results so the first typed character does
+not dismiss the keyboard or lose selection. Search pagination, query cancellation,
+filter selection and the playlist song picker keep their existing behavior.
+
+Home settings groups (including their subpages) and the Library category group
+use the shared rounded glass surface. They inherit artwork tint, theme colors
+and the opaque fallback when glass effects are disabled or high contrast is on.
+
+Device checks: scroll a long queue beneath the seek/transport controls, then reach
+and select its last track. Check reordering, pull-down dismissal and an active
+sleep timer. Scroll discovery and search results beneath the search field, type
+without keyboard interruption, and clear the query. Check Home/Library groups
+in both themes and with glass disabled. Native iOS refraction still needs the
+physical-device sideload check.
+
+Validation: all 204 Flutter tests pass, formatting and static analysis are clean,
+and five viewport preview flows pass. After adding the footer tap guard, all five
+layout flows pass again with checks for covered rows and final-track reachability.
+The new search regression verifies actual overlap and hit testing beneath the
+field, continued typing/focus across discovery/results, and access to the final
+result. Light/dark queue, scrolled discovery, Home and Library previews were
+inspected; they use the desktop test renderer, not native iOS refraction.

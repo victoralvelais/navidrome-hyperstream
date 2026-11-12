@@ -102,7 +102,7 @@ class _GlassSurfaceState extends State<GlassSurface> {
     );
     // A lighter, continuous frost covers the full rounded surface. Avoid inset
     // masks: they can make the center look like a separate plate inside the rim.
-    final sigma = widget.prominent ? 10.0 : 8.0;
+    final sigma = widget.prominent ? 8.0 : 6.0;
     final frost = BackdropFilter(
       filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
       blendMode: BlendMode.src,

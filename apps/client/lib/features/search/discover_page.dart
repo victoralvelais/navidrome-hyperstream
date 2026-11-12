@@ -8,9 +8,15 @@ import '../library/catalog_widgets.dart';
 import '../library/cover_art.dart';
 
 class DiscoverPage extends StatefulWidget {
-  const DiscoverPage({super.key, required this.client, required this.onAlbum});
+  const DiscoverPage({
+    super.key,
+    required this.client,
+    required this.onAlbum,
+    this.leadingSlivers = const [],
+  });
   final NavidromeClient client;
   final ValueChanged<Album> onAlbum;
+  final List<Widget> leadingSlivers;
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
 }
@@ -229,6 +235,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          ...widget.leadingSlivers,
           if (_selection == null) ...[
             _heading('Browse your library'),
             _grid([

@@ -1,5 +1,6 @@
 import '../../widgets/hyperstream_mark.dart';
 import '../../widgets/glass_overlays.dart';
+import '../../widgets/glass_surface.dart';
 
 import 'package:flutter/material.dart';
 
@@ -91,16 +92,8 @@ class SettingsPageState extends State<SettingsPage> {
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
   );
 
-  Widget _group(List<Widget> rows) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainer,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(24),
-      side: BorderSide(
-        color: Theme.of(context).colorScheme.outlineVariant
-            .withValues(alpha: .22),
-      ),
-    ),
-    clipBehavior: Clip.antiAlias,
+  Widget _group(List<Widget> rows) => GlassSurface(
+    radius: 24,
     child: Column(
       children: [
         for (var i = 0; i < rows.length; i++) ...[
