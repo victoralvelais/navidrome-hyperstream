@@ -376,3 +376,28 @@ Local validation: 205 Flutter tests pass, formatting/static analysis are clean,
 and all five viewport preview flows pass with the new bottom-inset checks.
 Light/dark phone queue previews were inspected. Native converter validation is
 an additional required step of the paired release workflow.
+
+The user subsequently confirmed that 0.1.0+33 fixes system album artwork on their
+device.
+
+### Account actions inside Servers
+
+Home now contains Appearance, Playback and Servers. The Account section,
+connected username/server details and Disconnect from server live under
+Home > Servers, below the saved connections. Disconnect opens a glass dialog
+naming the active server and explaining that it stops playback and removes that
+saved connection from the device. Cancel has default keyboard focus; Cancel,
+Escape/Back and outside dismissal do not invoke the disconnect callback.
+Only the explicit Disconnect button continues. Duplicate prompts are blocked,
+and a confirmation is ignored if the active account changes while it is open.
+Existing server switching, removal and disconnect storage behavior are retained.
+
+The existing five-viewport flows now check that Home has no account/disconnect
+section, the moved controls are reachable in Servers, cancelling/dismissing
+preserves playback and the account, and confirmation invokes disconnect once.
+
+Validation: all 205 Flutter tests pass, formatting and static analysis are clean,
+and all five viewport preview flows pass. Home, Servers and the confirmation
+dialog were visually inspected, including the small phone with enlarged text.
+The startup regression also verifies that Cancel preserves saved credentials
+and only confirming Disconnect prevents account restoration on the next launch.

@@ -322,6 +322,8 @@ Future<void> main() async {
             matching: find.text('Home'),
           ),
         );
+        expect(find.text('Disconnect from server'), findsNothing);
+        await tap(find.text('Servers'));
         await tester.scrollUntilVisible(
           find.text('Disconnect from server'),
           160,
@@ -333,6 +335,9 @@ Future<void> main() async {
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Disconnect from server'));
+        await tester.pumpAndSettle();
+        expect(disconnected, isFalse);
+        await tester.tap(find.text('Disconnect'));
         // The real app replaces this screen on disconnect. This fixture keeps
         // it mounted, so its progress indicator deliberately keeps animating.
         await tester.pump(const Duration(milliseconds: 400));

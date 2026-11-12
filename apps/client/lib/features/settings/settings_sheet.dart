@@ -30,6 +30,7 @@ class SettingsPage extends StatefulWidget {
 
 class SettingsPageState extends State<SettingsPage> {
   String? _page;
+  bool _confirmingDisconnect = false;
   String get pageTitle => _page ?? 'Home';
   bool back() {
     if (_page == null) return false;
@@ -41,6 +42,58 @@ class SettingsPageState extends State<SettingsPage> {
   void _open(String page) {
     setState(() => _page = page);
     widget.onPageChanged?.call(true);
+  }
+
+  Future<void> _confirmDisconnect() async {
+    final session = widget.session;
+    if (_confirmingDisconnect ||
+        session?.busy == true ||
+        widget.onDisconnect == null) {
+      return;
+    }
+    final serverId = session?.activeServerId;
+    final name =
+        session?.savedServers
+            .where((server) => server.id == serverId)
+            .firstOrNull
+            ?.displayName ??
+        'this server';
+    setState(() => _confirmingDisconnect = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => GlassAlertDialog(
+          title: const Text('Disconnect from server?'),
+          content: Text(
+            'Stop playback and remove the saved connection to $name from this device?',
+          ),
+          actions: [
+            TextButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Disconnect'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true ||
+          !mounted ||
+          widget.session != session ||
+          session?.busy == true ||
+          session?.activeServerId != serverId) {
+        return;
+      }
+      widget.onDisconnect?.call();
+    } finally {
+      if (mounted) setState(() => _confirmingDisconnect = false);
+    }
   }
 
   Future<void> _remove(String id, String name) async {
@@ -185,26 +238,13 @@ class SettingsPageState extends State<SettingsPage> {
                 'Music volume and other audio',
                 onTap: () => _open('Playback'),
               ),
-              if (session != null)
+              if (session != null || widget.onDisconnect != null)
                 _row(
                   'Servers',
-                  '${session.savedServers.length} saved connections',
+                  session == null
+                      ? 'Connection settings'
+                      : '${session.savedServers.length} saved connections',
                   onTap: () => _open('Servers'),
-                ),
-            ]),
-            _label('Account'),
-            _group([
-              if (session != null)
-                _row(
-                  'Connected to',
-                  '${session.username ?? ''}\n${session.serverUrl ?? ''}',
-                  trailing: const Icon(Icons.check_circle_outline_rounded),
-                ),
-              if (widget.onDisconnect != null)
-                _row(
-                  'Disconnect from server',
-                  'Stop playback and forget this connection',
-                  onTap: widget.onDisconnect,
                 ),
             ]),
           ],
@@ -335,6 +375,26 @@ class SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
+          ],
+          if (_page == 'Servers' &&
+              (session != null || widget.onDisconnect != null)) ...[
+            _label('Account'),
+            _group([
+              if (session != null)
+                _row(
+                  'Connected to',
+                  '${session.username ?? ''}\n${session.serverUrl ?? ''}',
+                  trailing: const Icon(Icons.check_circle_outline_rounded),
+                ),
+              if (widget.onDisconnect != null)
+                _row(
+                  'Disconnect from server',
+                  'Stop playback and forget this connection',
+                  onTap: session?.busy == true || _confirmingDisconnect
+                      ? null
+                      : _confirmDisconnect,
+                ),
+            ]),
           ],
           if (_page == 'Add connection' && session != null)
             ServerSignInForm(

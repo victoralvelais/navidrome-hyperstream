@@ -89,6 +89,7 @@ Future<void> main() async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final player = FakePlayer();
+      var disconnectCalls = 0;
       final playback = PlaybackService(player: player);
       final homeAccount = SavedAccount(
         serverUrl: 'https://music.example.com',
@@ -337,7 +338,9 @@ Future<void> main() async {
               accountSession: accounts,
               client: client,
               playback: playback,
-              onDisconnect: () async {},
+              onDisconnect: () async {
+                disconnectCalls++;
+              },
             ),
           ),
         ),
@@ -353,6 +356,9 @@ Future<void> main() async {
         matching: find.text(label),
       );
       expect(find.text('Appearance'), findsOneWidget);
+      expect(find.text('Account'), findsNothing);
+      expect(find.text('Connected to'), findsNothing);
+      expect(find.text('Disconnect from server'), findsNothing);
       expect(find.text('Recently added'), findsNothing);
       if (viewport.size.width < 950) {
         expect(
@@ -663,6 +669,52 @@ Future<void> main() async {
       expect(find.text('Home library'), findsOneWidget);
       expect(find.text('Archive'), findsOneWidget);
       await _capturePreview(tester, '${viewport.name}-servers');
+      await tester.scrollUntilVisible(
+        find.text('Disconnect from server').hitTestable(),
+        160,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey<String?>('Servers')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Disconnect from server')),
+        alignment: .35,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Account'), findsOneWidget);
+      expect(find.text('Connected to'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-server-account');
+      final wasPlaying = player.playing;
+      final activeServer = accounts.activeServerId;
+      await tester.tap(find.text('Disconnect from server'));
+      await tester.pumpAndSettle();
+      expect(find.text('Disconnect from server?'), findsOneWidget);
+      expect(
+        find.textContaining('saved connection to Home library'),
+        findsOneWidget,
+      );
+      expect(disconnectCalls, 0);
+      await _capturePreview(tester, '${viewport.name}-disconnect-confirmation');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(disconnectCalls, 0);
+      expect(player.playing, wasPlaying);
+      expect(accounts.activeServerId, activeServer);
+      await tester.tap(find.text('Disconnect from server'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(disconnectCalls, 0);
+      expect(accounts.savedServers, hasLength(2));
+      await tester.tap(find.text('Disconnect from server'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect'));
+      await tester.pumpAndSettle();
+      expect(disconnectCalls, 1);
+      expect(find.text('Disconnect from server?'), findsNothing);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Appearance'));
