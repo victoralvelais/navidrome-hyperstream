@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../widgets/floating_chrome.dart';
@@ -85,7 +87,7 @@ class SmartRuleEditor extends StatelessWidget {
         children: [
           Text(title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          DropdownButtonFormField<bool>(
+          GlassDropdownField<bool>(
             initialValue: group.all,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Match'),
@@ -217,7 +219,7 @@ class _ConditionDialogState extends State<_ConditionDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => GlassAlertDialog(
     title: const Text('Condition'),
     content: SizedBox(
       width: 430,
@@ -225,7 +227,7 @@ class _ConditionDialogState extends State<_ConditionDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<SmartField>(
+            GlassDropdownField<SmartField>(
               initialValue: _field,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Field'),
@@ -249,7 +251,7 @@ class _ConditionDialogState extends State<_ConditionDialog> {
               }),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<SmartOperator>(
+            GlassDropdownField<SmartOperator>(
               key: ValueKey(_field),
               initialValue: _operator,
               isExpanded: true,

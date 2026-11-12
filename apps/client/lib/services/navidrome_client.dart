@@ -71,7 +71,7 @@ class NavidromeClient {
     return uri.replace(path: '${uri.path.replaceFirst(RegExp(r'/+$'), '')}/');
   }
 
-  Uri _endpoint(String method, [Map<String, String> parameters = const {}]) {
+  Uri _endpoint(String method, [Map<String, dynamic> parameters = const {}]) {
     final salt = List.generate(
       16,
       (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -91,11 +91,18 @@ class NavidromeClient {
         );
   }
 
-  Future<http.Response> _get(Uri uri) async {
+  Future<http.Response> _get(Uri uri, {bool post = false}) async {
     try {
       // Do not forward credential-bearing requests through HTTP redirects.
       // Users should configure the final server URL (including its subpath).
-      final request = http.Request('GET', uri)..followRedirects = false;
+      final request = http.Request(
+        post ? 'POST' : 'GET',
+        post ? uri.replace(query: '') : uri,
+      )..followRedirects = false;
+      if (post) {
+        request.headers['content-type'] = 'application/x-www-form-urlencoded';
+        request.body = uri.query;
+      }
       final response = await _http
           .send(request)
           .then(http.Response.fromStream)
@@ -132,9 +139,12 @@ class NavidromeClient {
 
   Future<Map<String, dynamic>> _request(
     String method, [
-    Map<String, String> parameters = const {},
+    Map<String, dynamic> parameters = const {},
   ]) async {
-    final response = await _get(_endpoint(method, parameters));
+    final response = await _get(
+      _endpoint(method, parameters),
+      post: parameters.values.any((value) => value is List),
+    );
     try {
       final body =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -269,6 +279,70 @@ class NavidromeClient {
     } on Object {
       throw const NavidromeException('The server returned an invalid song.');
     }
+  }
+
+  Future<List<Track>> instantMix(String id) async {
+    final data = await _request('getSimilarSongs2', {'id': id, 'count': '50'});
+    try {
+      final songs =
+          (data['similarSongs2'] as Map<String, dynamic>?)?['song'] as List? ??
+          [];
+      final result = <String, Track>{};
+      for (final song in songs) {
+        final track = Track.fromJson(song as Map<String, dynamic>);
+        if (track.id != id) result[track.id] = track;
+      }
+      if (result.isEmpty) {
+        throw const NavidromeException(
+          'No similar songs were returned. Your server needs matching music and a configured similarity provider.',
+        );
+      }
+      return result.values.toList();
+    } on NavidromeException {
+      rethrow;
+    } on Object {
+      throw const NavidromeException('The server returned an invalid mix.');
+    }
+  }
+
+  Future<void> setRating(String id, int rating) async {
+    if (rating < 0 || rating > 5) {
+      throw const NavidromeException('Choose a rating from 0 to 5.');
+    }
+    await _request('setRating', {'id': id, 'rating': '$rating'});
+  }
+
+  Future<String?> lyrics(Track track) async {
+    try {
+      final data = await _request('getLyricsBySongId', {'id': track.id});
+      final entries =
+          (data['lyricsList'] as Map<String, dynamic>?)?['structuredLyrics']
+              as List? ??
+          [];
+      for (final entry in entries) {
+        final lines = (entry as Map<String, dynamic>)['line'] as List? ?? [];
+        final text = lines
+            .map(
+              (line) =>
+                  (line as Map<String, dynamic>)['value'] as String? ?? '',
+            )
+            .join('\n')
+            .trim();
+        if (text.isNotEmpty) return text;
+      }
+    } on NavidromeException catch (error) {
+      if (error.authenticationRejected) rethrow;
+      // Older servers expose only the artist/title lyrics endpoint.
+    } on Object {
+      throw const NavidromeException('The server returned invalid lyrics.');
+    }
+    final data = await _request('getLyrics', {
+      'artist': track.artist,
+      'title': track.title,
+    });
+    final lyrics =
+        (data['lyrics'] as Map<String, dynamic>?)?['value'] as String?;
+    return lyrics?.trim().isEmpty == true ? null : lyrics;
   }
 
   Future<List<Track>> radioTracks({
@@ -497,14 +571,18 @@ class NavidromeClient {
   Future<MusicPlaylist> playlist(String id) async =>
       _playlistFrom(await _request('getPlaylist', {'id': id}));
 
-  Future<MusicPlaylist> createPlaylist(String name, {String? songId}) async {
+  Future<MusicPlaylist> createPlaylist(
+    String name, {
+    String? songId,
+    List<String>? songIds,
+  }) async {
     if (name.trim().isEmpty) {
       throw const NavidromeException('Enter a playlist name.');
     }
     return _playlistFrom(
       await _request('createPlaylist', {
         'name': name.trim(),
-        'songId': ?songId,
+        'songId': ?(songIds ?? songId),
       }),
     );
   }
@@ -518,6 +596,14 @@ class NavidromeClient {
 
   Future<void> addToPlaylist(String id, String songId) async {
     await _request('updatePlaylist', {'playlistId': id, 'songIdToAdd': songId});
+  }
+
+  Future<void> addSongsToPlaylist(String id, List<String> songIds) async {
+    if (songIds.isEmpty) return;
+    await _request('updatePlaylist', {
+      'playlistId': id,
+      'songIdToAdd': songIds,
+    });
   }
 
   Future<void> removeFromPlaylist(MusicPlaylist snapshot, int index) async {

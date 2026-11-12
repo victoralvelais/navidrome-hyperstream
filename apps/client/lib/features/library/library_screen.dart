@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -109,6 +111,25 @@ class _LibraryScreenState extends State<LibraryScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _radio.setAppActive(state == AppLifecycleState.resumed);
+  }
+
+  void _albumFromPlayer(Album album) {
+    _tab(_Section.library.index);
+    setState(() {
+      _libraryPage = 'Albums';
+      _smartId = null;
+      _artist = null;
+    });
+    _selectAlbum(album);
+  }
+
+  void _artistFromPlayer(Artist artist) {
+    _tab(_Section.library.index);
+    setState(() {
+      _libraryPage = 'Artists';
+      _smartId = null;
+    });
+    _selectArtist(artist);
   }
 
   void _selectAlbum(Album album) => setState(() {
@@ -484,7 +505,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Widget? _topActions() {
     if (_smartId != null) {
-      return PopupMenuButton<String>(
+      return GlassPopupMenuButton<String>(
         tooltip: 'Playlist options',
         icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (action) {
@@ -507,7 +528,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       );
     }
     if (_playlistId != null) {
-      return PopupMenuButton<String>(
+      return GlassPopupMenuButton<String>(
         tooltip: 'Playlist options',
         icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (action) {
@@ -796,6 +817,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: PlayerControls(
+                                    onAlbum: _albumFromPlayer,
+                                    onArtist: _artistFromPlayer,
                                     playback: widget.playback,
                                     client: widget.client,
                                     collections: _collections,
@@ -817,6 +840,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           )
                         else ...[
                           PlayerControls(
+                            onAlbum: _albumFromPlayer,
+                            onArtist: _artistFromPlayer,
                             playback: widget.playback,
                             client: widget.client,
                             collections: _collections,

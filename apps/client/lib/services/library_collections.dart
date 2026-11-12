@@ -12,6 +12,23 @@ class LibraryCollections extends ChangeNotifier {
   final Map<String, Track> _songs = {};
   final Map<(bool, String), bool> _favoriteChanges = {};
   final Set<(bool, String)> _pendingFavorites = {};
+  final Map<String, int> _ratings = {};
+  final Set<String> _pendingRatings = {};
+  int rating(Track track) => _ratings[track.id] ?? track.userRating;
+  bool ratingPending(Track track) => _pendingRatings.contains(track.id);
+
+  Future<void> rate(Track track, int value) async {
+    if (!_pendingRatings.add(track.id)) return;
+    _notify();
+    try {
+      await client.setRating(track.id, value);
+      if (!_disposed) _ratings[track.id] = value;
+    } finally {
+      _pendingRatings.remove(track.id);
+      _notify();
+    }
+  }
+
   int _favoriteRevision = 0;
   int playlistRevision = 0;
   bool _disposed = false;
@@ -129,14 +146,27 @@ class LibraryCollections extends ChangeNotifier {
     }
   }
 
-  Future<MusicPlaylist> createPlaylist(String name, {String? songId}) async {
-    final result = await client.createPlaylist(name, songId: songId);
+  Future<MusicPlaylist> createPlaylist(
+    String name, {
+    String? songId,
+    List<String>? songIds,
+  }) async {
+    final result = await client.createPlaylist(
+      name,
+      songId: songId,
+      songIds: songIds,
+    );
     await _playlistsChanged();
     return result;
   }
 
   Future<void> addToPlaylist(String id, String songId) async {
     await client.addToPlaylist(id, songId);
+    await _playlistsChanged();
+  }
+
+  Future<void> addSongsToPlaylist(String id, List<String> songIds) async {
+    await client.addSongsToPlaylist(id, songIds);
     await _playlistsChanged();
   }
 

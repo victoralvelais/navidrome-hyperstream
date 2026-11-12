@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
@@ -84,7 +86,7 @@ class SongActions extends StatelessWidget {
         album: false,
         fallback: song.starred,
       );
-      return PopupMenuButton<_SongAction>(
+      return GlassPopupMenuButton<_SongAction>(
         tooltip: 'Song actions for ${song.title}',
         enabled: enabled,
         icon: const Icon(Icons.more_horiz_rounded),

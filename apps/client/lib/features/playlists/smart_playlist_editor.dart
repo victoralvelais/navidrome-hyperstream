@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -140,7 +142,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
     if (_dirty) {
       final discard = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => GlassAlertDialog(
           title: const Text('Discard changes?'),
           content: const Text('Your unsaved playlist settings will be lost.'),
           actions: [
@@ -422,7 +424,7 @@ class SmartOrderPicker extends StatelessWidget {
   final SmartOrder order;
   final ValueChanged<SmartOrder> onChanged;
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<SmartOrder>(
+  Widget build(BuildContext context) => GlassDropdownField<SmartOrder>(
     initialValue: order,
     isExpanded: true,
     decoration: const InputDecoration(labelText: 'Order'),

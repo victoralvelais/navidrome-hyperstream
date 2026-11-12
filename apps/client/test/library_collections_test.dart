@@ -28,6 +28,32 @@ void main() {
     });
   }
 
+  test('rating changes wait for acknowledgement and failures preserve the prior rating', () async {
+    final response = Completer<http.Response>();
+    var fail = false;
+    setup((request) async => fail ? http.Response('', 500) : response.future);
+    const song = Track(
+      id: 'song',
+      title: 'Song',
+      artist: 'Artist',
+      album: 'Album',
+      duration: Duration.zero,
+      userRating: 2,
+    );
+    final save = store.rate(song, 5);
+    expect(store.ratingPending(song), isTrue);
+    expect(store.rating(song), 2);
+    response.complete(
+      http.Response('{"subsonic-response":{"status":"ok"}}', 200),
+    );
+    await save;
+    expect(store.rating(song), 5);
+    expect(store.ratingPending(song), isFalse);
+    fail = true;
+    await expectLater(store.rate(song, 0), throwsA(isA<NavidromeException>()));
+    expect(store.rating(song), 5);
+  });
+
   test(
     'favorites use the correct album/song ids and failed writes preserve state',
     () async {

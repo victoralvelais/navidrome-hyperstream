@@ -58,6 +58,11 @@ class Track {
     this.lastPlayedAt,
     this.playCount = 0,
     this.invalidActivityDates = false,
+    this.albumId,
+    this.artistId,
+    this.container,
+    this.bitRate,
+    this.userRating = 0,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -68,6 +73,11 @@ class Track {
     duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
     number: (json['track'] as num?)?.toInt(),
     coverArt: json['coverArt'] as String?,
+    albumId: json['albumId'] as String?,
+    artistId: json['artistId'] as String?,
+    container: json['suffix'] as String?,
+    bitRate: (json['bitRate'] as num?)?.toInt(),
+    userRating: (json['userRating'] as num?)?.toInt() ?? 0,
     starred: json['starred'] != null,
     addedAt: activityDate(json['created']),
     lastPlayedAt: activityDate(json['played']),
@@ -90,6 +100,16 @@ class Track {
   final DateTime? lastPlayedAt;
   final int playCount;
   final bool invalidActivityDates;
+  final String? albumId;
+  final String? artistId;
+  final String? container;
+  final int? bitRate;
+  final int userRating;
+
+  String get audioDetails => [
+    if (container?.isNotEmpty == true) container!.toUpperCase(),
+    if (bitRate != null && bitRate! > 0) '$bitRate kbps',
+  ].join(' · ');
 
   /// Overlay local activity without claiming a server play-count change.
   Track withLastPlayedAt(DateTime value) => withActivity(playedAt: value);
@@ -108,6 +128,11 @@ class Track {
         lastPlayedAt: playedAt ?? lastPlayedAt,
         playCount: playCount ?? this.playCount,
         invalidActivityDates: invalidActivityDates,
+        albumId: albumId,
+        artistId: artistId,
+        container: container,
+        bitRate: bitRate,
+        userRating: userRating,
       );
 }
 

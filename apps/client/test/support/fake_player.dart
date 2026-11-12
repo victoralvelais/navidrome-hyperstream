@@ -12,6 +12,8 @@ class FakePlayer extends Fake implements AudioPlayer {
   Completer<void>? seekGate;
   bool failNextLoad = false;
   bool failVolume = false;
+  bool failEdit = false;
+  Completer<void>? editGate;
   int playCalls = 0;
   int seekCalls = 0;
   final volumeCalls = <double>[];
@@ -37,7 +39,42 @@ class FakePlayer extends Fake implements AudioPlayer {
   @override
   Duration get bufferedPosition => Duration.zero;
   @override
-  double get speed => 1;
+  double speed = 1;
+  @override
+  bool shuffleModeEnabled = false;
+  @override
+  LoopMode loopMode = LoopMode.off;
+  @override
+  List<int> shuffleIndices = [];
+  @override
+  Future<void> setSpeed(double value) async {
+    speed = value;
+  }
+
+  @override
+  Future<void> setLoopMode(LoopMode value) async {
+    loopMode = value;
+  }
+
+  @override
+  Future<void> setShuffleModeEnabled(bool value) async {
+    shuffleModeEnabled = value;
+  }
+
+  @override
+  Future<void> shuffle() async {
+    shuffleIndices = List.generate(
+      loaded.isEmpty ? 0 : loaded.last.length,
+      (i) => i,
+    );
+  }
+
+  @override
+  Future<void> seekToPrevious() =>
+      seek(Duration.zero, index: (currentIndex ?? 1) - 1);
+  @override
+  Future<void> seekToNext() =>
+      seek(Duration.zero, index: (currentIndex ?? 0) + 1);
   @override
   Duration? get duration => const Duration(minutes: 3);
   @override
@@ -101,6 +138,26 @@ class FakePlayer extends Fake implements AudioPlayer {
   @override
   Future<void> clearAudioSources() async {
     currentIndex = null;
+  }
+
+  @override
+  Future<void> moveAudioSource(int from, int to) async {
+    if (editGate != null) await editGate!.future;
+    if (failEdit) throw StateError('native edit failed');
+    final current = currentIndex == null ? null : loaded.last[currentIndex!];
+    loaded.last.insert(to, loaded.last.removeAt(from));
+    currentIndex = current == null ? null : loaded.last.indexOf(current);
+    emit();
+  }
+
+  @override
+  Future<void> removeAudioSourceAt(int index) async {
+    if (editGate != null) await editGate!.future;
+    if (failEdit) throw StateError('native edit failed');
+    final current = currentIndex == null ? null : loaded.last[currentIndex!];
+    loaded.last.removeAt(index);
+    currentIndex = current == null ? null : loaded.last.indexOf(current);
+    emit();
   }
 
   @override

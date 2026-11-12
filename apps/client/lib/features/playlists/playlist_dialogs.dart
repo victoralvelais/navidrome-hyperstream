@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
@@ -56,7 +58,7 @@ class _PlaylistNameDialogState extends State<_PlaylistNameDialog> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
-    child: AlertDialog(
+    child: GlassAlertDialog(
       scrollable: true,
       title: Text(
         widget.initialName == null ? 'New playlist' : 'Rename playlist',
@@ -98,16 +100,25 @@ Future<void> addSongToPlaylist(
   BuildContext context,
   LibraryCollections collections,
   Track song,
+) => addTracksToPlaylist(context, collections, [song.id]);
+
+Future<void> addTracksToPlaylist(
+  BuildContext context,
+  LibraryCollections collections,
+  List<String> songIds,
 ) => showDialog<void>(
   context: context,
   barrierDismissible: false,
-  builder: (_) => _PlaylistPicker(collections: collections, song: song),
+  builder: (_) => _PlaylistPicker(
+    collections: collections,
+    songIds: List.unmodifiable(songIds),
+  ),
 );
 
 class _PlaylistPicker extends StatefulWidget {
-  const _PlaylistPicker({required this.collections, required this.song});
+  const _PlaylistPicker({required this.collections, required this.songIds});
   final LibraryCollections collections;
-  final Track song;
+  final List<String> songIds;
   @override
   State<_PlaylistPicker> createState() => _PlaylistPickerState();
 }
@@ -130,7 +141,17 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
       _error = null;
     });
     try {
-      await widget.collections.addToPlaylist(playlist.id, widget.song.id);
+      if (widget.songIds.length == 1) {
+        await widget.collections.addToPlaylist(
+          playlist.id,
+          widget.songIds.single,
+        );
+      } else {
+        await widget.collections.addSongsToPlaylist(
+          playlist.id,
+          widget.songIds,
+        );
+      }
       if (mounted) Navigator.pop(context);
     } on NavidromeException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -142,7 +163,7 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
-    child: AlertDialog(
+    child: GlassAlertDialog(
       title: const Text('Add to playlist'),
       content: SizedBox(
         width: 400,
@@ -205,7 +226,7 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                     onSave: (name) async {
                       await widget.collections.createPlaylist(
                         name,
-                        songId: widget.song.id,
+                        songIds: widget.songIds,
                       );
                     },
                   );

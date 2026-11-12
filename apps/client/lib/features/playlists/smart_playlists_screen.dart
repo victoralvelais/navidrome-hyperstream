@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -111,7 +113,7 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
     if (value == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => GlassAlertDialog(
         title: const Text('Delete smart playlist?'),
         content: Text('Delete "${value.name}" from this device?'),
         actions: [

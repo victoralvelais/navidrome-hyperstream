@@ -27,10 +27,45 @@ class ArtworkTint extends InheritedWidget {
   bool updateShouldNotify(ArtworkTint oldWidget) => color != oldWidget.color;
 }
 
-class GlassSurface extends StatelessWidget {
-  const GlassSurface({super.key, required this.child, this.radius = 28});
+class GlassSurface extends StatefulWidget {
+  const GlassSurface({
+    super.key,
+    required this.child,
+    this.radius = 28,
+    this.prominent = false,
+  });
   final Widget child;
   final double radius;
+  final bool prominent;
+
+  @override
+  State<GlassSurface> createState() => _GlassSurfaceState();
+}
+
+class _GlassSurfaceState extends State<GlassSurface> {
+  static Future<FragmentProgram?>? _program;
+  FragmentShader? _shader;
+
+  @override
+  void initState() {
+    super.initState();
+    if (ImageFilter.isShaderFilterSupported) {
+      _program ??= FragmentProgram.fromAsset('shaders/glass.frag')
+          .then<FragmentProgram?>((program) => program)
+          .catchError((Object _) => null);
+      _program!.then((program) {
+        if (mounted && program != null) {
+          setState(() => _shader = program.fragmentShader());
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _shader?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +75,8 @@ class GlassSurface extends StatelessWidget {
     final tint = ArtworkTint.of(context);
     Color tinted(Color base) =>
         tint == null ? base : Color.lerp(base, tint, dark ? .35 : .16)!;
-    final corners = BorderRadius.circular(radius);
+    final corners = BorderRadius.circular(widget.radius);
+    final density = widget.prominent ? .18 : 0.0;
     final surface = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: corners,
@@ -51,23 +87,45 @@ class GlassSurface extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: dark
                     ? [
-                        tinted(const Color(0xff59616b)).withValues(alpha: .46),
-                        tinted(const Color(0xff141a21)).withValues(alpha: .42),
+                        tinted(const Color(0xff59616b))
+                            .withValues(alpha: .18 + density),
+                        tinted(const Color(0xff141a21))
+                            .withValues(alpha: .15 + density),
                       ]
                     : [
-                        tinted(Colors.white).withValues(alpha: .72),
-                        tinted(const Color(0xfffaf8f3)).withValues(alpha: .56),
+                        tinted(Colors.white).withValues(alpha: .30 + density),
+                        tinted(const Color(0xfffaf8f3))
+                            .withValues(alpha: .22 + density),
                       ],
               )
             : null,
         border: Border.all(
           color: glass
-              ? Colors.white.withValues(alpha: dark ? .36 : .95)
+              ? Colors.white.withValues(alpha: dark ? .34 : .80)
               : scheme.outline,
         ),
       ),
-      child: Material(type: MaterialType.transparency, child: child),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: scheme.copyWith(
+            // A translucent sheet can sit over a dimmed cover in either theme.
+            // Keep secondary labels legible instead of using mid-gray on gray.
+            onSurfaceVariant: scheme.onSurface.withValues(alpha: .82),
+          ),
+        ),
+        child: Material(type: MaterialType.transparency, child: widget.child),
+      ),
     );
+    final blur = ImageFilter.blur(
+      sigmaX: widget.prominent ? 10 : 4,
+      sigmaY: widget.prominent ? 10 : 4,
+    );
+    final shader = _shader;
+    if (shader != null) {
+      final scale = MediaQuery.devicePixelRatioOf(context);
+      shader.setFloat(2, widget.radius * scale);
+      shader.setFloat(3, scale);
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: corners,
@@ -83,7 +141,15 @@ class GlassSurface extends StatelessWidget {
         borderRadius: corners,
         child: glass
             ? BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                filter: shader == null
+                    ? blur
+                    : ImageFilter.compose(
+                        outer: ImageFilter.shader(shader),
+                        inner: ImageFilter.blur(
+                          sigmaX: widget.prominent ? 6 : 1.5,
+                          sigmaY: widget.prominent ? 6 : 1.5,
+                        ),
+                      ),
                 child: surface,
               )
             : surface,

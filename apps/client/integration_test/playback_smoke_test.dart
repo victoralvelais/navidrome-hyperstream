@@ -99,6 +99,7 @@ void main() {
                   'song': [
                     {'id': 'one', 'title': 'First', 'duration': 12},
                     {'id': 'two', 'title': 'Second', 'duration': 12},
+                    {'id': 'three', 'title': 'Third', 'duration': 12},
                   ],
                 },
             },
@@ -162,6 +163,51 @@ void main() {
     await eventually(tester, () => playback.mediaItem.value?.id == 'two');
     expect(streamedIds, containsAll(['one', 'two']));
     expect(playback.error.value, isNull);
+
+    await playback.playAlbum(client, tracks, 0);
+    await eventually(
+      tester,
+      () => playback.position > const Duration(milliseconds: 200),
+    );
+    await playback.setSpeed(1.25);
+    expect(playback.playbackState.value.speed, 1.25);
+    await playback.setSpeed(1);
+    await playback.setShuffleMode(AudioServiceShuffleMode.all);
+    expect(
+      playback.playbackState.value.shuffleMode,
+      AudioServiceShuffleMode.all,
+    );
+    await playback.setShuffleMode(AudioServiceShuffleMode.none);
+    await playback.setRepeatMode(AudioServiceRepeatMode.one);
+    expect(playback.playbackState.value.repeatMode, AudioServiceRepeatMode.one);
+    await playback.setRepeatMode(AudioServiceRepeatMode.none);
+    await playback.moveUpcoming(2, 1);
+    expect(playback.queue.value.map((item) => item.id), [
+      'one',
+      'three',
+      'two',
+    ]);
+    await playback.removeUpcoming(2);
+    expect(playback.queue.value.map((item) => item.id), ['one', 'three']);
+    await playback.seek(const Duration(seconds: 10));
+    playback.setSleepTimer(endOfTrack: true);
+    await eventually(
+      tester,
+      () =>
+          playback.sleepTimer.value == null &&
+          !playback.playbackState.value.playing,
+    );
+    expect(playback.error.value, isNull);
+    expect(playback.settingsError.value, isNull);
+    expect(playback.mediaItem.value?.id, 'three');
+    await playback.play();
+    playback.setSleepTimer(duration: const Duration(seconds: 1));
+    await eventually(
+      tester,
+      () =>
+          playback.sleepTimer.value == null &&
+          !playback.playbackState.value.playing,
+    );
     await playback.reset();
     expect(playback.queue.value, isEmpty);
     expect(playback.mediaItem.value, isNull);

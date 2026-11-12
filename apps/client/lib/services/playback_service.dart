@@ -11,6 +11,13 @@ import 'app_preferences.dart';
 import 'navidrome_client.dart';
 import 'listen_tracker.dart';
 import 'startup_stage.dart';
+import 'system_artwork.dart';
+
+class SleepTimerState {
+  const SleepTimerState({this.deadline, this.endOfTrack = false});
+  final DateTime? deadline;
+  final bool endOfTrack;
+}
 
 /// One instance for the application, independent of navigation and widgets.
 /// just_audio owns the native queue, including transitions while backgrounded.
@@ -21,9 +28,13 @@ class PlaybackService extends BaseAudioHandler {
     Future<void> Function(AudioSessionConfiguration)? configureSession,
     Duration Function()? listeningClock,
     DateTime Function()? listeningTime,
+    Future<Uri?> Function(NavidromeClient, String)? artworkLoader,
+    DateTime Function()? timerClock,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
-       _configureSession = configureSession ?? _configureNativeSession {
+       _configureSession = configureSession ?? _configureNativeSession,
+       _artworkLoader = artworkLoader ?? SystemArtwork().load,
+       _timerClock = timerClock ?? DateTime.now {
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
       now: listeningTime ?? DateTime.now,
@@ -87,6 +98,102 @@ class PlaybackService extends BaseAudioHandler {
   int _revision = 0;
   bool _loading = false;
   bool _playWhenReady = false;
+  final Future<Uri?> Function(NavidromeClient, String) _artworkLoader;
+  final DateTime Function() _timerClock;
+  final Set<int> _requestedArtwork = {};
+  final ValueNotifier<SleepTimerState?> sleepTimer = ValueNotifier(null);
+  Timer? _sleepTick;
+  int? _sleepIndex;
+  Duration _sleepPosition = Duration.zero;
+
+  Track? trackAt(int index) => index >= 0 && index < _listeningTracks.length
+      ? _listeningTracks[index]
+      : null;
+
+  List<int> get upcomingIndices {
+    final current = _player.currentIndex;
+    if (current == null) return const [];
+    final order = _player.shuffleModeEnabled
+        ? _player.shuffleIndices
+        : List.generate(queue.value.length, (i) => i);
+    final at = order.indexOf(current);
+    return at < 0 ? const [] : order.skip(at + 1).toList();
+  }
+
+  void setSleepTimer({Duration? duration, bool endOfTrack = false}) {
+    cancelSleepTimer();
+    if (mediaItem.value == null || (duration == null && !endOfTrack)) return;
+    if (duration != null && duration <= Duration.zero) return;
+    _sleepIndex = _player.currentIndex;
+    _sleepPosition = _player.position;
+    sleepTimer.value = SleepTimerState(
+      deadline: duration == null ? null : _timerClock().add(duration),
+      endOfTrack: endOfTrack,
+    );
+    _sleepTick = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => _checkSleepTimer(),
+    );
+  }
+
+  void cancelSleepTimer() {
+    _sleepTick?.cancel();
+    _sleepTick = null;
+    sleepTimer.value = null;
+    _sleepIndex = null;
+  }
+
+  void _checkSleepTimer() {
+    final timer = sleepTimer.value;
+    if (timer == null || _disposed || _loading) return;
+    final expired =
+        timer.deadline != null && !_timerClock().isBefore(timer.deadline!);
+    final ended =
+        timer.endOfTrack &&
+        (_player.processingState == ProcessingState.completed ||
+            _player.currentIndex != _sleepIndex ||
+            (!_seeking &&
+                _sleepPosition > const Duration(seconds: 2) &&
+                _player.position < const Duration(seconds: 1)));
+    _sleepPosition = _player.position;
+    if (expired || ended) {
+      cancelSleepTimer();
+      final revision = _revision;
+      // Native events may be synchronous. Defer commands until the stream
+      // callback returns so a nested event cannot put playback into error.
+      scheduleMicrotask(() {
+        if (!_disposed && revision == _revision) unawaited(pause());
+      });
+    }
+  }
+
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) =>
+      _changeSetting(() async {
+        await _player.setLoopMode(switch (repeatMode) {
+          AudioServiceRepeatMode.one => LoopMode.one,
+          AudioServiceRepeatMode.all ||
+          AudioServiceRepeatMode.group => LoopMode.all,
+          _ => LoopMode.off,
+        });
+        _publishState();
+      });
+
+  @override
+  Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) =>
+      _changeSetting(() async {
+        final enabled = shuffleMode != AudioServiceShuffleMode.none;
+        if (enabled) await _player.shuffle();
+        await _player.setShuffleModeEnabled(enabled);
+        _publishState();
+      });
+
+  @override
+  Future<void> setSpeed(double speed) => _changeSetting(() async {
+    if (!speed.isFinite || speed < .5 || speed > 2) return;
+    await _player.setSpeed(speed);
+    _publishState();
+  });
 
   Stream<Duration> get positionStream => _player.positionStream;
   Duration get position => _player.position;
@@ -149,6 +256,8 @@ class PlaybackService extends BaseAudioHandler {
       return Future.value();
     }
     final revision = ++_revision;
+    cancelSleepTimer();
+    _requestedArtwork.clear();
     _clearListening();
     _loading = true;
     _playWhenReady = true;
@@ -171,6 +280,7 @@ class PlaybackService extends BaseAudioHandler {
                 extras: {
                   'coverArtId': ?(track.coverArt ?? coverArtId),
                   'starred': track.starred,
+                  'audioDetails': track.audioDetails,
                 },
               ),
             )
@@ -212,11 +322,14 @@ class PlaybackService extends BaseAudioHandler {
     if (index != null && index >= 0 && index < queue.value.length) {
       final item = queue.value[index];
       mediaItem.add(item.copyWith(duration: _player.duration ?? item.duration));
+      _loadArtwork(index);
     }
     _syncListening();
   }
 
   void _publishState() {
+    _checkSleepTimer();
+    _publishItem();
     _syncListening();
     final processing = error.value != null
         ? AudioProcessingState.error
@@ -248,10 +361,49 @@ class PlaybackService extends BaseAudioHandler {
         bufferedPosition: _player.bufferedPosition,
         speed: _player.speed,
         queueIndex: _player.currentIndex,
+        shuffleMode: _player.shuffleModeEnabled
+            ? AudioServiceShuffleMode.all
+            : AudioServiceShuffleMode.none,
+        repeatMode: switch (_player.loopMode) {
+          LoopMode.off => AudioServiceRepeatMode.none,
+          LoopMode.one => AudioServiceRepeatMode.one,
+          LoopMode.all => AudioServiceRepeatMode.all,
+        },
         errorCode: error.value == null ? null : 1,
         errorMessage: error.value,
       ),
     );
+  }
+
+  void _loadArtwork(int index) {
+    final client = _listeningClient;
+    final item = queue.value[index];
+    final id = item.extras?['coverArtId'] as String?;
+    if (client == null ||
+        id == null ||
+        item.artUri != null ||
+        !_requestedArtwork.add(index)) {
+      return;
+    }
+    final revision = _revision;
+    unawaited(() async {
+      Uri? uri;
+      try {
+        uri = await _artworkLoader(client, id);
+      } on Object {
+        return;
+      }
+      if (_disposed ||
+          revision != _revision ||
+          uri == null ||
+          uri.scheme != 'file') {
+        return;
+      }
+      final items = List<MediaItem>.of(queue.value);
+      items[index] = items[index].copyWith(artUri: uri);
+      queue.add(items);
+      if (_player.currentIndex == index) _publishItem();
+    }());
   }
 
   void _clearListening() {
@@ -403,8 +555,12 @@ class PlaybackService extends BaseAudioHandler {
     await _seekCommand(() async {
       final index = _player.currentIndex ?? 0;
       final previous =
-          _player.position < const Duration(seconds: 3) && index > 0;
-      await _player.seek(Duration.zero, index: previous ? index - 1 : index);
+          _player.position < const Duration(seconds: 3) && _player.hasPrevious;
+      if (previous) {
+        await _player.seekToPrevious();
+      } else {
+        await _player.seek(Duration.zero, index: index);
+      }
       _publishItem();
       _publishState();
     });
@@ -417,11 +573,78 @@ class PlaybackService extends BaseAudioHandler {
     }
   }
 
+  Future<void> moveUpcoming(int from, int to) => _editQueue(from, to);
+  Future<void> removeUpcoming(int index) => _editQueue(index, null);
+
+  Future<void> _editQueue(int from, int? to) {
+    final upcoming = upcomingIndices;
+    if (_loading ||
+        !upcoming.contains(from) ||
+        (to != null &&
+            (!upcoming.contains(to) ||
+                from == to ||
+                _player.shuffleModeEnabled))) {
+      return Future.value();
+    }
+    final revision = ++_revision;
+    _requestedArtwork.clear();
+    _syncListening();
+    _playWhenReady = _player.playing;
+    _loading = true;
+    _publishState();
+    _pending = _pending.then((_) async {
+      if (revision != _revision) return;
+      final items = List<MediaItem>.of(queue.value);
+      final tracks = List<Track>.of(_listeningTracks);
+      try {
+        if (to == null) {
+          await _player.removeAudioSourceAt(from);
+          items.removeAt(from);
+          tracks.removeAt(from);
+        } else {
+          await _player.moveAudioSource(from, to);
+          items.insert(to, items.removeAt(from));
+          tracks.insert(to, tracks.removeAt(from));
+        }
+        if (revision != _revision) return;
+        _listeningTracks = tracks;
+        // The current song has not changed; preserve its listen progress.
+        _listeningIndex = _player.currentIndex;
+        if (sleepTimer.value?.endOfTrack == true) {
+          _sleepIndex = _player.currentIndex;
+        }
+        queue.add(items);
+      } on Object {
+        // A native edit may have partially applied. Clear rather than play a
+        // queue whose native indexes no longer match our metadata.
+        if (revision == _revision) {
+          await _command(_player.stop);
+          await _command(_player.clearAudioSources);
+          if (revision != _revision) return;
+          cancelSleepTimer();
+          _clearListening();
+          queue.add([]);
+          mediaItem.add(null);
+          _reportFailure();
+        }
+      } finally {
+        if (revision == _revision) {
+          _loading = false;
+          _publishItem();
+          _publishState();
+        }
+      }
+    });
+    return _pending;
+  }
+
   @override
   Future<void> stop() => reset();
 
   Future<void> reset() {
     ++_revision;
+    cancelSleepTimer();
+    _requestedArtwork.clear();
     _clearListening();
     _playWhenReady = false;
     _pending = _pending.then((_) async {
@@ -452,6 +675,7 @@ class PlaybackService extends BaseAudioHandler {
     error.dispose();
     settingsError.dispose();
     listeningNotice.dispose();
+    sleepTimer.dispose();
     preferences.dispose();
   }
 }

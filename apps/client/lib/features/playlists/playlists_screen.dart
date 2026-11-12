@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
@@ -21,7 +23,7 @@ class NewPlaylistMenu extends StatelessWidget {
   final LibraryCollections collections;
   final VoidCallback onNewSmartPlaylist;
   @override
-  Widget build(BuildContext context) => PopupMenuButton<String>(
+  Widget build(BuildContext context) => GlassPopupMenuButton<String>(
     tooltip: 'New playlist',
     onSelected: (action) {
       if (action == 'smart') {

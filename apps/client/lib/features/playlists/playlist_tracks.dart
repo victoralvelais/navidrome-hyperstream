@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
@@ -114,7 +116,7 @@ class PlaylistTracksState extends State<PlaylistTracks> {
     _addSongs();
   }
 
-  void _addSongs() => showModalBottomSheet<void>(
+  void _addSongs() => showGlassSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

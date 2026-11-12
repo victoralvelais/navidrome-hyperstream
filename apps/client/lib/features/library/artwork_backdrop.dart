@@ -153,8 +153,8 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
                                 if (art != null)
                                   ImageFiltered(
                                     imageFilter: ui.ImageFilter.blur(
-                                      sigmaX: 64,
-                                      sigmaY: 64,
+                                      sigmaX: 44,
+                                      sigmaY: 44,
                                     ),
                                     child: Image.memory(
                                       art.bytes,
@@ -171,11 +171,11 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
                                       colors: [
                                         base.withValues(
                                           alpha: dark
-                                              ? (widget.immersive ? .60 : .82)
-                                              : .90,
+                                              ? (widget.immersive ? .42 : .76)
+                                              : (widget.immersive ? .72 : .86),
                                         ),
                                         base.withValues(
-                                          alpha: dark ? .90 : .97,
+                                          alpha: dark ? .82 : .92,
                                         ),
                                       ],
                                     ),

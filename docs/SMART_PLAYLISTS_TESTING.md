@@ -81,3 +81,28 @@ real server metadata, large-library timing and device usability still need testi
 - While one album plays, open a differently colored album or playlist. The selected
   cover should tint the page and floating controls without changing the queue.
   Verify light/dark mode, disabled glass and increased contrast.
+
+## Player, glass and branding follow-up (November 12)
+
+- Open Now Playing: no fixed title, chevron header or blank bottom band. Scroll
+  with large text; dismiss by downward swipe, left-edge swipe or desktop Escape.
+- Open Up Next with a populated queue. The current track is separate. Scroll
+  the list under its pinned glass controls; reorder upcoming songs with shuffle
+  off, remove one, and verify actual next playback matches the displayed order.
+  Toggle shuffle and all repeat modes; changing them must not stop the song.
+- Check original-file container/bitrate, playback rate, player info, lyrics,
+  adding the queue (including duplicates) to a playlist, and Clear queue.
+- Set a short sleep duration, background/lock the phone and verify it pauses.
+  Check end-of-current-track with repeat off/one/all, manual seeking, cancel,
+  queue replacement and disconnect. A native transition may select the next song
+  before pausing; no sample-exact stop is claimed.
+- Check Instant Mix against this server's similarity provider. Verify Show album,
+  Show artist, favorite, rating (including removing it), Add to playlist and Share.
+  There is no Delete cache action. Share contains song details only.
+- Check Lock Screen and Control Center artwork on first play, next song, rapid
+  queue replacement and account switching. Compare LiveContainer with a directly
+  signed install if any problem remains; the previous missing-art-URI bug is fixed.
+- Inspect refraction on iOS and clearer translucent glass on Windows. Toggle
+  Reduce Transparency while a sheet is open and check the opaque fallback.
+- Verify the violet gradient/golden sparkle app icon after installing the new
+  IPA/Windows package. Home and launch/sign-in screens use the same mark and name.

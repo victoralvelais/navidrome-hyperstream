@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/glass_overlays.dart';
+import 'package:hyperstream_client/widgets/hyperstream_mark.dart';
 import 'package:hyperstream_client/features/library/artwork_backdrop.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -268,14 +270,41 @@ Future<void> main() async {
       await playback.preferences.setThemeMode(viewport.theme);
       await playback.playAlbum(
         client,
-        const [
-          Track(
+        [
+          const Track(
             id: 'track',
             title: 'A quiet place to start again',
             artist: 'The Night Ensemble',
             album: 'After Hours',
             duration: Duration(minutes: 3),
+            container: 'mp3',
+            bitRate: 320,
+            albumId: 'one',
+            artistId: 'northline',
           ),
+          for (var i = 0; i < 12; i++)
+            Track(
+              id: 'queue-$i',
+              title: [
+                'After the rain',
+                'City lights',
+                'Into the blue',
+                'A little further',
+              ][i % 4],
+              artist: [
+                'Still Life',
+                'New Horizons',
+                'Sunday Sessions',
+                'The Night Ensemble',
+              ][i % 4],
+              album: 'Sample album',
+              duration: const Duration(minutes: 4),
+              coverArt: covers.isEmpty
+                  ? null
+                  : ['one', 'two', 'three', 'four'][i % 4],
+              container: 'mp3',
+              bitRate: 320,
+            ),
         ],
         0,
         coverArtId: covers.isNotEmpty ? 'one' : null,
@@ -306,7 +335,9 @@ Future<void> main() async {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Home'), findsNWidgets(2));
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Hyperstream'), findsOneWidget);
+      expect(find.byType(HyperstreamMark), findsOneWidget);
       Finder nav(String label) => find.descendant(
         of: find.byWidgetPredicate(
           (w) => w is FloatingNavigation || w is NavigationRail,
@@ -459,7 +490,8 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('A quiet place to start again'));
       await tester.pumpAndSettle();
-      expect(find.text('Now playing'), findsOneWidget);
+      expect(find.text('Now playing'), findsNothing);
+      expect(find.byTooltip('Close player'), findsNothing);
       expect(tester.takeException(), isNull);
       await _capturePreview(tester, '${viewport.name}-player');
       await Scrollable.ensureVisible(
@@ -495,9 +527,16 @@ Future<void> main() async {
       await tester.tap(find.byTooltip('Show queue'));
       await tester.pumpAndSettle();
       expect(find.text('Up next'), findsOneWidget);
+      expect(find.byTooltip('Queue options'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-queue');
+      await tester.tap(find.byTooltip('Queue options'));
+      await tester.pumpAndSettle();
+      await _capturePreview(tester, '${viewport.name}-queue-menu');
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Close queue'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Close player'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
@@ -550,7 +589,7 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Appearance'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(DropdownButtonFormField<ThemeMode>));
+      await tester.tap(find.byType(GlassDropdownField<ThemeMode>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Follow system').last);
       await tester.pumpAndSettle();

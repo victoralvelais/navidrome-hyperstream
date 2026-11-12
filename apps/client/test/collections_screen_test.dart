@@ -322,6 +322,11 @@ Future<void> main() async {
             matching: find.text('Home'),
           ),
         );
+        await tester.scrollUntilVisible(
+          find.text('Disconnect from server'),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
         await Scrollable.ensureVisible(
           tester.element(find.text('Disconnect from server')),
           alignment: .35,

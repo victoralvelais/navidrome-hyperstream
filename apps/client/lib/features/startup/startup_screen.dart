@@ -1,3 +1,5 @@
+import '../../widgets/hyperstream_mark.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/startup_stage.dart';
@@ -25,11 +27,7 @@ class StartupScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.graphic_eq,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                const HyperstreamMark(),
                 const SizedBox(height: 20),
                 Text(
                   'Hyperstream',

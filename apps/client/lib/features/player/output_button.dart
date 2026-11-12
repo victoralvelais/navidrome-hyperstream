@@ -1,3 +1,5 @@
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,7 +28,7 @@ class OutputButton extends StatelessWidget {
       return IconButton(
         tooltip: 'Choose audio output',
         icon: const Icon(Icons.speaker_group_outlined),
-        onPressed: () => showModalBottomSheet<void>(
+        onPressed: () => showGlassSheet<void>(
           context: context,
           useSafeArea: true,
           isScrollControlled: true,

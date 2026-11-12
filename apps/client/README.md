@@ -11,6 +11,48 @@ The current visual pass draws on the user-supplied
 and Apple's [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 Glass controls and navigation are implemented in shared Flutter code; they are
 Liquid Glass-inspired surfaces, not Apple's native Liquid Glass renderer.
+The November 12 player pass uses clearer surfaces and a rounded-edge refraction
+shader on Impeller (iOS), with a light-blur fallback on other renderers. Menus,
+dropdowns, dialogs and sheets share that material. Reduce Transparency, disabled
+glass and high contrast keep opaque surfaces; open overlays follow changes.
+
+Now Playing has a continuous artwork background without a fixed title/chevron
+header or blank bottom bar. Swipe down or from the left edge to dismiss; Escape
+and the accessibility dismiss action are also available. Up Next separates the
+current track from upcoming songs and pins shuffle, repeat and queue options
+above the list. Drag upcoming songs to reorder when shuffle is off; each row's
+menu can remove it. Queue options include player info, saving the queue to a
+server playlist, lyrics, playback rate, sleep timer and clearing the player.
+Container and bitrate are Navidrome's original-file metadata (the player requests
+raw audio); missing values are omitted.
+
+Sleep timers pause after 15/30/45/60/90 minutes or on the current track's native
+transition/completion. An active deadline appears below the player controls.
+Timers can be cancelled and reset with a replacement queue or disconnect; they
+are session-only. End-of-track pausing is event-driven, not a native sample-exact
+stop guarantee. Check background timing and transitions on the sideloaded device.
+
+The playing track menu adds Instant Mix, album/artist navigation, ratings,
+favorites, playlist addition and sharing. Instant Mix uses the server's
+[getSimilarSongs2](https://opensubsonic.netlify.app/docs/endpoints/getsimilarsongs2/)
+results and reports unavailable suggestions; it does not substitute random songs.
+Ratings use [setRating](https://opensubsonic.netlify.app/docs/endpoints/setrating/).
+Lyrics prefer song-ID structured lyrics, with an artist/title fallback. Sharing
+sends title/artist/album through the iOS share sheet, or copies those details on
+Windows; it never includes authenticated stream URLs or creates a public share.
+
+iOS media metadata now includes artwork from a bounded, account-scoped temporary
+PNG cache. Only local file URIs reach audio_service. Missing/invalid artwork does
+not stop audio, and late results cannot overwrite a newer queue. The prior build
+never set `MediaItem.artUri`; the reported blank artwork had a definite app-side
+cause. LiveContainer and ordinary signed installs still need separate device
+checks; no LiveContainer-specific limitation has been established.
+
+The original equalizer launch mark now uses a violet gradient and golden sparkles.
+Home displays the same icon beside Hyperstream. iOS/Windows app icons are exported
+from the shared vector painter with `flutter test tool/export_brand.dart`; iOS
+PNGs contain no alpha channel. This tool is an explicit asset export, not a test
+that rewrites icons during the normal suite.
 
 Home, Library, and Search are the main destinations, in that order. Library has Artists,
 Albums, Songs, Playlists, and Favorites entries; wide windows use a sidebar and
@@ -442,5 +484,11 @@ FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and
 restore network access, and resize the window. On iPhone also check screen lock,
 Control Center, track transitions while locked, headphone removal, interruptions,
 and background recovery. Check saved sign-in across app restarts and signed iOS
-updates. Queue restoration, system artwork, offline mode, and Mornye integration
+updates. Queue restoration, offline mode, and Mornye integration
 come later.
+
+The November 12 native playback smoke test also covers queue editing, playback
+rate, shuffle/repeat and both sleep modes. This workstation could not compile it:
+its VS 2019 installation lacks ATL and rejects the audio plugin's coroutine
+headers. Hosted release compilation uses the configured VS 2022 environment;
+unit/widget checks do not replace real-device playback acceptance.

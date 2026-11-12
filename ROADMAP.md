@@ -24,6 +24,13 @@ controls, left-edge Back, compact tab highlights and artwork-derived glass tint.
 The follow-up navigation correction puts grouped settings directly on Home,
 with Library in the middle and Search on the right. Continue producing paired
 iOS sideload and Windows releases for user testing as milestones are completed.
+The next UI batch adds continuous Now Playing, clearer refractive glass and glass
+overlays, a separated/pinned Up Next layout, queue editing, shuffle/repeat, rate,
+sleep timers, track actions, server ratings/lyrics and local-file system artwork.
+The violet/gold equalizer icon is shared by launch, Home and platform app icons.
+Device validation still includes background sleep timing, LiveContainer artwork
+and Impeller refraction. Rules/Mix configuration and the fixed Recent Radio
+behavior are unchanged; addon/provider work remains deferred to the next phase.
 
 ## Product direction
 

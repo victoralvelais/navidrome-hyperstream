@@ -17,6 +17,28 @@ import AVKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HyperstreamAppearance") else { return }
     registrar.register(HyperstreamRouteFactory(), withId: "dev.hyperstream/audio_route_picker")
+    let share = FlutterMethodChannel(name: "dev.hyperstream/share", binaryMessenger: registrar.messenger())
+    share.setMethodCallHandler { call, result in
+      guard call.method == "shareText", let text = call.arguments as? String else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard var presenter = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .filter({ $0.activationState == .foregroundActive })
+        .flatMap({ $0.windows }).first(where: { $0.isKeyWindow })?.rootViewController else {
+        result(FlutterError(code: "unavailable", message: "Share is unavailable.", details: nil))
+        return
+      }
+      while let presented = presenter.presentedViewController { presenter = presented }
+      let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+      if let popover = controller.popoverPresentationController {
+        popover.sourceView = presenter.view
+        popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
+        popover.permittedArrowDirections = []
+      }
+      presenter.present(controller, animated: true) { result(nil) }
+    }
     let channel = FlutterMethodChannel(name: "dev.hyperstream/appearance", binaryMessenger: registrar.messenger())
     appearanceChannel = channel
     channel.setMethodCallHandler { call, result in

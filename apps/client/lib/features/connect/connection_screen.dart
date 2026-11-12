@@ -1,3 +1,5 @@
+import '../../widgets/hyperstream_mark.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/account_session.dart';
@@ -37,11 +39,7 @@ class ConnectionScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.graphic_eq,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  const HyperstreamMark(),
                   const SizedBox(height: 20),
                   Text(
                     'Hyperstream',

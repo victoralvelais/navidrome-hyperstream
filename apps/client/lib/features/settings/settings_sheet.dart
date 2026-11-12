@@ -1,3 +1,6 @@
+import '../../widgets/hyperstream_mark.dart';
+import '../../widgets/glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/account_session.dart';
@@ -42,7 +45,7 @@ class SettingsPageState extends State<SettingsPage> {
   Future<void> _remove(String id, String name) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => GlassAlertDialog(
         title: Text('Remove $name?'),
         content: const Text(
           'Remove this saved connection from this device. Your server and music will stay untouched.',
@@ -149,13 +152,26 @@ class SettingsPageState extends State<SettingsPage> {
                   onPressed: back,
                   icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 ),
+              if (_page == null) ...[
+                const HyperstreamMark(size: 60),
+                const SizedBox(width: 16),
+              ],
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    _page ?? 'Home',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                  ),
+                  child: _page == null
+                      ? FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Hyperstream',
+                            style: Theme.of(context).textTheme.headlineLarge,
+                          ),
+                        )
+                      : Text(
+                          _page!,
+                          style: Theme.of(context).textTheme.headlineLarge,
+                        ),
                 ),
               ),
             ],
@@ -203,7 +219,7 @@ class SettingsPageState extends State<SettingsPage> {
             _group([
               Padding(
                 padding: const EdgeInsets.all(20),
-                child: DropdownButtonFormField<ThemeMode>(
+                child: GlassDropdownField<ThemeMode>(
                   isExpanded: true,
                   initialValue: preferences.themeMode,
                   decoration: const InputDecoration(labelText: 'Theme'),

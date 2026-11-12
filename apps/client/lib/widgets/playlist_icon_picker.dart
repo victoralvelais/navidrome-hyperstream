@@ -1,3 +1,5 @@
+import 'glass_overlays.dart';
+
 import 'package:flutter/material.dart';
 
 import '../models/playlist_icon.dart';
@@ -33,7 +35,7 @@ Future<void> choosePlaylistIcon(
         .showSnackBar(SnackBar(content: Text(store.error!)));
     return;
   }
-  final icon = await showModalBottomSheet<PlaylistIcon>(
+  final icon = await showGlassSheet<PlaylistIcon>(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,

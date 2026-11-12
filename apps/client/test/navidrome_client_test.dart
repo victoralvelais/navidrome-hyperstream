@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
+import 'package:hyperstream_client/models/library.dart';
 
 http.Response ok([Map<String, dynamic> data = const {}]) => http.Response(
   jsonEncode({
@@ -27,6 +28,95 @@ void main() {
     addTearDown(client.close);
     return client;
   }
+
+  test('queue saves use repeated form fields without putting a large queue in the URL', () async {
+    final ids = ['one', 'two', 'one', 'spaces & symbols'];
+    late http.Request request;
+    final client = clientWith((sent) async {
+      request = sent;
+      return ok();
+    });
+    await client.addSongsToPlaylist('playlist', ids);
+    expect(request.method, 'POST');
+    expect(request.followRedirects, isFalse);
+    expect(request.url.query, isEmpty);
+    final form = Uri(query: request.body).queryParametersAll;
+    expect(form['songIdToAdd'], ids);
+    expect(form['playlistId'], ['playlist']);
+    expect(form['u'], ['a user']);
+    expect(form['t']!.single.length, 32);
+    expect(request.body, isNot(contains('not-a-real-password')));
+  });
+
+  test(
+    'similar songs are deduplicated and ratings enforce the protocol range',
+    () async {
+      final requests = <Uri>[];
+      final client = clientWith((request) async {
+        requests.add(request.url);
+        if (request.url.path.endsWith('getSimilarSongs2.view')) {
+          return ok({
+            'similarSongs2': {
+              'song': [
+                {'id': 'seed'},
+                {'id': 'other', 'title': 'Another song'},
+                {'id': 'other'},
+              ],
+            },
+          });
+        }
+        return ok();
+      });
+      expect((await client.instantMix('seed')).map((s) => s.id), ['other']);
+      expect(requests.first.queryParameters['count'], '50');
+      await client.setRating('seed', 5);
+      expect(requests.last.queryParameters['rating'], '5');
+      await client.setRating('seed', 0);
+      expect(requests.last.queryParameters['rating'], '0');
+      await expectLater(
+        client.setRating('seed', 6),
+        throwsA(isA<NavidromeException>()),
+      );
+      expect(requests.length, 3);
+    },
+  );
+
+  test('structured lyrics are read by song ID with legacy fallback', () async {
+    const track = Track(
+      id: 'song',
+      title: 'Title',
+      artist: 'Artist',
+      album: 'Album',
+      duration: Duration.zero,
+    );
+    var structured = true;
+    final client = clientWith((request) async {
+      if (request.url.path.endsWith('getLyricsBySongId.view')) {
+        expect(request.url.queryParameters['id'], 'song');
+        return ok({
+          'lyricsList': {
+            'structuredLyrics': structured
+                ? [
+                    {
+                      'line': [
+                        {'value': 'A sample line'},
+                        {'value': 'Another sample line'},
+                      ],
+                    },
+                  ]
+                : [],
+          },
+        });
+      }
+      expect(request.url.queryParameters['artist'], 'Artist');
+      return ok({
+        'lyrics': {'value': 'Legacy sample'},
+      });
+    });
+    expect(await client.lyrics(track), 'A sample line\nAnother sample line');
+    structured = false;
+    expect(await client.lyrics(track), 'Legacy sample');
+  });
 
   test(
     'auth uses a fresh salted token and preserves reverse proxy subpaths',
