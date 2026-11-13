@@ -1,7 +1,7 @@
 # Smart playlists: device checks
 
 This milestone adds selectable **Rules** and **Mix** editor types. It requires
-only the existing Navidrome account. Addons, server export and background updates
+only the existing Navidrome account. Addons and background updates
 with the app closed are deferred. Automated tests use synthetic API responses;
 real server metadata, large-library timing and device usability still need testing.
 
@@ -85,6 +85,35 @@ requested. Physical-device acceptance remains open.
    confirm metadata and the acknowledged rating survive.
 4. Existing cached tracks may lack genre/year until the next 30-minute or manual
    refresh. Updating the app must not force a fresh full-library scan.
+
+## Publish a server copy
+
+1. Open a saved smart playlist, let its preview finish, and choose the corner menu
+   **Publish to Navidrome**. Review the name/count, then Create server copy. Verify
+   the complete song order in Navidrome or another client, including tracks past
+   the 50-song preview. Your current queue must remain unchanged.
+2. Edit the smart configuration or Reshuffle, then publish again. Update server
+   copy must update the same server playlist ID. Relaunch and repeat. A same-named
+   manual playlist must never be adopted or replaced implicitly.
+3. Edit the server copy from another client. Publishing must stop for review.
+   Keep server edits leaves it alone; Create separate copy preserves the existing
+   one; Replace reviewed copy deliberately replaces its songs. Changes made again
+   before the replacement must be rechecked. Rename/sharing metadata is preserved.
+4. Interrupt an update. Retry must first read and verify whether it succeeded.
+   If a create's response was lost, Check existing copies lets you explicitly
+   select the matching playlist for full-order verification. The app must not
+   silently create duplicates. Choosing a separate copy warns that it may duplicate
+   a previously successful create.
+5. Failed/incomplete library syncs, empty results, incomplete server responses,
+   another owner's playlist and read-only native smart playlists must not cause
+   replacement. Verify account isolation. Cancel during review makes no write.
+
+Publication is manual; opening/listening/refreshing does not update the server
+copy. Deleting a local definition leaves the server copy intact. These checks use
+your real server; automated tests use synthetic responses and do not establish
+physical-server compatibility. OpenSubsonic has no conditional compare-and-replace,
+so another client's change between the final read and write remains a protocol
+limitation. Avoid simultaneous editing during publication.
 
 ## A recent discovery mix
 

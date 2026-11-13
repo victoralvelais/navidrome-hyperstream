@@ -384,8 +384,6 @@ schemas or malformed ranking values remain protected by the existing store.
 The user authorized work through metadata filters and generated server publishing;
 addon design is the next collaboration boundary, not an implementation authorization.
 
-## Configuration proposals and selection
-
 ### Rich metadata follow-up
 
 Genre uses OpenSubsonic's complete `genres[].name` list when present, with legacy
@@ -406,10 +404,51 @@ refresh, without forcing an upgrade scan. Definitions now use schema 4 and retai
 versions 1–3. No placeholder metadata, per-song fetch loop, or background service
 is added.
 
+### Explicit generated server copies
+
+The saved smart playlist menu now offers Publish to Navidrome. It creates an
+ordinary ordered playlist from the complete preview snapshot, including entries
+past the 50-row sample. Subsequent publication updates only the explicitly linked
+server ID. It never adopts by name. Smart settings remain local; generated copies
+update only on this user action, not on listening, refresh, restart or a timer.
+Recent Radio and the current playing queue are unchanged. Deleting a local smart
+definition leaves its server copy intact.
+
+Publishing needs a complete successful catalog and nonempty result. It checks
+owner, read-only status, response completeness and exact previous sequence. Outside
+edits stop replacement and expose Keep server edits, Create separate copy, or
+Replace reviewed copy. Replacement rechecks the reviewed sequence immediately
+before writing and verifies all returned IDs afterward. The server's name,
+comments, artwork and visibility stay under its control. This uses form POST to
+`createPlaylist` with an existing playlist ID for replacement, supported by
+[OpenSubsonic](https://opensubsonic.netlify.app/docs/endpoints/createplaylist/)
+and [Navidrome's implementation](https://github.com/navidrome/navidrome/blob/master/core/playlists/playlists.go).
+There is no protocol-level conditional write, so a concurrent external edit after
+the final read can still race publication. No atomic cross-client guarantee is claimed.
+
+An account-scoped versioned journal stores the remote ID, last verified song
+sequence and pending sequence before sending each write. A lost update response
+is reconciled by reading the server, avoiding unnecessary resend. An uncertain
+create is never retried automatically: the user selects an existing server playlist
+by ID for exact pending-sequence verification, or deliberately confirms an extra
+copy. Failed local intent storage sends no server write. A failed ID receipt save
+retains the ID in memory and leaves durable uncertainty for restart recovery.
+Operations are exclusive within the account session and stop follow-on actions
+when it closes. Unknown stored versions are preserved, with publishing disabled.
+
+The service and UI tests exercise 15,000-track form POST, same-named manual
+playlists, storage/network failures, full-order verification, concurrent edits,
+read-only/foreign owners, account closure, restart recovery, and phone/desktop
+dialogs. Actual Navidrome and physical-device acceptance remains open. Native
+Navidrome rule editing and closed-app scheduling are separate future work.
+
+## Historical configuration proposals and selection
+
 These originally compared alternative depths using a common rule model. The
-user selected **A and B as separate editor types**, with C reserved for later.
-The implemented subset is documented above; variety, scoring and export below
-are still design proposals.
+user selected **A and B as separate editor types**. Bounded scoring was later
+authorized as an ordering option in both. The implemented variety, metadata,
+ranking and generated-copy behavior is documented above; the broader expression
+language and native-rule adapters below remain proposals.
 Recent Radio remains its own hardcoded feature under every option.
 
 | Proposal | What the listener configures | Strength | Tradeoff |
@@ -556,9 +595,11 @@ addons or Docker a prerequisite for configuration.
    artist, duration, favorite, added/played and play-count data first. Genre/year/
    rating need explicit model/API support; do not expose empty placeholder fields.
    Keep pool count extensible rather than encoding only “added versus played.”
-3. Follow with artist spacing, stable shuffle, richer metadata and explicit
-   Navidrome export/native-rule editing. Keep unknown imported rules intact.
-   Produce paired sideload releases with implemented milestones as already agreed.
+3. Implemented: artist spacing, stable shuffle, custom ranking, genre/year/rating
+   filters and explicit generated Navidrome copies. Paired sideload releases are
+   produced for each milestone. Native-rule editing remains optional future work.
+4. Stop before addon implementation; align the streaming/import/companion vision
+   with the user before beginning that next phase.
 
 Acceptance includes saving/reopening multiple different configurations, producing
 both the exact radio equivalent and a multi-pool mix, explaining scarce/overlapping

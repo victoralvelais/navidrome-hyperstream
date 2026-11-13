@@ -34,8 +34,11 @@ Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
 After reviewing Feishin-informed proposals, the user selected both a rule editor
 and a pool mixer as selectable editor types. Both use the same rule model and
 account catalog. Artist spacing and stable shuffle are implemented in the current
-follow-up. Custom ranking and genre/year/rating filters are implemented. Explicit
-server publishing is next. Addons remain deferred.
+follow-up. Custom ranking, genre/year/rating filters and explicit generated server
+publishing are implemented. The authorized pre-addon scope is complete in code;
+device acceptance remains open. Next: collaborate on the addon/streaming/import
+vision before implementation. Native Navidrome rule editing remains an optional
+future extension, separate from the generated ordinary playlist copies.
 See [smart-playlist device checks](docs/SMART_PLAYLISTS_TESTING.md).
 Recent Radio's status follow-up is implemented: a progress bar plus the current
 catalog total replaces the growing fetched/search-count message. A bounded native

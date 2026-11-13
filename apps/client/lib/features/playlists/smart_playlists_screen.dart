@@ -11,12 +11,15 @@ import '../../services/playback_service.dart';
 import '../../services/smart_playlist_preview.dart';
 import '../../services/smart_playlist_store.dart';
 import '../../services/playlist_icon_store.dart';
+import '../../services/library_collections.dart';
+import '../../models/library.dart';
 import '../../widgets/edge_back_gesture.dart';
 import '../../widgets/floating_chrome.dart';
 import '../../widgets/playlist_icon_picker.dart';
 import '../../widgets/pull_to_refresh.dart';
 import 'smart_playlist_editor.dart';
 import 'smart_playlist_results.dart';
+import 'playlist_publish_dialog.dart';
 
 Future<String?> editSmartPlaylist(
   BuildContext context, {
@@ -59,6 +62,7 @@ class SmartPlaylistScreen extends StatefulWidget {
     required this.icons,
     required this.playback,
     required this.onDeleted,
+    this.collections,
   });
   final String id;
   final LibraryCatalog catalog;
@@ -66,6 +70,7 @@ class SmartPlaylistScreen extends StatefulWidget {
   final PlaylistIconStore icons;
   final PlaybackService playback;
   final VoidCallback onDeleted;
+  final LibraryCollections? collections;
   @override
   State<SmartPlaylistScreen> createState() => SmartPlaylistScreenState();
 }
@@ -159,6 +164,48 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
     }
   }
 
+  Future<void> publish() async {
+    final value = definition;
+    final result = _preview.result;
+    final collections = widget.collections;
+    if (value == null || collections == null) return;
+    if (result == null ||
+        result.matches.isEmpty ||
+        _preview.busy ||
+        widget.catalog.loading ||
+        widget.catalog.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Finish a successful library sync and a nonempty preview before publishing.',
+          ),
+        ),
+      );
+      return;
+    }
+    final published = await showDialog<MusicPlaylist>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PlaylistPublishDialog(
+        publisher: collections.smartPublisher,
+        definition: value,
+        result: result,
+        catalog: widget.catalog,
+      ),
+    );
+    if (published == null) return;
+    await collections.refreshPlaylists();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Server copy verified: ${published.name} · ${published.tracks.length} songs.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([widget.store, widget.catalog, _preview]),
@@ -205,6 +252,12 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
                 ),
               ),
             const SizedBox(height: 20),
+            if (!PageChrome.present(context) && widget.collections != null)
+              TextButton.icon(
+                onPressed: publish,
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('Publish to Navidrome'),
+              ),
             SmartPlaylistResults(
               catalog: widget.catalog,
               preview: _preview,

@@ -48,10 +48,13 @@ Navidrome, with a toggle under Home > Playback. See the
 [smart playlists and optional providers](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
 Smart playlists offer **Rules** (nested conditions plus ordering) and **Mix**
 (named pools with their own conditions, order and percentage shares). Both support
-exclusions, limits, artist spacing, saved stable shuffle, track preview and playback; definitions save on this device
+exclusions, limits, artist spacing, saved stable shuffle, custom ranking, genre/year/rating
+filters, track preview and playback; definitions save on this device
 for each server/account. See the [smart-playlist test guide](docs/SMART_PLAYLISTS_TESTING.md).
 Reshuffle updates the saved selection without replacing the playing queue.
-Managed Navidrome playlist saving, scoring and addons remain future work.
+The saved playlist menu can explicitly publish an ordered server copy, with conflict
+review and interrupted-write recovery. Addon/streaming/import architecture is the
+next collaboration milestone; no addon implementation is included.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,

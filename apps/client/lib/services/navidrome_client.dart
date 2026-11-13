@@ -599,6 +599,14 @@ class NavidromeClient {
     await _request('updatePlaylist', {'playlistId': id, 'name': name.trim()});
   }
 
+  /// Full ordered replacement. Callers must check ownership and contents first.
+  Future<MusicPlaylist> replacePlaylistTracks(
+    String id,
+    List<String> songIds,
+  ) async => _playlistFrom(
+    await _request('createPlaylist', {'playlistId': id, 'songId': songIds}),
+  );
+
   Future<void> addToPlaylist(String id, String songId) async {
     await _request('updatePlaylist', {'playlistId': id, 'songIdToAdd': songId});
   }

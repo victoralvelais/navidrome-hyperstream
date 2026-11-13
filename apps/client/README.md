@@ -135,17 +135,32 @@ when syncing stops. Recent Radio also omits its introductory description. Local 
 
 Recent Radio is a fixed built-in feature, separate from the smart-playlist
 editor and custom mixing. The earlier editable name/window preferences are left
-untouched but no longer used. Neither the cache nor unconfirmed local activity is
-persisted across app restarts; there is no managed Navidrome playlist yet.
+untouched but no longer used. The catalog and local activity overlays now persist
+across app restarts; no scrobble submissions are replayed from that cache.
 
 **Library → Playlists → + → New smart playlist** opens the configurable editor.
 Choose **Rules** for nested all/any conditions and an order, or **Mix** for named
 pools with independent conditions, orders and percentage shares. Both support
 global exclusions, limits, preview and Play. Switching types preserves both
 configurations. Definitions save locally per server/account; they share Recent
-Radio's session catalog and listening/favorite updates, without extra scans.
+Radio's cached catalog and listening/favorite/rating updates, without extra scans.
 Preview displays the first 50 selected tracks; Play uses the full result. See
 [examples and acceptance checks](../../docs/SMART_PLAYLISTS_TESTING.md).
+
+Custom ranking adds weighted recency boosts, a favorite bonus and a bounded
+play-count penalty to Rules or each Mix pool. Preview explains the contributions;
+pool shares remain independent of ranking weights. Genre, release year, personal
+rating and missing-metadata conditions use actual song metadata. Older cached
+tracks gain genres/year at the next regular or manual refresh.
+
+The saved smart playlist's menu offers **Publish to Navidrome**. It explicitly
+creates/updates an ordinary ordered server copy, preserving the playing queue.
+Copies update only when published. The app checks ownership and contents, pauses
+on outside edits, and verifies complete song order after writes. Ambiguous creates
+require selecting an existing copy to verify or deliberately making a separate
+copy. Definitions and copy links are local to this account/device. Deleting a
+local smart definition does not delete its server copy. Closed-app scheduling,
+native Navidrome rule editing and addon execution are not included.
 
 **Home → Playback → Report listening history** is enabled by default. Tracks
 longer than 30 seconds count after half their duration or four minutes of actual

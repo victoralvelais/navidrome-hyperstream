@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import '../models/library.dart';
 import 'navidrome_client.dart';
+import 'smart_playlist_publisher.dart';
 
 /// Server-backed collections shared by browsing, search, and the player.
 /// Changes become visible only after Navidrome confirms them.
 class LibraryCollections extends ChangeNotifier {
   LibraryCollections(this.client);
   final NavidromeClient client;
+  late final smartPublisher = SmartPlaylistPublisher(client);
   final Map<String, Album> _albums = {};
   final Map<String, Track> _songs = {};
   final Map<(bool, String), bool> _favoriteChanges = {};
@@ -190,6 +192,7 @@ class LibraryCollections extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    smartPublisher.dispose();
     super.dispose();
   }
 }

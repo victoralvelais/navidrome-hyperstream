@@ -419,6 +419,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         icons: _icons,
         playback: widget.playback,
         onDeleted: _back,
+        collections: _collections,
       );
     }
     if (_playlistId != null) {
@@ -517,6 +518,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         onSelected: (action) {
           if (action == 'edit') _smartKey.currentState?.edit();
           if (action == 'delete') _smartKey.currentState?.delete();
+          if (action == 'publish') _smartKey.currentState?.publish();
           if (action == 'icon') {
             choosePlaylistIcon(
               context,
@@ -528,6 +530,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'edit', child: Text('Edit configuration')),
+          PopupMenuItem(value: 'publish', child: Text('Publish to Navidrome')),
           PopupMenuItem(value: 'icon', child: Text('Choose icon')),
           PopupMenuItem(value: 'delete', child: Text('Delete')),
         ],

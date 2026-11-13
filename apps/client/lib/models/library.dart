@@ -207,6 +207,7 @@ class MusicPlaylist {
     this.songCount = 0,
     this.coverArt,
     this.tracks = const [],
+    this.readOnly = false,
   });
 
   factory MusicPlaylist.fromJson(Map<String, dynamic> json) => MusicPlaylist(
@@ -215,6 +216,7 @@ class MusicPlaylist {
     owner: json['owner'] as String? ?? '',
     songCount: (json['songCount'] as num?)?.toInt() ?? 0,
     coverArt: json['coverArt'] as String?,
+    readOnly: json['readonly'] == true,
     tracks: (json['entry'] as List<dynamic>? ?? [])
         .map((entry) => Track.fromJson(entry as Map<String, dynamic>))
         .toList(),
@@ -226,6 +228,7 @@ class MusicPlaylist {
   final int songCount;
   final String? coverArt;
   final List<Track> tracks;
+  final bool readOnly;
 }
 
 class LibrarySearchResults {
