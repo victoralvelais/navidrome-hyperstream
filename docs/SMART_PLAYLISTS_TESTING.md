@@ -149,7 +149,7 @@ limitation. Avoid simultaneous editing during publication.
   leave the editor open; retry. Failed/unknown stored schemas are never overwritten.
 - Restart and confirm definitions survive. Switch account/server and confirm its
   own definitions/catalog; switch back and verify the originals. Local activity
-  overlays and the catalog itself are session-only.
+  overlays and the catalog itself persist in an account-scoped disk cache.
 - Use phone portrait, enlarged text, iPad and Windows. Check nested rule dialogs,
   pool editing/reordering, discard confirmation, preview, save, delete and Back.
 - Recent Radio stays a separate hardcoded 30-day entry. Its sync status now shows

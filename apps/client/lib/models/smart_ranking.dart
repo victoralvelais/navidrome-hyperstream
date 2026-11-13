@@ -97,5 +97,5 @@ class SmartScore {
       contributions.values.fold(0.0, (sum, value) => sum + value);
   String get explanation => contributions.isEmpty
       ? 'Score 0.0 · All ranking weights are off'
-      : 'Score ${total.toStringAsFixed(1)} · ${contributions.entries.map((entry) => '${entry.key} ${entry.value < 0 ? '' : '+'}${entry.value.toStringAsFixed(1)}').join(', ')}';
+      : 'Score ${total.toStringAsFixed(1)} · ${contributions.entries.map((entry) => '${entry.key} ${entry.value < 0 ? '' : '+'}${(entry.value == 0 ? 0.0 : entry.value).toStringAsFixed(1)}').join(', ')}';
 }

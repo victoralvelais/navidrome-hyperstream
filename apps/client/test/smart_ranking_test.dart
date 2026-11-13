@@ -56,6 +56,14 @@ void main() {
       0,
     );
     expect(const SmartRanking().score(song('a'), now).total, 0);
+    expect(
+      const SmartRanking().score(song('a'), now).explanation,
+      contains('Play-count penalty +0.0'),
+    );
+    expect(
+      const SmartRanking().score(song('a'), now).explanation,
+      isNot(contains('+-')),
+    );
     final halfDay = const SmartRanking().score(
       song('a', added: 0),
       now.add(const Duration(hours: 12)),

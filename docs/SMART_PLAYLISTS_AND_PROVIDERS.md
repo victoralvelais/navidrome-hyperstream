@@ -51,8 +51,9 @@ type's settings. The name, exclusions and optional track limit are shared.
 Definitions use versioned JSON in local preferences, keyed by the canonical
 server URI and username. Writes serialize and publish only after storage succeeds;
 malformed/newer unreadable data is preserved with editing disabled. This stores
-configuration only: no credentials, cross-device sharing or Navidrome playlist
-publication. A separate rebuildable disk cache now stores catalog metadata.
+configuration only, without credentials or cross-device definition sharing.
+Explicit generated publication uses a separate journal of server IDs and song
+sequences. A rebuildable disk cache stores catalog metadata.
 Account switching disposes the old catalog and
 preview listeners. The same account entered through a different server URL has a
 separate definition store, matching existing connection identity semantics.
@@ -550,7 +551,7 @@ flowchart LR
   Eval --> Preview[Track preview and explanations]
   Preview --> Saved[Save definition and play snapshot]
   V -. exact native mapping later .-> ND[Navidrome smart rules]
-  Eval -. optional publish later .-> Copy[Generated server playlist]
+  Eval -->|Explicit publish| Copy[Generated server playlist]
 ```
 
 **Start with the Hyperstream evaluator** for the chosen editor. Reuse the catalog
@@ -560,7 +561,7 @@ one UTC evaluation time. Discard stale preview work when the rule/account change
 For large libraries, evaluate off the UI thread and measure representative sizes.
 Persist definitions per account; do not confuse this with syncing definitions
 between devices. A metadata cache is a separate decision and must retain its age
-and completeness. The present radio cache is session-only.
+and completeness. The implemented radio cache now persists on disk.
 
 **Add a native Navidrome adapter where the complete definition maps exactly.**
 It can eventually provide server-managed rules available to other clients. It
@@ -572,7 +573,7 @@ The new API v1 documentation is explicitly work in progress and is separate from
 Feishin's current adapter.
 [API v1 status](https://www.navidrome.org/docs/developers/api-v1/).
 
-**Offer an explicit generated server copy for advanced mixes later.** This is an
+**Implemented: explicit generated server copies.** This is an
 ordinary ordered playlist; its rule source remains Hyperstream. Store the remote
 playlist ID and last written sequence. Read ownership and contents before updates;
 pause on outside edits and offer keep manual/copy/regenerate. Never adopt a playlist
