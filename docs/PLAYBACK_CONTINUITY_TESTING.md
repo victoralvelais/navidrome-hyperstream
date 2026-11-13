@@ -1,6 +1,6 @@
 # Playback continuity: device checks
 
-Current paired follow-up: **0.1.0+40**, November 13, 2026 (first continuity build: 39).
+Current paired follow-up: **0.1.0+41**, November 13, 2026 (first continuity build: 39).
 Use the release recorded in `releases/latest.json`. Next is user testing, then collaborative smart-playlist
 planning, then alignment on addons, external streaming and Navidrome imports.
 Those later features are not part of this change. The user declined the Discord
@@ -19,7 +19,7 @@ Earlier entries follow the current shuffle traversal when enabled and preserve
 duplicate queue occurrences. They are queue entries, not a listening-history log.
 
 Build 40 feedback: Play was disabled after an error despite the retry message,
-and a returning server did not reconnect automatically. The next follow-up keeps
+and a returning server did not reconnect automatically. Build 41 keeps
 Play available whenever a failed queue can be retried, including failure before
 the current media item is published. An unavailable saved account retries its
 login automatically. Interrupted/requested playback checks server reachability
@@ -30,7 +30,8 @@ Startup recovery still opens the restored queue paused. Playback recovery resume
 only an outstanding play request. Pause/Stop retrying, Clear, a new queue, switching
 accounts and disposal cancel pending playback recovery. Authentication rejection
 stops automatic attempts. If the server responds but the stream keeps failing,
-two automatic reloads are allowed before leaving Play/another track to the user.
+two automatic reloads for repeated failures within a minute are allowed before
+leaving Play/another track to the user.
 The app also checks immediately on foreground return because iOS can suspend
 timers when the app is not running. This does not promise retries after termination.
 
@@ -154,3 +155,15 @@ restoration checks passed; audible playback was again skipped because the host
 reported zero audio outputs. The real-library activation regression and full-queue
 gesture tests passed. Await the user's device confirmation before moving on to
 smart-playlist planning.
+
+Build 41 validation: all **272 Flutter tests**, formatting and analysis passed.
+The tests exercise the visible Play control in error, failure before media-item
+publication, automatic backoff/recovery, stopped retries, late probes after
+Pause/Clear/new queue/account switch/disposal, authentication rejection, broken
+streams and automatic startup recovery with a paused restored queue. Both
+packages succeeded in [run 41](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43415220361)
+from `8d207545`. The release helper verified manifests/checksums; independent
+checksum and archive CRC checks passed, and the IPA bundle reports `0.1.0+41`.
+Windows native restoration checks passed; audible playback was skipped because
+the host again reported zero audio outputs. Physical outage/recovery acceptance
+remains with the user.
