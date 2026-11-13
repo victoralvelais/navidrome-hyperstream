@@ -5,6 +5,24 @@ only the existing Navidrome account. Addons, server export and background update
 with the app closed are deferred. Automated tests use synthetic API responses;
 real server metadata, large-library timing and device usability still need testing.
 
+The variety follow-up ships in paired **0.1.0+42** packages from commit
+`53aa00dbc897ed220973fe98a45b526fdcd15c79`:
+[release workflow](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43499609859).
+It adds artist spacing, stable shuffle and persisted Reshuffle to Rules/Mix.
+Built-in Recent Radio keeps its existing behavior. This build also includes the
+playback recovery fixes; continue the [playback device checks](PLAYBACK_CONTINUITY_TESTING.md)
+on the same installation.
+
+Validation: all 284 Flutter tests pass, with clean formatting and static analysis.
+Coverage includes saved/failed/concurrent reshuffles, legacy definitions, strict
+and relaxed spacing across overlapping pools, a 20,000-track single-artist case,
+and editor/preview/save flows at 320 px with enlarged text and desktop width.
+Both release jobs passed their required checks. Downloaded package hashes, archive
+integrity and the IPA's version/build were verified against the release manifest.
+The Windows runner reported no audio output, so its audible playback check was
+skipped; queue restoration checks still ran. The iOS simulator launch was not
+requested. Physical-device acceptance remains open.
+
 ## A configurable Recent Radio
 
 1. Open Library → Playlists → + → New smart playlist. Leave type as Rules.

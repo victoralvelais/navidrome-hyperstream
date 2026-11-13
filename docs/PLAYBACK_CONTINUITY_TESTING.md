@@ -1,10 +1,11 @@
 # Playback continuity: device checks
 
-Current paired follow-up: **0.1.0+41**, November 13, 2026 (first continuity build: 39).
-Use the release recorded in `releases/latest.json`. Next is user testing, then collaborative smart-playlist
-planning, then alignment on addons, external streaming and Navidrome imports.
-Those later features are not part of this change. The user declined the Discord
-webhook alternative; leave that investigation aside.
+Recovery follow-up first shipped in **0.1.0+41**, November 13, 2026 (first continuity
+build: 39). Later builds include these fixes; use the release recorded in
+`releases/latest.json`. Device testing continues while the authorized smart-playlist
+work proceeds. Alignment on addons, external streaming and Navidrome imports
+remains later work. The user declined the Discord webhook alternative; leave that
+investigation aside.
 
 Device feedback on build 39: the saved song/position appeared correctly, but
 pressing Play restarted at the beginning of the queue. The follow-up explicitly
