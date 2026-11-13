@@ -274,13 +274,13 @@ void main() {
       expect(legacy.artistGap, 0);
       expect(legacy.shuffleSeed, 0);
       expect(legacy.order, SmartOrder.title);
-      expect(legacy.toJson()['schemaVersion'], 3);
+      expect(legacy.toJson()['schemaVersion'], 4);
       for (final bad in [
         {'artistGap': 11},
         {'artistGap': -1},
         {'shuffleSeed': -1},
         {'shuffleSeed': 0x80000000},
-        {'schemaVersion': 4},
+        {'schemaVersion': 5},
       ]) {
         expect(
           () => SmartPlaylistDefinition.fromJson({

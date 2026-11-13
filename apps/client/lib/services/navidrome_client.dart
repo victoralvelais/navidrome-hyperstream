@@ -42,6 +42,7 @@ class NavidromeClient {
   final Random _random = Random.secure();
   final _listens = StreamController<LocalListen>.broadcast();
   final _favoriteChanges = StreamController<(String, bool)>.broadcast();
+  final _ratingChanges = StreamController<(String, int)>.broadcast();
   bool _closed = false;
   final _closedSignal = Completer<void>();
   bool get isClosed => _closed;
@@ -51,6 +52,7 @@ class NavidromeClient {
   bool openSubsonic = false;
   Stream<LocalListen> get localListens => _listens.stream;
   Stream<(String, bool)> get favoriteChanges => _favoriteChanges.stream;
+  Stream<(String, int)> get ratingChanges => _ratingChanges.stream;
 
   void recordLocalListen(Track track, DateTime startedAt) {
     if (!_closed) _listens.add(LocalListen(track, startedAt.toUtc()));
@@ -312,6 +314,7 @@ class NavidromeClient {
       throw const NavidromeException('Choose a rating from 0 to 5.');
     }
     await _request('setRating', {'id': id, 'rating': '$rating'});
+    if (!_closed) _ratingChanges.add((id, rating));
   }
 
   Future<String?> lyrics(Track track) async {
@@ -712,5 +715,6 @@ class NavidromeClient {
     _http.close();
     unawaited(_listens.close());
     unawaited(_favoriteChanges.close());
+    unawaited(_ratingChanges.close());
   }
 }

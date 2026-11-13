@@ -35,7 +35,8 @@ type's settings. The name, exclusions and optional track limit are shared.
   examples, not new fixed radio semantics.
 - Available conditions: added/played date windows, never played, favorites,
   play count, duration, title, artist and album. Global exclusions run before
-  ordering/mixing. Genre/year/rating remain next. Custom ranking, artist spacing
+  ordering/mixing. Genre, release year and personal rating are also available.
+  Custom ranking, artist spacing
   and stable shuffle are implemented below. Collection playback offers Shuffle separately.
 - Mix uses smooth weighted interleaving. Pool order resolves ties; sort ties use
   track ID. Duplicate IDs are skipped without consuming another slot and charged
@@ -384,6 +385,26 @@ The user authorized work through metadata filters and generated server publishin
 addon design is the next collaboration boundary, not an implementation authorization.
 
 ## Configuration proposals and selection
+
+### Rich metadata follow-up
+
+Genre uses OpenSubsonic's complete `genres[].name` list when present, with legacy
+`genre` fallback as one literal name. Names are trimmed/deduplicated without
+guessing separators. Equals/contains match any supplied genre; does-not-contain
+requires metadata and matches none. Release year uses the song's integer `year`
+tag (1–9999), not the date added or an inferred original release. Missing genre
+or year matches only the explicit Is missing condition. Is present is available.
+Personal rating compares 0–5 stars; zero/missing server rating means unrated.
+These fields follow [Navidrome's song response](https://github.com/navidrome/navidrome/blob/master/server/subsonic/helpers.go).
+
+Successful rating writes update the account catalog immediately, including removal
+of a rating. Pending local values survive restart and stale scans until the server
+returns the acknowledged value. Failed writes emit no catalog change. Genres/year
+survive local activity overlays, disk catalog and restored playback queues. Old
+caches remain usable; their missing fields populate at the next regular/manual
+refresh, without forcing an upgrade scan. Definitions now use schema 4 and retain
+versions 1–3. No placeholder metadata, per-song fetch loop, or background service
+is added.
 
 These originally compared alternative depths using a common rule model. The
 user selected **A and B as separate editor types**, with C reserved for later.

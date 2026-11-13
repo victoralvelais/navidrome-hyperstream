@@ -72,6 +72,20 @@ requested. Physical-device acceptance remains open.
    scan, while the current playing queue keeps its previous order. Artist spacing
    can move lower scores ahead; Mix shares still determine pool contributions.
 
+## Genre, release year and rating
+
+1. After one normal library refresh, create Include ALL: Genre contains Rock,
+   Release year greater than 1999, My rating greater than 3. Preview and compare
+   against tagged songs in Navidrome. Genres match every supplied song genre.
+2. Try Genre does not contain Jazz: untagged songs must not silently qualify.
+   Select Is missing or Is present to include/exclude missing genres/years explicitly.
+   Year 0 or rating 6 must be rejected; rating 0 means unrated.
+3. Rate a playing song 5 stars, then remove its rating. After each successful
+   server response, rating-filtered playlists update without a scan. Restart and
+   confirm metadata and the acknowledged rating survive.
+4. Existing cached tracks may lack genre/year until the next 30-minute or manual
+   refresh. Updating the app must not force a fresh full-library scan.
+
 ## A recent discovery mix
 
 1. Create another smart playlist and select Mix. The example starts with:

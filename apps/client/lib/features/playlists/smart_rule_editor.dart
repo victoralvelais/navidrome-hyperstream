@@ -287,6 +287,20 @@ class _ConditionDialogState extends State<_ConditionDialog> {
                 padding: EdgeInsets.only(top: 12),
                 child: Text('Also includes songs that have never been played.'),
               ),
+            if (_field == SmartField.genre || _field == SmartField.year)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text(
+                  'Missing metadata matches only “Is missing”. Genre checks every supplied genre; release year uses the song’s year tag. Older cached tracks gain these fields on the next library refresh.',
+                ),
+              ),
+            if (_field == SmartField.rating)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text(
+                  'Your rating: 0 is unrated, 1–5 are stars. Successful rating changes update playlists immediately.',
+                ),
+              ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),

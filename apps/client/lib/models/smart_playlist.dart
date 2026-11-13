@@ -18,7 +18,10 @@ enum SmartField {
   duration('Duration in seconds'),
   title('Title'),
   artist('Artist'),
-  album('Album');
+  album('Album'),
+  genre('Genre'),
+  year('Release year'),
+  rating('My rating');
 
   const SmartField(this.label);
   final String label;
@@ -26,11 +29,23 @@ enum SmartField {
     added => [SmartOperator.within, SmartOperator.older],
     played => [SmartOperator.within, SmartOperator.older, SmartOperator.never],
     favorite => [SmartOperator.isTrue, SmartOperator.isFalse],
-    playCount || duration => [
+    year => [
       SmartOperator.less,
       SmartOperator.greater,
       SmartOperator.equal,
+      SmartOperator.isMissing,
+      SmartOperator.isPresent,
     ],
+    genre => [
+      SmartOperator.contains,
+      SmartOperator.notContains,
+      SmartOperator.equal,
+      SmartOperator.isMissing,
+      SmartOperator.isPresent,
+    ],
+    playCount ||
+    duration ||
+    rating => [SmartOperator.less, SmartOperator.greater, SmartOperator.equal],
     _ => [
       SmartOperator.contains,
       SmartOperator.notContains,
@@ -38,7 +53,12 @@ enum SmartField {
     ],
   };
   bool get isDate => this == added || this == played;
-  bool get isNumber => isDate || this == playCount || this == duration;
+  bool get isNumber =>
+      isDate ||
+      this == playCount ||
+      this == duration ||
+      this == year ||
+      this == rating;
 }
 
 enum SmartOperator {
@@ -51,11 +71,14 @@ enum SmartOperator {
   greater('More than'),
   equal('Equals'),
   contains('Contains'),
-  notContains('Does not contain');
+  notContains('Does not contain'),
+  isMissing('Is missing'),
+  isPresent('Is present');
 
   const SmartOperator(this.label);
   final String label;
-  bool get needsValue => ![never, isTrue, isFalse].contains(this);
+  bool get needsValue =>
+      ![never, isTrue, isFalse, isMissing, isPresent].contains(this);
 }
 
 enum SmartOrder {
@@ -132,6 +155,14 @@ class SmartCondition extends SmartRule {
     }
     if (field.isNumber) {
       final number = int.tryParse(value);
+      if (field == SmartField.rating &&
+          (number == null || number < 0 || number > 5)) {
+        throw const FormatException('Choose a rating from 0 (unrated) to 5.');
+      }
+      if (field == SmartField.year &&
+          (number == null || number < 1 || number > 9999)) {
+        throw const FormatException('Choose a release year from 1 to 9999.');
+      }
       if (number == null ||
           number < (field.isDate ? 1 : 0) ||
           number > (field.isDate ? 3650 : 1000000)) {
@@ -146,6 +177,23 @@ class SmartCondition extends SmartRule {
 
   @override
   bool matches(Track track, DateTime now) {
+    if (operator == SmartOperator.isMissing ||
+        operator == SmartOperator.isPresent) {
+      final missing = field == SmartField.year
+          ? track.year == null
+          : track.genres.isEmpty;
+      return operator == SmartOperator.isMissing ? missing : !missing;
+    }
+    if (field == SmartField.genre) {
+      if (track.genres.isEmpty) return false;
+      final target = value.trim().toLowerCase();
+      bool match(String genre) => operator == SmartOperator.equal
+          ? genre.toLowerCase() == target
+          : genre.toLowerCase().contains(target);
+      return operator == SmartOperator.notContains
+          ? !track.genres.any(match)
+          : track.genres.any(match);
+    }
     if (field.isDate) {
       final date = validSmartDate(
         field == SmartField.added ? track.addedAt : track.lastPlayedAt,
@@ -167,9 +215,13 @@ class SmartCondition extends SmartRule {
       return operator == SmartOperator.isTrue ? track.starred : !track.starred;
     }
     if (field.isNumber) {
-      final actual = field == SmartField.playCount
-          ? track.playCount
-          : track.duration.inSeconds;
+      final actual = switch (field) {
+        SmartField.playCount => track.playCount,
+        SmartField.year => track.year,
+        SmartField.rating => track.userRating,
+        _ => track.duration.inSeconds,
+      };
+      if (actual == null) return false;
       final target = int.parse(value);
       return switch (operator) {
         SmartOperator.less => actual < target,
@@ -412,7 +464,7 @@ class SmartPlaylistDefinition {
   }
 
   Map<String, dynamic> toJson() => {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'id': id,
     'name': name,
     'type': type.name,
@@ -429,7 +481,7 @@ class SmartPlaylistDefinition {
   };
   factory SmartPlaylistDefinition.fromJson(Map<String, dynamic> json) {
     final version = json['schemaVersion'];
-    if (version != 1 && version != 2 && version != 3) {
+    if (version != 1 && version != 2 && version != 3 && version != 4) {
       throw const FormatException('Unsupported smart playlist version.');
     }
     final value = SmartPlaylistDefinition(
@@ -446,7 +498,7 @@ class SmartPlaylistDefinition {
           .map(
             (pool) => SmartPool.fromJson(
               pool as Map<String, dynamic>,
-              rankingRequired: version == 3,
+              rankingRequired: version == 3 || version == 4,
             ),
           )
           .toList(),
@@ -456,7 +508,7 @@ class SmartPlaylistDefinition {
       artistGap: version == 1 ? 0 : json['artistGap'] as int,
       relaxArtistGap: version == 1 ? true : json['relaxArtistGap'] as bool,
       shuffleSeed: version == 1 ? 0 : json['shuffleSeed'] as int,
-      ranking: version == 3
+      ranking: version == 3 || version == 4
           ? SmartRanking.fromJson(json['ranking'] as Map<String, dynamic>)
           : const SmartRanking(),
     );

@@ -34,8 +34,8 @@ Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
 After reviewing Feishin-informed proposals, the user selected both a rule editor
 and a pool mixer as selectable editor types. Both use the same rule model and
 account catalog. Artist spacing and stable shuffle are implemented in the current
-follow-up. Custom ranking is implemented; metadata filters and explicit server
-publishing are next. Addons remain deferred.
+follow-up. Custom ranking and genre/year/rating filters are implemented. Explicit
+server publishing is next. Addons remain deferred.
 See [smart-playlist device checks](docs/SMART_PLAYLISTS_TESTING.md).
 Recent Radio's status follow-up is implemented: a progress bar plus the current
 catalog total replaces the growing fetched/search-count message. A bounded native

@@ -22,15 +22,18 @@ class CatalogSnapshot {
     int? syncedTrackCount,
     Map<String, CachedListen> listens = const {},
     Map<String, bool> favorites = const {},
+    Map<String, int> ratings = const {},
   }) : syncedTrackCount = syncedTrackCount ?? tracks.length,
        tracks = List.unmodifiable(tracks),
        listens = Map.unmodifiable(listens),
-       favorites = Map.unmodifiable(favorites);
+       favorites = Map.unmodifiable(favorites),
+       ratings = Map.unmodifiable(ratings);
   final DateTime syncedAt;
   final int syncedTrackCount;
   final List<Track> tracks;
   final Map<String, CachedListen> listens;
   final Map<String, bool> favorites;
+  final Map<String, int> ratings;
 }
 
 abstract interface class CatalogCache {
@@ -130,6 +133,10 @@ String _encode(CatalogSnapshot value) => jsonEncode({
         'suffix': track.container,
         'bitRate': track.bitRate,
         'userRating': track.userRating,
+        'genres': [
+          for (final name in track.genres) {'name': name},
+        ],
+        'year': track.year,
       },
   ],
   'listens': {
@@ -140,6 +147,7 @@ String _encode(CatalogSnapshot value) => jsonEncode({
       },
   },
   'favorites': value.favorites,
+  'ratings': value.ratings,
 });
 
 CatalogSnapshot _decode(String raw) {
@@ -168,6 +176,8 @@ CatalogSnapshot _decode(String raw) {
       container: track.container,
       bitRate: track.bitRate,
       userRating: track.userRating,
+      genres: track.genres,
+      year: track.year,
     );
   }).toList();
   if (tracks.any((t) => t.id.isEmpty) ||
@@ -186,5 +196,11 @@ CatalogSnapshot _decode(String raw) {
     tracks: tracks,
     listens: listens,
     favorites: (data['favorites'] as Map).cast<String, bool>(),
+    ratings: ((data['ratings'] as Map?) ?? {}).map((key, value) {
+      if (value is! int || value < 0 || value > 5) {
+        throw const FormatException();
+      }
+      return MapEntry(key as String, value);
+    }),
   );
 }

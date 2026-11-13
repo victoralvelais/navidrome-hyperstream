@@ -222,6 +222,10 @@ String _encodeQueue((String, PlaybackSnapshot) value) => jsonEncode({
         'suffix': track.container,
         'bitRate': track.bitRate,
         'userRating': track.userRating,
+        'genres': [
+          for (final name in track.genres) {'name': name},
+        ],
+        'year': track.year,
       },
   ],
 });

@@ -12,6 +12,7 @@ class LibraryCatalog extends ChangeNotifier {
     : _now = now ?? DateTime.now {
     _subscription = client.localListens.listen(_onListen);
     _favoritesSubscription = client.favoriteChanges.listen(_onFavorite);
+    _ratingsSubscription = client.ratingChanges.listen(_onRating);
     // Restore existing metadata even if this session never opens a playlist.
     // Otherwise listens on Library/Home could be lost on the next restart.
     // The account screen also starts ensureLoaded to scan a cold cache in the background.
@@ -26,9 +27,11 @@ class LibraryCatalog extends ChangeNotifier {
   Timer? _saveTimer;
   late final StreamSubscription<LocalListen> _subscription;
   late final StreamSubscription<(String, bool)> _favoritesSubscription;
+  late final StreamSubscription<(String, int)> _ratingsSubscription;
   Map<String, Track> _tracks = {};
   final _local = <String, (LocalListen, int, int)>{};
   final _favorites = <String, bool>{};
+  final _ratings = <String, int>{};
   DateTime get currentTime => _now().toUtc();
   List<Track> tracks = const [];
   int revision = 0;
@@ -107,6 +110,17 @@ class LibraryCatalog extends ChangeNotifier {
     );
   }
 
+  void _onRating((String, int) change) {
+    if (_disposed) return;
+    _ratings[change.$1] = change.$2;
+    final track = _tracks[change.$1];
+    if (track == null) return;
+    _tracks[track.id] = track.withActivity(rating: change.$2);
+    _evaluate();
+    _saveSoon();
+    _notify();
+  }
+
   void _evaluate() {
     final now = _now();
     tracks = List.unmodifiable(_tracks.values);
@@ -133,7 +147,8 @@ class LibraryCatalog extends ChangeNotifier {
   Future<void> _restore() async {
     final saved = await _cache?.read();
     if (_disposed || saved == null || saved.syncedAt.isAfter(_now())) return;
-    final changedWhileRestoring = _local.isNotEmpty || _favorites.isNotEmpty;
+    final changedWhileRestoring =
+        _local.isNotEmpty || _favorites.isNotEmpty || _ratings.isNotEmpty;
     final incoming = {for (final track in saved.tracks) track.id: track};
     for (final entry in saved.listens.entries) {
       final track = incoming[entry.key];
@@ -159,6 +174,15 @@ class LibraryCatalog extends ChangeNotifier {
       final track = incoming[entry.key];
       if (track != null) {
         incoming[entry.key] = track.withActivity(favorite: entry.value);
+      }
+    }
+    for (final entry in saved.ratings.entries) {
+      _ratings.putIfAbsent(entry.key, () => entry.value);
+    }
+    for (final entry in _ratings.entries) {
+      final track = incoming[entry.key];
+      if (track != null) {
+        incoming[entry.key] = track.withActivity(rating: entry.value);
       }
     }
     _tracks = incoming;
@@ -196,6 +220,7 @@ class LibraryCatalog extends ChangeNotifier {
           entry.key: CachedListen(entry.value.$1.startedAt, entry.value.$3),
       },
       favorites: _favorites,
+      ratings: _ratings,
     );
     try {
       await cache.write(snapshot);
@@ -280,6 +305,14 @@ class LibraryCatalog extends ChangeNotifier {
           incoming[entry.key] = track.withActivity(favorite: entry.value);
         }
       }
+      for (final entry in _ratings.entries.toList()) {
+        final track = incoming[entry.key];
+        if (track == null || track.userRating == entry.value) {
+          _ratings.remove(entry.key);
+        } else {
+          incoming[entry.key] = track.withActivity(rating: entry.value);
+        }
+      }
       _tracks = incoming;
       loadedCount = tracks.length;
       lastSyncTrackCount = tracks.length;
@@ -307,6 +340,7 @@ class LibraryCatalog extends ChangeNotifier {
     _timer?.cancel();
     unawaited(_subscription.cancel());
     unawaited(_favoritesSubscription.cancel());
+    unawaited(_ratingsSubscription.cancel());
     super.dispose();
   }
 }

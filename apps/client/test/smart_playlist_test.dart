@@ -250,7 +250,7 @@ void main() {
       expect(
         () => SmartPlaylistDefinition.fromJson({
           ...original.toJson(),
-          'schemaVersion': 4,
+          'schemaVersion': 5,
         }),
         throwsFormatException,
       );

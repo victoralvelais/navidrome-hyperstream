@@ -44,6 +44,8 @@ void main() {
     container: 'mp3',
     bitRate: 320,
     userRating: 4,
+    genres: ['Rock', 'Alternative'],
+    year: 2001,
   );
   CatalogSnapshot snapshot(DateTime time) =>
       CatalogSnapshot(syncedAt: time, tracks: [song]);
@@ -64,6 +66,7 @@ void main() {
         tracks: [song],
         listens: {'a': CachedListen(now, 9)},
         favorites: {'a': false},
+        ratings: {'a': 4},
       );
       await cache.write(data);
       final restored = (await cache.read())!;
@@ -80,6 +83,9 @@ void main() {
       expect(track.albumId, 'album');
       expect(track.artistId, 'artist');
       expect(track.userRating, 4);
+      expect(track.genres, ['Rock', 'Alternative']);
+      expect(track.year, 2001);
+      expect(restored.ratings, {'a': 4});
       expect(track.coverArt, 'cover');
       expect(track.number, 7);
       expect(restored.listens['a']!.minimumCount, 9);

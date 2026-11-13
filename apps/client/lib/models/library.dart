@@ -63,6 +63,8 @@ class Track {
     this.container,
     this.bitRate,
     this.userRating = 0,
+    this.genres = const [],
+    this.year,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -77,7 +79,9 @@ class Track {
     artistId: json['artistId'] as String?,
     container: json['suffix'] as String?,
     bitRate: (json['bitRate'] as num?)?.toInt(),
-    userRating: (json['userRating'] as num?)?.toInt() ?? 0,
+    userRating: _boundedInteger(json['userRating'], 0, 5) ?? 0,
+    genres: _trackGenres(json),
+    year: _boundedInteger(json['year'], 1, 9999),
     starred: json['starred'] != null,
     addedAt: activityDate(json['created']),
     lastPlayedAt: activityDate(json['played']),
@@ -105,6 +109,8 @@ class Track {
   final String? container;
   final int? bitRate;
   final int userRating;
+  final List<String> genres;
+  final int? year;
 
   String get audioDetails => [
     if (container?.isNotEmpty == true) container!.toUpperCase(),
@@ -114,26 +120,59 @@ class Track {
   /// Overlay local activity without claiming a server play-count change.
   Track withLastPlayedAt(DateTime value) => withActivity(playedAt: value);
 
-  Track withActivity({DateTime? playedAt, int? playCount, bool? favorite}) =>
-      Track(
-        id: id,
-        title: title,
-        artist: artist,
-        album: album,
-        duration: duration,
-        number: number,
-        coverArt: coverArt,
-        starred: favorite ?? starred,
-        addedAt: addedAt,
-        lastPlayedAt: playedAt ?? lastPlayedAt,
-        playCount: playCount ?? this.playCount,
-        invalidActivityDates: invalidActivityDates,
-        albumId: albumId,
-        artistId: artistId,
-        container: container,
-        bitRate: bitRate,
-        userRating: userRating,
-      );
+  Track withActivity({
+    DateTime? playedAt,
+    int? playCount,
+    bool? favorite,
+    int? rating,
+  }) => Track(
+    id: id,
+    title: title,
+    artist: artist,
+    album: album,
+    duration: duration,
+    number: number,
+    coverArt: coverArt,
+    starred: favorite ?? starred,
+    addedAt: addedAt,
+    lastPlayedAt: playedAt ?? lastPlayedAt,
+    playCount: playCount ?? this.playCount,
+    invalidActivityDates: invalidActivityDates,
+    albumId: albumId,
+    artistId: artistId,
+    container: container,
+    bitRate: bitRate,
+    userRating: rating ?? userRating,
+    genres: genres,
+    year: year,
+  );
+}
+
+int? _boundedInteger(Object? value, int minimum, int maximum) =>
+    value is num &&
+        value.isFinite &&
+        value == value.roundToDouble() &&
+        value >= minimum &&
+        value <= maximum
+    ? value.toInt()
+    : null;
+
+List<String> _trackGenres(Map<String, dynamic> json) {
+  final values = <String, String>{};
+  void add(Object? value) {
+    if (value is! String || value.trim().isEmpty) return;
+    final name = value.trim();
+    values.putIfAbsent(name.toLowerCase(), () => name);
+  }
+
+  final genres = json['genres'];
+  if (genres is List) {
+    for (final genre in genres) {
+      if (genre is Map) add(genre['name']);
+    }
+  }
+  if (values.isEmpty) add(json['genre']);
+  return List.unmodifiable(values.values);
 }
 
 /// Activity dates must specify a timezone; never interpret server time as local.
