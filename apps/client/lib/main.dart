@@ -77,7 +77,10 @@ class _HyperstreamAppState extends State<HyperstreamApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed) {
+      _account.retryConnectionNow();
+      _playback?.retryConnectionNow();
+    } else {
       final playback = _playback;
       if (playback != null) unawaited(playback.savePlayback());
     }

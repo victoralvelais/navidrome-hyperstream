@@ -187,6 +187,66 @@ void main() {
     expect(store.saves, 0);
   });
 
+  testWidgets('saved connection automatically retries with bounded backoff', (
+    tester,
+  ) async {
+    store.account = exampleAccount();
+    pingError = const NavidromeException('Unavailable');
+    await session.restore();
+    for (final seconds in [2, 5, 10, 20, 30, 30]) {
+      final attempts = clients.length;
+      await tester.pump(Duration(seconds: seconds - 1));
+      expect(clients, hasLength(attempts));
+      await tester.pump(const Duration(seconds: 1));
+      expect(clients, hasLength(attempts + 1));
+      expect(session.phase, AccountPhase.recovery);
+    }
+    pingError = null;
+    await tester.pump(const Duration(seconds: 30));
+    expect(session.phase, AccountPhase.connected);
+    expect(store.saves, 0);
+    expect(store.clears, 0);
+  });
+
+  for (final action in ['edit', 'forget']) {
+    testWidgets('$action cancels scheduled saved-account reconnection', (
+      tester,
+    ) async {
+      store.account = exampleAccount();
+      pingError = const NavidromeException('Unavailable');
+      await session.restore();
+      if (action == 'edit') {
+        session.editConnection();
+      } else {
+        await session.disconnect();
+      }
+      pingError = null;
+      await tester.pump(const Duration(minutes: 1));
+      expect(clients, hasLength(1));
+      expect(session.client, isNull);
+      expect(session.phase, AccountPhase.signedOut);
+    });
+  }
+
+  testWidgets(
+    'rejected credentials and unavailable storage do not automatically retry',
+    (tester) async {
+      store.account = exampleAccount();
+      pingError = const NavidromeException(
+        'Rejected',
+        authenticationRejected: true,
+      );
+      await session.restore();
+      await tester.pump(const Duration(minutes: 1));
+      expect(clients, hasLength(1));
+      store.readError = StateError('locked storage');
+      await session.restore();
+      await tester.pump(const Duration(minutes: 1));
+      expect(clients, hasLength(1));
+      expect(session.phase, AccountPhase.recovery);
+    },
+  );
+
   test('rejected saved account requests password but preserves address and username', () async {
     store.account = exampleAccount();
     pingError = const NavidromeException(

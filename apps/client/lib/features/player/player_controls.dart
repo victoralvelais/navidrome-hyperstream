@@ -271,8 +271,7 @@ class _PlayButton extends StatelessWidget {
     tooltip: state.playing ? 'Pause' : 'Play',
     color: Theme.of(context).colorScheme.onSurface,
     iconSize: large ? 64 : 28,
-    onPressed:
-        item == null || state.processingState == AudioProcessingState.error
+    onPressed: item == null && !playback.canRetryPlayback
         ? null
         : state.playing
         ? playback.pause
@@ -293,6 +292,11 @@ class _PlayerErrors extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(12),
           child: Text(state.errorMessage ?? 'Playback failed.'),
+        ),
+      if (playback.reconnecting)
+        TextButton(
+          onPressed: playback.pause,
+          child: const Text('Stop retrying'),
         ),
       ValueListenableBuilder<String?>(
         valueListenable: playback.settingsError,

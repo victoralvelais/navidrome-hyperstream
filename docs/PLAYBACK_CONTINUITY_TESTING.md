@@ -18,6 +18,22 @@ only pulling past the actual beginning starts the existing sheet-dismiss gesture
 Earlier entries follow the current shuffle traversal when enabled and preserve
 duplicate queue occurrences. They are queue entries, not a listening-history log.
 
+Build 40 feedback: Play was disabled after an error despite the retry message,
+and a returning server did not reconnect automatically. The next follow-up keeps
+Play available whenever a failed queue can be retried, including failure before
+the current media item is published. An unavailable saved account retries its
+login automatically. Interrupted/requested playback checks server reachability
+before reloading the same song/position. Retry delays grow through 2, 5, 10, 20
+and 30 seconds between checks; network request timeouts are additional.
+
+Startup recovery still opens the restored queue paused. Playback recovery resumes
+only an outstanding play request. Pause/Stop retrying, Clear, a new queue, switching
+accounts and disposal cancel pending playback recovery. Authentication rejection
+stops automatic attempts. If the server responds but the stream keeps failing,
+two automatic reloads are allowed before leaving Play/another track to the user.
+The app also checks immediately on foreground return because iOS can suspend
+timers when the app is not running. This does not promise retries after termination.
+
 ## Expected behavior
 
 After successful login to a remembered account, Hyperstream restores its queue,
@@ -79,11 +95,18 @@ normal playback.
 - **Clear:** use Up Next > Clear queue, restart, and confirm the player stays
   empty. Do not disconnect merely to test relaunch; Disconnect deliberately
   removes the current saved queue and saved sign-in.
-- **Connection recovery:** after restoration, temporarily make the server
-  unreachable and try Play. If playback fails, reconnect and press Play again;
-  it should retry the same queue/position. If a track was removed from Navidrome,
-  select another queue row instead. Startup still requires successful server
-  login; this is not offline playback.
+- **Playback connection recovery:** after restoration, temporarily make the server
+  unreachable and press Play. On failure, Play must remain enabled. Restore access
+  and leave the app open: it should automatically resume the same song/position
+  after a connection check. Also test pressing Play for an immediate manual retry.
+- **Cancel recovery:** repeat the outage, then choose Stop retrying before restoring
+  access. Playback must stay paused until Play. Clearing the queue or switching
+  servers must not allow an old retry to restart it.
+- **Startup connection recovery:** launch while the saved server is unavailable.
+  Restore access and leave the app open (or foreground it). The library should
+  reconnect without another sign-in, then restore its queue paused. Authentication
+  rejection or unavailable secure storage still requires attention. This is not
+  offline playback.
 
 Report the first failed step, iOS/LiveContainer or Windows, and expected versus
 actual song/position. Complete the first test before the follow-up cases.

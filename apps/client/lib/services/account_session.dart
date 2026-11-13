@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'account_store.dart';
@@ -34,9 +36,14 @@ class AccountSession extends ChangeNotifier {
   bool hasSavedAccount = false;
   bool _disposed = false;
   bool _forgetting = false;
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  bool _checkingRecovery = false;
+  bool _canAutoReconnect = false;
   bool get canEditConnection => _storageReadable;
   bool get busy =>
       _forgetting ||
+      _checkingRecovery ||
       phase == AccountPhase.restoring ||
       phase == AccountPhase.connecting;
 
@@ -50,10 +57,16 @@ class AccountSession extends ChangeNotifier {
     password: account.password,
   );
 
-  Future<void> restore() async {
+  Future<void> restore({bool automatic = false}) async {
     if (busy || _disposed || _client != null) return;
-    phase = AccountPhase.restoring;
-    error = null;
+    _reconnectTimer?.cancel();
+    if (!automatic) _reconnectAttempt = 0;
+    _canAutoReconnect = false;
+    _checkingRecovery = automatic;
+    if (!automatic) {
+      phase = AccountPhase.restoring;
+      error = null;
+    }
     _changed();
     NavidromeClient? candidate;
     try {
@@ -76,24 +89,50 @@ class AccountSession extends ChangeNotifier {
       candidate = null;
       phase = AccountPhase.connected;
     } on NavidromeException catch (failure) {
+      if (_disposed) return;
+      _canAutoReconnect = !failure.authenticationRejected;
       phase = failure.authenticationRejected
           ? AccountPhase.signedOut
           : AccountPhase.recovery;
       error = failure.authenticationRejected
           ? 'Your saved sign-in was rejected. Enter your password again.'
-          : '${failure.message} Your saved account is still on this device.';
+          : '${failure.message} Retrying automatically. Your saved account is still on this device.';
     } on Object {
       _storageReadable = false;
       phase = AccountPhase.recovery;
       error = 'Could not read your saved account. Unlock your device and try again.';
     } finally {
       candidate?.close();
+      _checkingRecovery = false;
+      if (!_disposed && _canAutoReconnect && phase == AccountPhase.recovery) {
+        final seconds = [2, 5, 10, 20, 30][_reconnectAttempt.clamp(0, 4)];
+        _reconnectAttempt++;
+        _reconnectTimer = Timer(Duration(seconds: seconds), retryConnectionNow);
+      }
       _changed();
     }
   }
 
+  /// Also called on foreground return, since iOS may suspend retry timers.
+  void retryConnectionNow() {
+    if (_canAutoReconnect &&
+        phase == AccountPhase.recovery &&
+        !busy &&
+        !_disposed) {
+      unawaited(restore(automatic: true));
+    }
+  }
+
+  void _cancelReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
+    _canAutoReconnect = false;
+  }
+
   void editConnection() {
     if (busy || !_storageReadable || _disposed) return;
+    _cancelReconnect();
     phase = AccountPhase.signedOut;
     error = null;
     _changed();
@@ -105,6 +144,7 @@ class AccountSession extends ChangeNotifier {
     Future<void> Function()? beforeSwitch,
   }) async {
     if (busy || _disposed) return;
+    _cancelReconnect();
     phase = AccountPhase.connecting;
     error = null;
     _changed();
@@ -167,6 +207,7 @@ class AccountSession extends ChangeNotifier {
 
   Future<void> removeServer(String id) async {
     if (busy || _disposed || (id == activeServerId && _client != null)) return;
+    _cancelReconnect();
     _forgetting = true;
     _changed();
     try {
@@ -184,6 +225,7 @@ class AccountSession extends ChangeNotifier {
 
   Future<void> disconnect() async {
     if (busy || _disposed) return;
+    _cancelReconnect();
     _forgetting = true;
     _changed();
     try {
@@ -212,6 +254,7 @@ class AccountSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _cancelReconnect();
     _client?.close();
     _client = null;
     super.dispose();

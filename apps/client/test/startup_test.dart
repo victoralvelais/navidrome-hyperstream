@@ -9,6 +9,7 @@ import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/startup_stage.dart';
 import 'package:hyperstream_client/services/account_session.dart';
 import 'package:hyperstream_client/services/account_store.dart';
+import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/features/library/library_screen.dart';
 
 import 'support/fake_player.dart';
@@ -30,6 +31,52 @@ class ObservedPlayback extends PlaybackService {
 }
 
 void main() {
+  testWidgets(
+    'an unavailable saved server reconnects and restores its queue paused',
+    (tester) async {
+      var offline = true;
+      final session = AccountSession(
+        store: MemoryAccountStore()..account = exampleAccount(),
+        createClient:
+            ({required serverUrl, required username, required password}) =>
+                AccountClient(
+                    serverUrl: serverUrl,
+                    username: username,
+                    password: password,
+                  )
+                  ..pingError = offline
+                      ? const NavidromeException('Unavailable')
+                      : null,
+      );
+      final store = MemoryPlaybackStore()..value = savedQueue(index: 2);
+      final player = FakePlayer();
+      final playback = ObservedPlayback(
+        player: player,
+        playbackStore: (_) => store,
+      );
+      await tester.pumpWidget(
+        HyperstreamApp(
+          accountSession: session,
+          initialize: (_) async => playback,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ConnectionScreen), findsOneWidget);
+      expect(store.reads, 0);
+      offline = false;
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(LibraryScreen), findsOneWidget);
+      expect(store.reads, 1);
+      expect(player.currentIndex, 2);
+      expect(player.position, const Duration(seconds: 47));
+      expect(player.playCalls, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'queue restore waits for verified login and lifecycle saves its position',
     (tester) async {

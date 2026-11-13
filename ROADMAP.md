@@ -16,6 +16,10 @@ Build 39 device testing exposed native Play resetting the restored selection;
 the follow-up loads the live paused target explicitly before activation. The queue
 now opens at the current song with earlier entries above it and Up Next below;
 pull-to-dismiss begins only past the first entry. Device acceptance remains open.
+The connection-recovery follow-up enables Play after playback errors, retries
+unavailable saved-server logins and interrupted playback with bounded backoff,
+and cancels playback retries on Pause/Clear/account changes. Startup recovery
+continues to restore paused. The next device check focuses on outage recovery.
 Current sequence agreed with the user: validate this playback release together,
 then collaborate on smart-playlist improvements, then align the addon/streaming/
 Navidrome import vision. Do not begin those later phases during playback testing.

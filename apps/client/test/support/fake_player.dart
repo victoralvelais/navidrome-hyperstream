@@ -13,6 +13,7 @@ class FakePlayer extends Fake implements AudioPlayer {
   Completer<void>? loadGate;
   Completer<void>? seekGate;
   bool failNextLoad = false;
+  bool failNextPause = false;
   bool failVolume = false;
   bool failEdit = false;
   Completer<void>? editGate;
@@ -135,6 +136,10 @@ class FakePlayer extends Fake implements AudioPlayer {
 
   @override
   Future<void> pause() async {
+    if (failNextPause) {
+      failNextPause = false;
+      throw PlayerException(1, 'private-native-details', currentIndex);
+    }
     playing = false;
     emit();
   }

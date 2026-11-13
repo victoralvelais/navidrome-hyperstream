@@ -128,6 +128,16 @@ class PlaybackService extends BaseAudioHandler {
   _RestoredShuffleOrder? _restoredOrder;
   NavidromeClient? _queueClient;
   PlaybackSnapshot? _retrySnapshot;
+  Timer? _reconnectTimer;
+  int _reconnectEpoch = 0;
+  int? _probeEpoch;
+  int _reconnectAttempt = 0;
+  int _healthyReloads = 0;
+  DateTime? _lastPlaybackFailure;
+  bool _reconnectWanted = false;
+  bool get reconnecting => _reconnectWanted;
+  bool get canRetryPlayback =>
+      _retrySnapshot != null && _queueClient?.isClosed == false;
   final ValueNotifier<String?> continuityNotice = ValueNotifier(null);
 
   /// Called only after AccountSession has successfully verified this account.
@@ -426,11 +436,13 @@ class PlaybackService extends BaseAudioHandler {
     PlaybackSnapshot? restored,
     bool autoplay = true,
     bool preserveSleepTimer = false,
+    bool automaticRecovery = false,
   }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
     }
     if (shuffle) index = _random.nextInt(tracks.length);
+    _cancelReconnect(resetBudget: !automaticRecovery);
     final revision = ++_revision;
     _queueClient = client;
     _retrySnapshot =
@@ -533,7 +545,9 @@ class PlaybackService extends BaseAudioHandler {
         _publishItem();
         _publishState();
         _scheduleCheckpoint();
-        if (_playWhenReady) unawaited(play());
+        if (_playWhenReady) {
+          unawaited(_play(automaticRecovery: automaticRecovery));
+        }
       } on Object {
         if (revision == _revision) {
           _loading = false;
@@ -734,28 +748,131 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   void _reportFailure() {
+    if (_disposed) return;
     _retrySnapshot ??= _snapshot();
+    final now = _timerClock();
+    if (_lastPlaybackFailure == null ||
+        now.difference(_lastPlaybackFailure!) > const Duration(minutes: 1)) {
+      _healthyReloads = 0;
+    }
+    _lastPlaybackFailure = now;
+    _reconnectWanted = (_reconnectWanted || _playWhenReady) && canRetryPlayback;
     _playWhenReady = false;
-    error.value = 'Playback failed. Check your connection, then press Play to retry or select another track.';
+    error.value = _reconnectWanted
+        ? 'Playback interrupted. Reconnecting automatically. Press Play to retry now.'
+        : canRetryPlayback
+        ? 'Playback failed. Press Play to retry or select another track.'
+        : 'Playback failed. Select a track to start a new queue.';
+    _scheduleReconnect();
     _publishState();
   }
 
+  void _cancelReconnect({bool resetBudget = true}) {
+    _reconnectEpoch++;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _probeEpoch = null;
+    _reconnectWanted = false;
+    if (resetBudget) {
+      _reconnectAttempt = 0;
+      _healthyReloads = 0;
+      _lastPlaybackFailure = null;
+    }
+  }
+
+  void _scheduleReconnect() {
+    if (_disposed ||
+        !_reconnectWanted ||
+        _reconnectTimer != null ||
+        _probeEpoch != null) {
+      return;
+    }
+    final seconds = [2, 5, 10, 20, 30][_reconnectAttempt.clamp(0, 4)];
+    _reconnectAttempt++;
+    _reconnectTimer = Timer(Duration(seconds: seconds), retryConnectionNow);
+  }
+
+  /// A foreground return can retry immediately rather than waiting for a timer
+  /// that iOS suspended. Play always remains available as a manual retry.
+  void retryConnectionNow() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    if (_disposed || !_reconnectWanted || _probeEpoch != null) return;
+    unawaited(_tryReconnect(_reconnectEpoch));
+  }
+
+  Future<void> _tryReconnect(int epoch) async {
+    final client = _queueClient;
+    final snapshot = _retrySnapshot;
+    if (client == null || client.isClosed || snapshot == null) {
+      _cancelReconnect();
+      return;
+    }
+    _probeEpoch = epoch;
+    var reachable = false;
+    var rejected = false;
+    try {
+      await client.ping();
+      reachable = true;
+    } on NavidromeException catch (failure) {
+      rejected = failure.authenticationRejected;
+    } on Object {
+      // Native/request details can contain authenticated URLs. Never expose them.
+    } finally {
+      if (_probeEpoch == epoch) _probeEpoch = null;
+    }
+    if (_disposed || epoch != _reconnectEpoch || !_reconnectWanted) return;
+    if (rejected) {
+      _cancelReconnect();
+      error.value = 'Your server sign-in was rejected. Check your account in Home > Servers, then press Play to retry.';
+      _publishState();
+      return;
+    }
+    if (!reachable) {
+      _healthyReloads = 0;
+      _scheduleReconnect();
+      return;
+    }
+    // A healthy server plus a repeatedly failing stream can mean a removed or
+    // unsupported file. Do not endlessly reload the queue in that case.
+    if (_healthyReloads >= 2) {
+      _cancelReconnect();
+      error.value = 'The server is reachable, but this song could not play. Press Play to retry or select another track.';
+      _publishState();
+      return;
+    }
+    _healthyReloads++;
+    await _loadQueue(
+      client,
+      snapshot.tracks,
+      snapshot.index,
+      restored: snapshot,
+      preserveSleepTimer: true,
+      automaticRecovery: true,
+    );
+  }
+
   Future<void> _command(Future<void> Function() command) async {
+    final revision = _revision;
     try {
       await command();
     } on Object {
-      _reportFailure();
+      if (!_disposed && revision == _revision) _reportFailure();
     }
   }
 
   @override
-  Future<void> play() async {
+  Future<void> play() => _play();
+
+  Future<void> _play({bool automaticRecovery = false}) async {
+    if (_disposed) return;
+    if (!automaticRecovery) _cancelReconnect();
     _playWhenReady = true;
     if (_loading) {
       _publishState();
       return;
     }
-    if (mediaItem.value == null) return;
+    if (mediaItem.value == null && !canRetryPlayback) return;
     if (error.value != null ||
         _player.processingState == ProcessingState.idle) {
       // Seeking the idle just_audio player updates its visible state but clears
@@ -771,7 +888,8 @@ class PlaybackService extends BaseAudioHandler {
           snapshot.tracks,
           snapshot.index,
           restored: snapshot,
-          preserveSleepTimer: !retrying,
+          preserveSleepTimer: true,
+          automaticRecovery: automaticRecovery,
         );
       }
       return;
@@ -789,7 +907,11 @@ class PlaybackService extends BaseAudioHandler {
 
   @override
   Future<void> pause() async {
+    _cancelReconnect();
     _playWhenReady = false;
+    if (error.value != null) {
+      error.value = 'Playback paused. Press Play to retry.';
+    }
     await _command(_player.pause);
     _publishState();
   }
@@ -924,6 +1046,7 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> stop() => reset();
 
   Future<void> reset({bool clearSaved = true}) {
+    _cancelReconnect();
     _retrySnapshot = null;
     _queueClient = null;
     final store = clearSaved ? _continuityStore : null;
@@ -962,6 +1085,7 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   Future<void> dispose() async {
+    _cancelReconnect();
     final saving = savePlayback();
     _checkpointTimer?.cancel();
     _disposed = true;
