@@ -1,6 +1,6 @@
 # Playback continuity: device checks
 
-Implemented November 13, 2026. Use the paired iOS/Windows release recorded in
+First paired continuity release: **0.1.0+39**, November 13, 2026. Use the release recorded in
 `releases/latest.json`. Next is user testing, then collaborative smart-playlist
 planning, then alignment on addons, external streaming and Navidrome imports.
 Those later features are not part of this change. The user declined the Discord
@@ -88,3 +88,11 @@ permutation indices directly, and reads 64-bit initial positions for long tracks
 A native C++ check exercises that production permutation helper across all small
 permutations and rejects invalid orders.
 Physical iOS and Windows playback acceptance still requires the steps above.
+
+Release validation: all 251 Flutter tests, formatting and analysis passed.
+The compiled C++ queue traversal checks passed. The Windows host passed protected
+account storage, output enumeration and saved-queue restoration/checkpointing;
+the full audio smoke test reported skipped with zero audio outputs. Both platform
+packages succeeded in [run 39](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43404649005)
+from `e68cb4b6`. The release helper verified manifests/checksums, both downloaded
+archives passed CRC checks, and the IPA bundle reports `0.1.0+39`.
