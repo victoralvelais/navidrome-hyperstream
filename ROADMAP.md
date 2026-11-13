@@ -6,7 +6,16 @@ updates it immediately from local listens, and syncs on refresh/every 30 minutes
 while active. Saved Rules and Mix smart playlists are implemented,
 with shared condition groups, exclusions, track preview and ordered playback.
 Server imports remain an isolated prototype; addons remain later work.
-Updated: November 12, 2026.
+Updated: November 13, 2026.
+
+Playback continuity is implemented for remembered accounts: queue/current track,
+position, exact shuffle order, repeat and rate restore paused after verified
+login. Account changes preserve separate queues; clear/disconnect remove the
+current saved queue. See [continuity testing](docs/PLAYBACK_CONTINUITY_TESTING.md).
+Current sequence agreed with the user: validate this playback release together,
+then collaborate on smart-playlist improvements, then align the addon/streaming/
+Navidrome import vision. Do not begin those later phases during playback testing.
+Discord webhook integration was declined and is not a pending milestone.
 
 Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
 Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).

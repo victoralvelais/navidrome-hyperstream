@@ -197,6 +197,11 @@ jobs:
         # The hosted VS installation includes the secure-storage plugin's ATL dependency.
         run: flutter test integration_test/account_storage_test.dart -d windows --no-pub
 
+      - name: Verify native playback and queue continuity
+        # Covers lazy restoration and resumed seeking with the real audio engine.
+        timeout-minutes: 8
+        run: flutter test integration_test/playback_smoke_test.dart -d windows --no-pub
+
       - name: Build Windows release
         run: flutter build windows --release --no-pub --build-number="$env:GITHUB_RUN_NUMBER"
 

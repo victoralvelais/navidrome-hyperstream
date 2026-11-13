@@ -8,6 +8,8 @@ class FakePlayer extends Fake implements AudioPlayer {
   final events = StreamController<PlaybackEvent>.broadcast(sync: true);
   final errors = StreamController<PlayerException>.broadcast(sync: true);
   final loaded = <List<AudioSource>>[];
+  final preloads = <bool>[];
+  ShuffleOrder? activeShuffleOrder;
   Completer<void>? loadGate;
   Completer<void>? seekGate;
   bool failNextLoad = false;
@@ -63,6 +65,11 @@ class FakePlayer extends Fake implements AudioPlayer {
 
   @override
   Future<void> shuffle() async {
+    if (activeShuffleOrder != null) {
+      activeShuffleOrder!.shuffle(initialIndex: currentIndex);
+      shuffleIndices = List.of(activeShuffleOrder!.indices);
+      return;
+    }
     shuffleIndices = List.generate(
       loaded.isEmpty ? 0 : loaded.last.length,
       (i) => i,
@@ -104,13 +111,22 @@ class FakePlayer extends Fake implements AudioPlayer {
     ShuffleOrder? shuffleOrder,
   }) async {
     loaded.add(audioSources);
+    preloads.add(preload);
     if (loadGate != null) await loadGate!.future;
     if (failNextLoad) {
       failNextLoad = false;
       throw PlayerException(1, 'secret-auth-url', 0);
     }
     currentIndex = initialIndex ?? 0;
-    processingState = ProcessingState.ready;
+    position = initialPosition ?? Duration.zero;
+    activeShuffleOrder = shuffleOrder;
+    shuffleOrder?.clear();
+    shuffleOrder?.insert(0, audioSources.length);
+    shuffleOrder?.shuffle(initialIndex: currentIndex);
+    shuffleIndices = shuffleOrder == null
+        ? List.generate(audioSources.length, (i) => i)
+        : List.of(shuffleOrder.indices);
+    processingState = preload ? ProcessingState.ready : ProcessingState.idle;
     emit();
     return duration;
   }
@@ -125,6 +141,7 @@ class FakePlayer extends Fake implements AudioPlayer {
   Future<void> play() async {
     playCalls++;
     playing = true;
+    processingState = ProcessingState.ready;
     emit();
   }
 
@@ -138,6 +155,7 @@ class FakePlayer extends Fake implements AudioPlayer {
   @override
   Future<void> clearAudioSources() async {
     currentIndex = null;
+    position = Duration.zero;
   }
 
   @override

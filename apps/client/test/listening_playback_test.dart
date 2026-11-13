@@ -8,6 +8,7 @@ import 'package:hyperstream_client/services/recent_radio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'support/fake_player.dart';
+import 'playback_continuity_test.dart' show MemoryPlaybackStore, savedQueue;
 
 class RecordingClient extends NavidromeClient {
   RecordingClient(String username)
@@ -77,6 +78,31 @@ void main() {
       player.emit();
     }
   }
+
+  test(
+    'restoring a position earns no listen credit or replayed scrobble',
+    () async {
+      await playback.dispose();
+      player = FakePlayer();
+      final store = MemoryPlaybackStore()..value = savedQueue();
+      playback = PlaybackService(
+        player: player,
+        playbackStore: (_) => store,
+        artworkLoader: (_, _) async => null,
+        listeningClock: () => clock,
+        listeningTime: () => start.add(clock),
+      );
+      await playback.attachAccount(client, remember: true);
+      listen(300);
+      expect(client.submitted, isEmpty);
+      await playback.play();
+      listen(89);
+      expect(client.submitted, isEmpty);
+      listen(1);
+      expect(client.submitted, hasLength(1));
+      expect(client.submitted.single.$1, 'two');
+    },
+  );
 
   test(
     'pauses, buffering, and forward seeks do not qualify a short listen',

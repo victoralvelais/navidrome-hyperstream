@@ -484,8 +484,10 @@ FLAC, and AAC tracks, change albums rapidly, disconnect while loading, lose and
 restore network access, and resize the window. On iPhone also check screen lock,
 Control Center, track transitions while locked, headphone removal, interruptions,
 and background recovery. Check saved sign-in across app restarts and signed iOS
-updates. Queue restoration, offline mode, and Mornye integration
-come later.
+updates. Queue/current-position restoration is implemented for remembered
+accounts and opens paused after verified login, with saved shuffle order, repeat
+and speed. See [continuity testing](../../docs/PLAYBACK_CONTINUITY_TESTING.md).
+Offline mode and Mornye integration remain later work.
 
 The November 12 native playback smoke test also covers queue editing, playback
 rate, shuffle/repeat and both sleep modes. This workstation could not compile it:

@@ -42,7 +42,8 @@ class HyperstreamApp extends StatefulWidget {
   State<HyperstreamApp> createState() => _HyperstreamAppState();
 }
 
-class _HyperstreamAppState extends State<HyperstreamApp> {
+class _HyperstreamAppState extends State<HyperstreamApp>
+    with WidgetsBindingObserver {
   Future<PlaybackService>? _initialization;
   PlaybackService? _playback;
   late final AccountSession _account =
@@ -54,10 +55,32 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _account.addListener(_accountChanged);
     // Paint an identifiable screen before any preference or audio platform call.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _start();
     });
+  }
+
+  void _accountChanged() {
+    final playback = _playback;
+    final client = _account.client;
+    if (playback != null &&
+        client != null &&
+        _account.phase == AccountPhase.connected) {
+      unawaited(
+        playback.attachAccount(client, remember: _account.hasSavedAccount),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      final playback = _playback;
+      if (playback != null) unawaited(playback.savePlayback());
+    }
   }
 
   void _setStage(StartupStage stage) {
@@ -91,6 +114,7 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
         setState(() => _playback = service);
         _setStage(StartupStage.account);
         await _account.restore();
+        _accountChanged();
       }
       return service;
     } finally {
@@ -101,10 +125,13 @@ class _HyperstreamAppState extends State<HyperstreamApp> {
   Future<void> _disconnect() async {
     await _playback!.reset();
     await _account.disconnect();
+    await _playback!.suspendForAccountSwitch();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _account.removeListener(_accountChanged);
     _startupTimer?.cancel();
     _account.dispose();
     final playback = _playback;

@@ -12,6 +12,11 @@ The user has confirmed working playback on Windows and a sideloaded iPhone build
 
 ## What exists
 
+Remembered accounts now restore their queue, current song/position, shuffle
+order, repeat mode and speed after login, paused. State is isolated per account;
+explicitly clearing the queue removes its saved copy. See the
+[playback continuity test guide](docs/PLAYBACK_CONTINUITY_TESTING.md).
+
 The [Flutter client](apps/client/README.md) provides Navidrome sign-in, paginated
 album/artist/song browsing, grouped server-wide search, playlists, favorite albums/songs,
 artwork, track lists, and a native queue with play/pause, previous/next, and seeking.

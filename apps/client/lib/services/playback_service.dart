@@ -13,6 +13,7 @@ import 'navidrome_client.dart';
 import 'listen_tracker.dart';
 import 'startup_stage.dart';
 import 'system_artwork.dart';
+import 'playback_store.dart';
 
 class SleepTimerState {
   const SleepTimerState({this.deadline, this.endOfTrack = false});
@@ -32,12 +33,14 @@ class PlaybackService extends BaseAudioHandler {
     Future<Uri?> Function(NavidromeClient, String)? artworkLoader,
     DateTime Function()? timerClock,
     Random? random,
+    PlaybackStore Function(NavidromeClient)? playbackStore,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession,
        _artworkLoader = artworkLoader ?? SystemArtwork().load,
        _timerClock = timerClock ?? DateTime.now,
        _random = random ?? Random() {
+    _storeFactory = playbackStore;
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
       now: listeningTime ?? DateTime.now,
@@ -56,9 +59,13 @@ class PlaybackService extends BaseAudioHandler {
   static Future<PlaybackService> initialize({
     AppPreferences? preferences,
     ValueChanged<StartupStage>? onStage,
+    PlaybackStore Function(NavidromeClient)? playbackStore,
   }) async {
     onStage?.call(StartupStage.player);
-    PlaybackService build() => PlaybackService(preferences: preferences);
+    PlaybackService build() => PlaybackService(
+      preferences: preferences,
+      playbackStore: playbackStore ?? FilePlaybackStore.new,
+    );
     final handler = Platform.isIOS
         ? await AudioService.init<PlaybackService>(builder: build)
         : build();
@@ -109,6 +116,138 @@ class PlaybackService extends BaseAudioHandler {
   Timer? _sleepTick;
   int? _sleepIndex;
   Duration _sleepPosition = Duration.zero;
+  PlaybackStore Function(NavidromeClient)? _storeFactory;
+  PlaybackStore? _continuityStore;
+  NavidromeClient? _continuityClient;
+  int _accountEpoch = 0;
+  Timer? _checkpointTimer;
+  Future<void> _saving = Future.value();
+  bool _checkpointQueued = false;
+  String? _checkpointState;
+  List<String?> _queueCovers = const [];
+  _RestoredShuffleOrder? _restoredOrder;
+  NavidromeClient? _queueClient;
+  PlaybackSnapshot? _retrySnapshot;
+  final ValueNotifier<String?> continuityNotice = ValueNotifier(null);
+
+  /// Called only after AccountSession has successfully verified this account.
+  /// Temporary sign-ins never read or write a saved queue.
+  Future<void> attachAccount(
+    NavidromeClient client, {
+    required bool remember,
+  }) async {
+    if (_disposed || identical(client, _continuityClient)) return;
+    final epoch = ++_accountEpoch;
+    final revision = _revision;
+    _continuityClient = client;
+    _continuityStore = null;
+    _checkpointTimer?.cancel();
+    continuityNotice.value = null;
+    if (!remember || _storeFactory == null) return;
+    final store = _storeFactory!(client);
+    try {
+      final saved = await store.read().timeout(const Duration(seconds: 3));
+      if (_disposed || epoch != _accountEpoch || client.isClosed) return;
+      _continuityStore = store;
+      _checkpointTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (_player.playing) unawaited(savePlayback());
+      });
+      if (revision != _revision) {
+        // A user selection/clear made while disk was loading takes precedence.
+        if (_listeningTracks.isEmpty) {
+          await store.clear();
+        } else {
+          await savePlayback();
+        }
+        return;
+      }
+      if (saved != null) {
+        saved.validate();
+        await _loadQueue(
+          client,
+          saved.tracks,
+          saved.index,
+          restored: saved,
+          autoplay: false,
+        );
+      }
+    } on Object {
+      if (!_disposed && epoch == _accountEpoch) {
+        _continuityStore = null; // Preserve unread or newer saved data.
+        continuityNotice.value = 'Your saved queue could not be restored. You can still select music; reopen the app to try again.';
+      }
+    }
+  }
+
+  PlaybackSnapshot? _snapshot() {
+    final index = _player.currentIndex;
+    if (_loading ||
+        _listeningTracks.isEmpty ||
+        index == null ||
+        index < 0 ||
+        index >= _listeningTracks.length) {
+      return null;
+    }
+    return PlaybackSnapshot(
+      tracks: _listeningTracks,
+      coverArtIds: _queueCovers,
+      index: index,
+      position: _player.position,
+      shuffleOrder: _player.shuffleModeEnabled
+          ? List.unmodifiable(_player.shuffleIndices)
+          : const [],
+      repeat: _player.loopMode.name,
+      speed: _player.speed,
+    );
+  }
+
+  Future<void> savePlayback() {
+    final store = _continuityStore;
+    final snapshot = _snapshot();
+    if (_disposed ||
+        store == null ||
+        snapshot == null ||
+        error.value != null ||
+        !identical(_continuityClient, _listeningClient)) {
+      return _saving;
+    }
+    final epoch = _accountEpoch;
+    _saving = _saving.then((_) async {
+      try {
+        await store.write(snapshot);
+        if (!_disposed && epoch == _accountEpoch) continuityNotice.value = null;
+      } on Object {
+        if (!_disposed && epoch == _accountEpoch) {
+          continuityNotice.value = 'Playback continues, but your queue or position could not be saved.';
+        }
+      }
+    });
+    return _saving;
+  }
+
+  void _scheduleCheckpoint() {
+    if (_checkpointQueued ||
+        _disposed ||
+        _loading ||
+        _continuityStore == null) {
+      return;
+    }
+    _checkpointQueued = true;
+    scheduleMicrotask(() {
+      _checkpointQueued = false;
+      if (!_disposed) unawaited(savePlayback());
+    });
+  }
+
+  Future<void> suspendForAccountSwitch() async {
+    final saving = savePlayback();
+    ++_accountEpoch;
+    _continuityClient = null;
+    _continuityStore = null;
+    _checkpointTimer?.cancel();
+    await reset(clearSaved: false);
+    await saving;
+  }
 
   Track? trackAt(int index) => index >= 0 && index < _listeningTracks.length
       ? _listeningTracks[index]
@@ -187,7 +326,14 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) =>
       _changeSetting(() async {
         final enabled = shuffleMode != AudioServiceShuffleMode.none;
-        if (enabled) await _player.shuffle();
+        if (enabled) {
+          _restoredOrder?.reshuffle = true;
+          try {
+            await _player.shuffle();
+          } finally {
+            _restoredOrder?.reshuffle = false;
+          }
+        }
         await _player.setShuffleModeEnabled(enabled);
         _publishState();
       });
@@ -219,6 +365,7 @@ class PlaybackService extends BaseAudioHandler {
       try {
         await apply();
         settingsError.value = null;
+        _scheduleCheckpoint();
       } on Object {
         // A setting failure must not put the playing queue into an error state.
         settingsError.value = 'Could not change the audio setting. Try again.';
@@ -256,17 +403,47 @@ class PlaybackService extends BaseAudioHandler {
     int index, {
     String? coverArtId,
     bool shuffle = false,
+  }) => _loadQueue(
+    client,
+    tracks,
+    index,
+    coverArtId: coverArtId,
+    shuffle: shuffle,
+  );
+
+  Future<void> _loadQueue(
+    NavidromeClient client,
+    List<Track> tracks,
+    int index, {
+    String? coverArtId,
+    bool shuffle = false,
+    PlaybackSnapshot? restored,
+    bool autoplay = true,
   }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
     }
     if (shuffle) index = _random.nextInt(tracks.length);
     final revision = ++_revision;
+    _queueClient = client;
+    _retrySnapshot =
+        restored ??
+        PlaybackSnapshot(
+          tracks: List.unmodifiable(tracks),
+          coverArtIds: List.unmodifiable(
+            tracks.map((track) => track.coverArt ?? coverArtId),
+          ),
+          index: index,
+          position: Duration.zero,
+          repeat: _player.loopMode.name,
+          speed: _player.speed,
+        );
     cancelSleepTimer();
     _requestedArtwork.clear();
     _clearListening();
     _loading = true;
-    _playWhenReady = true;
+    _playWhenReady = autoplay;
+    _checkpointState = null;
     error.value = null;
     _publishState();
     _pending = _pending.then((_) async {
@@ -277,18 +454,26 @@ class PlaybackService extends BaseAudioHandler {
         if (revision != _revision) return;
         await _player.setShuffleModeEnabled(false);
         if (revision != _revision) return;
-        final items = tracks
+        _queueCovers =
+            restored?.coverArtIds ??
+            List.unmodifiable(
+              tracks.map((track) => track.coverArt ?? coverArtId),
+            );
+        _restoredOrder = restored != null && restored.shuffleOrder.isNotEmpty
+            ? _RestoredShuffleOrder(restored.shuffleOrder)
+            : null;
+        final items = tracks.indexed
             .map(
-              (track) => MediaItem(
-                id: track.id,
-                title: track.title,
-                artist: track.artist,
-                album: track.album,
-                duration: track.duration,
+              (entry) => MediaItem(
+                id: entry.$2.id,
+                title: entry.$2.title,
+                artist: entry.$2.artist,
+                album: entry.$2.album,
+                duration: entry.$2.duration,
                 extras: {
-                  'coverArtId': ?(track.coverArt ?? coverArtId),
-                  'starred': track.starred,
-                  'audioDetails': track.audioDetails,
+                  'coverArtId': ?_queueCovers[entry.$1],
+                  'starred': entry.$2.starred,
+                  'audioDetails': entry.$2.audioDetails,
                 },
               ),
             )
@@ -305,9 +490,20 @@ class PlaybackService extends BaseAudioHandler {
               )
               .toList(),
           initialIndex: index,
-          initialPosition: Duration.zero,
+          initialPosition: restored?.safePosition ?? Duration.zero,
+          // Show a restored queue immediately without fetching audio until Play.
+          preload: restored == null || autoplay,
+          shuffleOrder: _restoredOrder,
         );
         if (revision != _revision) return;
+        if (restored != null) {
+          await _player.setLoopMode(LoopMode.values.byName(restored.repeat));
+          if (revision != _revision) return;
+          await _player.setSpeed(restored.speed);
+          if (revision != _revision) return;
+          await _player.setShuffleModeEnabled(restored.shuffleOrder.isNotEmpty);
+          if (revision != _revision) return;
+        }
         if (shuffle) {
           // just_audio puts the selected random starting track first in its
           // shuffle traversal, while retaining the collection's original order.
@@ -319,8 +515,10 @@ class PlaybackService extends BaseAudioHandler {
         _loading = false;
         _listeningClient = client;
         _listeningTracks = List.unmodifiable(tracks);
+        _retrySnapshot = null;
         _publishItem();
         _publishState();
+        _scheduleCheckpoint();
         if (_playWhenReady) unawaited(play());
       } on Object {
         if (revision == _revision) {
@@ -389,6 +587,12 @@ class PlaybackService extends BaseAudioHandler {
         errorMessage: error.value,
       ),
     );
+    final checkpointState =
+        '${_player.currentIndex}:${_player.playing}:${_player.loopMode}:${_player.shuffleModeEnabled}:${_player.speed}';
+    if (!_loading && checkpointState != _checkpointState) {
+      _checkpointState = checkpointState;
+      _scheduleCheckpoint();
+    }
   }
 
   void _loadArtwork(int index) {
@@ -511,13 +715,14 @@ class PlaybackService extends BaseAudioHandler {
       _seeking = false;
       _publishItem();
       _publishState();
+      _scheduleCheckpoint();
     }
   }
 
   void _reportFailure() {
+    _retrySnapshot ??= _snapshot();
     _playWhenReady = false;
-    error.value =
-        'Playback failed. Check your connection and select a track again.';
+    error.value = 'Playback failed. Check your connection, then press Play to retry or select another track.';
     _publishState();
   }
 
@@ -536,7 +741,20 @@ class PlaybackService extends BaseAudioHandler {
       _publishState();
       return;
     }
-    if (mediaItem.value == null || error.value != null) return;
+    if (mediaItem.value == null) return;
+    if (error.value != null) {
+      final snapshot = _retrySnapshot ?? _snapshot();
+      final client = _queueClient;
+      if (snapshot != null && client != null && !client.isClosed) {
+        await _loadQueue(
+          client,
+          snapshot.tracks,
+          snapshot.index,
+          restored: snapshot,
+        );
+      }
+      return;
+    }
     await _command(() async {
       if (_player.processingState == ProcessingState.completed) {
         _listenTracker.clear();
@@ -584,6 +802,28 @@ class PlaybackService extends BaseAudioHandler {
 
   @override
   Future<void> skipToQueueItem(int index) async {
+    if (!_loading &&
+        error.value != null &&
+        _retrySnapshot != null &&
+        _queueClient != null) {
+      final saved = _retrySnapshot!;
+      if (index < 0 || index >= saved.tracks.length) return;
+      await _loadQueue(
+        _queueClient!,
+        saved.tracks,
+        index,
+        restored: PlaybackSnapshot(
+          tracks: saved.tracks,
+          coverArtIds: saved.coverArtIds,
+          index: index,
+          position: Duration.zero,
+          shuffleOrder: saved.shuffleOrder,
+          repeat: saved.repeat,
+          speed: saved.speed,
+        ),
+      );
+      return;
+    }
     if (!_loading && index >= 0 && index < queue.value.length) {
       await _seekCommand(() => _player.seek(Duration.zero, index: index));
     }
@@ -612,18 +852,22 @@ class PlaybackService extends BaseAudioHandler {
       if (revision != _revision) return;
       final items = List<MediaItem>.of(queue.value);
       final tracks = List<Track>.of(_listeningTracks);
+      final covers = List<String?>.of(_queueCovers);
       try {
         if (to == null) {
           await _player.removeAudioSourceAt(from);
           items.removeAt(from);
           tracks.removeAt(from);
+          covers.removeAt(from);
         } else {
           await _player.moveAudioSource(from, to);
           items.insert(to, items.removeAt(from));
           tracks.insert(to, tracks.removeAt(from));
+          covers.insert(to, covers.removeAt(from));
         }
         if (revision != _revision) return;
         _listeningTracks = tracks;
+        _queueCovers = covers;
         // The current song has not changed; preserve its listen progress.
         _listeningIndex = _player.currentIndex;
         if (sleepTimer.value?.endOfTrack == true) {
@@ -648,6 +892,7 @@ class PlaybackService extends BaseAudioHandler {
           _loading = false;
           _publishItem();
           _publishState();
+          _scheduleCheckpoint();
         }
       }
     });
@@ -657,7 +902,25 @@ class PlaybackService extends BaseAudioHandler {
   @override
   Future<void> stop() => reset();
 
-  Future<void> reset() {
+  Future<void> reset({bool clearSaved = true}) {
+    _retrySnapshot = null;
+    _queueClient = null;
+    final store = clearSaved ? _continuityStore : null;
+    final epoch = _accountEpoch;
+    if (store != null) {
+      _saving = _saving.then((_) async {
+        try {
+          await store.clear();
+          if (!_disposed && epoch == _accountEpoch) {
+            continuityNotice.value = null;
+          }
+        } on Object {
+          if (!_disposed && epoch == _accountEpoch) {
+            continuityNotice.value = 'The queue was cleared here, but its saved copy could not be removed.';
+          }
+        }
+      });
+    }
     ++_revision;
     cancelSleepTimer();
     _requestedArtwork.clear();
@@ -674,16 +937,20 @@ class PlaybackService extends BaseAudioHandler {
       error.value = null;
       _publishState();
     });
-    return _pending;
+    return Future.wait([_pending, _saving]);
   }
 
   Future<void> dispose() async {
+    final saving = savePlayback();
+    _checkpointTimer?.cancel();
     _disposed = true;
+    ++_revision; // A late native load must not autoplay while storage drains.
+    await saving;
     _clearListening();
     preferences.removeListener(_syncListening);
     await _settingsPending;
     await preferences.flush();
-    await reset();
+    await reset(clearSaved: false);
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
@@ -692,6 +959,31 @@ class PlaybackService extends BaseAudioHandler {
     settingsError.dispose();
     listeningNotice.dispose();
     sleepTimer.dispose();
+    continuityNotice.dispose();
     preferences.dispose();
+  }
+}
+
+/// just_audio reshuffles during native loads. Keep the saved traversal through
+/// those loads; only an explicit user shuffle generates a fresh order.
+class _RestoredShuffleOrder extends DefaultShuffleOrder {
+  _RestoredShuffleOrder(this.saved);
+  final List<int> saved;
+  bool _inserted = false;
+  bool reshuffle = false;
+
+  @override
+  void insert(int index, int count) {
+    if (!_inserted && index == 0 && count == saved.length) {
+      indices.addAll(saved);
+      _inserted = true;
+    } else {
+      super.insert(index, count);
+    }
+  }
+
+  @override
+  void shuffle({int? initialIndex}) {
+    if (reshuffle) super.shuffle(initialIndex: initialIndex);
   }
 }

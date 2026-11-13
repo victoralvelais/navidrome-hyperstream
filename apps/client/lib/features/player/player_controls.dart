@@ -300,6 +300,12 @@ class _PlayerErrors extends StatelessWidget {
             ? const SizedBox.shrink()
             : Padding(padding: const EdgeInsets.all(12), child: Text(error)),
       ),
+      ValueListenableBuilder<String?>(
+        valueListenable: playback.continuityNotice,
+        builder: (context, notice, _) => notice == null
+            ? const SizedBox.shrink()
+            : Padding(padding: const EdgeInsets.all(12), child: Text(notice)),
+      ),
     ],
   );
 }

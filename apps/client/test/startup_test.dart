@@ -13,9 +13,14 @@ import 'package:hyperstream_client/features/library/library_screen.dart';
 
 import 'support/fake_player.dart';
 import 'support/account_fakes.dart';
+import 'playback_continuity_test.dart' show MemoryPlaybackStore, savedQueue;
 
 class ObservedPlayback extends PlaybackService {
-  ObservedPlayback() : super(player: FakePlayer());
+  ObservedPlayback({super.playbackStore, FakePlayer? player})
+    : super(
+        player: player ?? FakePlayer(),
+        artworkLoader: (_, _) async => null,
+      );
   bool disposed = false;
   @override
   Future<void> dispose() async {
@@ -25,6 +30,85 @@ class ObservedPlayback extends PlaybackService {
 }
 
 void main() {
+  testWidgets(
+    'queue restore waits for verified login and lifecycle saves its position',
+    (tester) async {
+      final accounts = MemoryAccountStore()..account = exampleAccount();
+      final gate = Completer<void>();
+      final session = AccountSession(
+        store: accounts,
+        createClient:
+            ({required serverUrl, required username, required password}) =>
+                AccountClient(
+                  serverUrl: serverUrl,
+                  username: username,
+                  password: password,
+                )..pingGate = gate,
+      );
+      final saved = MemoryPlaybackStore()..value = savedQueue();
+      final native = FakePlayer();
+      final playback = ObservedPlayback(
+        player: native,
+        playbackStore: (_) => saved,
+      );
+      await tester.pumpWidget(
+        HyperstreamApp(
+          accountSession: session,
+          initialize: (_) async => playback,
+        ),
+      );
+      await tester.pump();
+      expect(saved.reads, 0);
+      expect(native.loaded, isEmpty);
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(saved.reads, 1);
+      expect(playback.queue.value, hasLength(3));
+      expect(native.playCalls, 0);
+      native.position = const Duration(seconds: 62);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(saved.value!.position, const Duration(seconds: 62));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('failed server verification never reads or loads a saved queue', (
+    tester,
+  ) async {
+    final accounts = MemoryAccountStore()..account = exampleAccount();
+    final session = AccountSession(
+      store: accounts,
+      createClient:
+          ({required serverUrl, required username, required password}) =>
+              AccountClient(
+                serverUrl: serverUrl,
+                username: username,
+                password: password,
+              )..pingError = StateError('unavailable'),
+    );
+    final saved = MemoryPlaybackStore()..value = savedQueue();
+    final native = FakePlayer();
+    final playback = ObservedPlayback(
+      player: native,
+      playbackStore: (_) => saved,
+    );
+    await tester.pumpWidget(
+      HyperstreamApp(
+        accountSession: session,
+        initialize: (_) async => playback,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(saved.reads, 0);
+    expect(native.loaded, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('Home settings switches saved servers and rebuilds the library', (
     tester,
   ) async {

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
+import 'package:hyperstream_client/services/playback_store.dart';
 import 'package:integration_test/integration_test.dart';
 
 // Silent PCM audio exercises the real native decoder without a music download.
@@ -57,10 +58,12 @@ void main() {
   ) async {
     final audio = silentWav();
     final streamedIds = <String>{};
+    var streamRequests = 0;
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       final response = request.response;
       if (request.uri.path.endsWith('/stream.view')) {
+        streamRequests++;
         streamedIds.add(request.uri.queryParameters['id']!);
         response.headers.contentType = ContentType('audio', 'wav');
         response.headers.set('accept-ranges', 'bytes');
@@ -113,11 +116,17 @@ void main() {
       username: 'test',
       password: 'test',
     );
-    final playback = await PlaybackService.initialize();
+    final savedDirectory = await Directory.systemTemp.createTemp(
+      'hyperstream-native-continuity-',
+    );
+    FilePlaybackStore store(NavidromeClient account) =>
+        FilePlaybackStore(account, directory: () async => savedDirectory);
+    var playback = await PlaybackService.initialize(playbackStore: store);
     addTearDown(() async {
       await playback.dispose();
       client.close();
       await server.close(force: true);
+      await savedDirectory.delete(recursive: true);
     });
     await tester.pumpWidget(
       const MaterialApp(
@@ -130,6 +139,7 @@ void main() {
     );
 
     await client.ping();
+    await playback.attachAccount(client, remember: true);
     final albums = await client.albums();
     final tracks = await client.tracks(albums.single.id);
     await playback.playAlbum(client, tracks, 0);
@@ -208,7 +218,44 @@ void main() {
           playback.sleepTimer.value == null &&
           !playback.playbackState.value.playing,
     );
+    // Recreate the real native player using the same on-disk account state.
+    await playback.seek(const Duration(seconds: 4));
+    await playback.setShuffleMode(AudioServiceShuffleMode.all);
+    await playback.setRepeatMode(AudioServiceRepeatMode.all);
+    await playback.setSpeed(1.25);
+    final upcoming = playback.upcomingIndices;
+    final current = playback.playbackState.value.queueIndex;
+    final beforeRestoreRequests = streamRequests;
+    await playback.dispose();
+    playback = await PlaybackService.initialize(playbackStore: store);
+    await playback.attachAccount(client, remember: true);
+    expect(playback.error.value, isNull);
+    expect(playback.continuityNotice.value, isNull);
+    expect(playback.queue.value.map((item) => item.id), ['one', 'three']);
+    expect(playback.playbackState.value.queueIndex, current);
+    expect(playback.playbackState.value.playing, isFalse);
+    expect(playback.playbackState.value.repeatMode, AudioServiceRepeatMode.all);
+    expect(
+      playback.playbackState.value.shuffleMode,
+      AudioServiceShuffleMode.all,
+    );
+    expect(playback.playbackState.value.speed, 1.25);
+    expect(playback.upcomingIndices, upcoming);
+    expect(playback.position.inMilliseconds, closeTo(4000, 500));
+    expect(
+      streamRequests,
+      beforeRestoreRequests,
+      reason: 'Restoration must not fetch audio before Play',
+    );
+    await playback.play();
+    await eventually(
+      tester,
+      () => playback.position > const Duration(seconds: 5),
+    );
+    expect(playback.error.value, isNull);
+    expect(playback.upcomingIndices, upcoming);
     await playback.reset();
+    expect(await store(client).read(), isNull);
     expect(playback.queue.value, isEmpty);
     expect(playback.mediaItem.value, isNull);
     expect(

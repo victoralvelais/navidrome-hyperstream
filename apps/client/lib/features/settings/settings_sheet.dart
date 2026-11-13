@@ -176,6 +176,7 @@ class SettingsPageState extends State<SettingsPage> {
       widget.playback.preferences,
       widget.playback.settingsError,
       widget.playback.listeningNotice,
+      widget.playback.continuityNotice,
       if (widget.session != null) widget.session!,
     ]),
     builder: (context, _) {
@@ -341,7 +342,7 @@ class SettingsPageState extends State<SettingsPage> {
                       ? null
                       : () => session.switchServer(
                           server.id,
-                          beforeSwitch: widget.playback.reset,
+                          beforeSwitch: widget.playback.suspendForAccountSwitch,
                         ),
                   trailing: server.id == session.activeServerId
                       ? Icon(
@@ -400,9 +401,11 @@ class SettingsPageState extends State<SettingsPage> {
             ServerSignInForm(
               session: session,
               adding: true,
-              beforeSwitch: widget.playback.reset,
+              beforeSwitch: widget.playback.suspendForAccountSwitch,
             ),
-          if (widget.playback.settingsError.value ?? preferences.notice
+          if (widget.playback.continuityNotice.value ??
+                  widget.playback.settingsError.value ??
+                  preferences.notice
               case final String message)
             Padding(
               padding: const EdgeInsets.only(top: 16),
