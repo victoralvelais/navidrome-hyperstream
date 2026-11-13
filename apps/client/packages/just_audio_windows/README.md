@@ -3,7 +3,10 @@
 Vendored from `just_audio_windows` 0.2.3 in the pub.dev cache. The upstream MIT
 license is retained in `LICENSE`. The target uses C++20 for standard WinRT
 coroutines; inline member declarations in `player.hpp` omit redundant class qualifiers
-for standard conformance. Playback behavior is otherwise unchanged.
+for standard conformance. Playback continuity also fixes queue traversal: the
+supplied shuffle permutation is applied directly and honored during initial
+loading, and initial positions accept 64-bit microseconds for long tracks.
+`tools/check_playback_queue.cpp` tests the production permutation helper in CI.
 
 `windows/just_audio_windows_plugin.cpp` adds the `dev.hyperstream/audio_outputs`
 method channel:

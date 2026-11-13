@@ -117,8 +117,10 @@ class FakePlayer extends Fake implements AudioPlayer {
       failNextLoad = false;
       throw PlayerException(1, 'secret-auth-url', 0);
     }
-    currentIndex = initialIndex ?? 0;
-    position = initialPosition ?? Duration.zero;
+    // Match just_audio's idle player: initial seek arguments are deferred until
+    // activation, so paused restoration must explicitly seek the idle queue.
+    currentIndex = preload ? initialIndex ?? 0 : 0;
+    position = preload ? initialPosition ?? Duration.zero : Duration.zero;
     activeShuffleOrder = shuffleOrder;
     shuffleOrder?.clear();
     shuffleOrder?.insert(0, audioSources.length);
@@ -184,7 +186,9 @@ class FakePlayer extends Fake implements AudioPlayer {
     if (seekGate != null) await seekGate!.future;
     this.position = position ?? Duration.zero;
     currentIndex = index ?? currentIndex;
-    processingState = ProcessingState.ready;
+    if (processingState != ProcessingState.idle) {
+      processingState = ProcessingState.ready;
+    }
     emit();
   }
 

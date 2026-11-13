@@ -497,6 +497,13 @@ class PlaybackService extends BaseAudioHandler {
         );
         if (revision != _revision) return;
         if (restored != null) {
+          // With preload:false, just_audio defers initial seek values until
+          // activation. Seek its idle player too so the paused UI and next
+          // checkpoint use the saved song/position before the user presses Play.
+          if (!autoplay) {
+            await _player.seek(restored.safePosition, index: index);
+            if (revision != _revision) return;
+          }
           await _player.setLoopMode(LoopMode.values.byName(restored.repeat));
           if (revision != _revision) return;
           await _player.setSpeed(restored.speed);

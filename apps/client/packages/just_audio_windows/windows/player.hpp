@@ -11,6 +11,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include "uri_utils.hpp"
+#include "playback_queue.hpp"
 
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Foundation.h>
@@ -258,21 +259,27 @@ public:
 
     if (method_call.method_name().compare("load") == 0) {
       const auto* audioSourceData = std::get_if<flutter::EncodableMap>(ValueOrNull(*args, "audioSource"));
-      const auto* initialPosition = std::get_if<int>(ValueOrNull(*args, "initialPosition"));
+      const auto* initialPosition = ValueOrNull(*args, "initialPosition");
       const auto* initialIndex = std::get_if<int>(ValueOrNull(*args, "initialIndex"));
 
       try {
         loadSource(*audioSourceData);
+        setShuffleOrder(*audioSourceData);
       } catch (char* error) {
         return result->Error("load_error", error);
+      } catch (const std::exception&) {
+        return result->Error("load_error", "Invalid queue order.");
+      } catch (const winrt::hresult_error&) {
+        return result->Error("load_error", "Could not prepare the audio queue.");
       }
 
       if (initialIndex != nullptr) {
         seekToItem((uint32_t)*initialIndex);
       }
 
-      if (initialPosition != nullptr) {
-        seekToPosition(*initialPosition);
+      if (initialPosition != nullptr && !initialPosition->IsNull()) {
+        // Microseconds exceed int32 after roughly 36 minutes.
+        seekToPosition(initialPosition->LongValue());
       }
 
       result->Success(flutter::EncodableMap());
@@ -356,7 +363,13 @@ public:
     } else if (method_call.method_name().compare("setShuffleOrder") == 0) {
       const auto* source = std::get_if<flutter::EncodableMap>(ValueOrNull(*args, "audioSource"));
 
-      setShuffleOrder(*source);
+      try {
+        setShuffleOrder(*source);
+      } catch (const std::exception&) {
+        return result->Error("shuffleOrder_error", "Invalid queue order.");
+      } catch (const winrt::hresult_error&) {
+        return result->Error("shuffleOrder_error", "Could not change queue order.");
+      }
 
       result->Success(flutter::EncodableMap());
     } else if (method_call.method_name().compare("setAutomaticallyWaitsToMinimizeStalling") == 0) {
@@ -679,28 +692,13 @@ public:
     if (type->compare("concatenating") == 0) {
       const auto* shuffleOrder = std::get_if<flutter::EncodableList>(ValueOrNull(source, "shuffleOrder"));
 
-      // A copy of mediaPlaybackList.Items()
       std::vector<Playback::MediaPlaybackItem> itemsCopy {};
       for (auto item : mediaPlaybackList.Items()) {
         itemsCopy.push_back(item);
       }
-
-      // then we apply the suffling to itemsCopy
-      for (int i = 0; i < ((int) shuffleOrder->size()); i++) {
-        auto item = itemsCopy.at(i);
-
-        auto insertAt = (*shuffleOrder).at(i).LongValue();
-
-        // delete the item at i
-        itemsCopy.erase(itemsCopy.begin() + i);
-        itemsCopy.insert(itemsCopy.begin() + insertAt, item);
-      }
-
-      // and finnaly provide it to the player list
-      mediaPlaybackList.SetShuffledItems(itemsCopy);
-
-      itemsCopy.clear();
-      itemsCopy.shrink_to_fit();
+      std::vector<int64_t> order;
+      for (const auto& value : *shuffleOrder) order.push_back(value.LongValue());
+      mediaPlaybackList.SetShuffledItems(hyperstream::ApplyShuffleOrder(itemsCopy, order));
 
       const auto* children = std::get_if<flutter::EncodableList>(ValueOrNull(source, "children"));
       for (auto child : *children) {

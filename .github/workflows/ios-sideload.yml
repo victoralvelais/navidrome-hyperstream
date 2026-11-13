@@ -84,6 +84,11 @@ jobs:
             -o build/ci/check-audio-share
           build/ci/check-audio-share
 
+      - name: Verify Windows queue traversal helper
+        run: |
+          c++ -std=c++17 ../../tools/check_playback_queue.cpp -o build/ci/check-playback-queue
+          build/ci/check-playback-queue
+
       - name: Build for physical iPhones and iPads
         # Release mode supports launching from the home screen without a debugger.
         # Flutter manages this project's Swift Package Manager dependencies.

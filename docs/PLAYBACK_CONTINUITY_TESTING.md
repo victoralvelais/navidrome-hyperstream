@@ -80,6 +80,11 @@ test recreates the player, verifies lazy paused restoration and resumes playback
 The release always checks saved-queue restoration/checkpointing in a real Windows
 app. HTTP playback, native seeking and transitions additionally run when a real
 audio output is enumerated; runners without one report that smoke test skipped.
-Run 37 reached zero-duration/completed audio before restoration, so the follow-up
-explicitly probes device availability rather than claiming a playback pass.
+Hosted validation confirmed zero Windows audio outputs. The independent saved
+queue check exposed just_audio's deferred initial seek when preloading is off;
+restoration now explicitly seeks the idle player before publishing/saving state.
+The Windows backend also applies saved shuffle traversal at load time, maps
+permutation indices directly, and reads 64-bit initial positions for long tracks.
+A native C++ check exercises that production permutation helper across all small
+permutations and rejects invalid orders.
 Physical iOS and Windows playback acceptance still requires the steps above.
