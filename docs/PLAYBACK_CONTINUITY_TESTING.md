@@ -1,7 +1,7 @@
 # Playback continuity: device checks
 
-First paired continuity release: **0.1.0+39**, November 13, 2026. Use the release recorded in
-`releases/latest.json`. Next is user testing, then collaborative smart-playlist
+Current paired follow-up: **0.1.0+40**, November 13, 2026 (first continuity build: 39).
+Use the release recorded in `releases/latest.json`. Next is user testing, then collaborative smart-playlist
 planning, then alignment on addons, external streaming and Navidrome imports.
 Those later features are not part of this change. The user declined the Discord
 webhook alternative; leave that investigation aside.
@@ -122,3 +122,12 @@ the full audio smoke test reported skipped with zero audio outputs. Both platfor
 packages succeeded in [run 39](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43404649005)
 from `e68cb4b6`. The release helper verified manifests/checksums, both downloaded
 archives passed CRC checks, and the IPA bundle reports `0.1.0+39`.
+
+Build 40 validation: all **255 Flutter tests**, formatting and analysis passed.
+Both packages succeeded in [run 40](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43408657918)
+from `5ed087b0`. The release helper verified manifests/checksums, both downloaded
+archives passed CRC checks, and the IPA bundle reports `0.1.0+40`. Windows native
+restoration checks passed; audible playback was again skipped because the host
+reported zero audio outputs. The real-library activation regression and full-queue
+gesture tests passed. Await the user's device confirmation before moving on to
+smart-playlist planning.
