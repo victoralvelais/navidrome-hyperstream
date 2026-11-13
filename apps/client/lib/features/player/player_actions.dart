@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,6 +9,7 @@ import '../../services/playback_service.dart';
 import '../../widgets/glass_overlays.dart';
 import '../library/collection_actions.dart';
 import '../playlists/playlist_dialogs.dart';
+import 'audio_share_dialog.dart';
 
 class NowPlayingTrackActions extends StatefulWidget {
   const NowPlayingTrackActions({
@@ -122,9 +122,8 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
         case 'share':
           final text = '${song.title} — ${song.artist}\n${song.album}';
           try {
-            if (Platform.isIOS) {
-              await const MethodChannel('dev.hyperstream/share')
-                  .invokeMethod<void>('shareText', text);
+            if (defaultTargetPlatform == TargetPlatform.iOS) {
+              await shareAudioFile(context, collections.client, song);
             } else {
               await Clipboard.setData(ClipboardData(text: text));
               if (mounted) {
@@ -133,6 +132,8 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
                 );
               }
             }
+          } on NavidromeException {
+            rethrow;
           } on Object {
             throw const NavidromeException(
               'Could not share this song. Try again.',
@@ -194,7 +195,9 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
           menuAction('playlist', 'Add to playlist', Icons.playlist_add_rounded),
           menuAction(
             'share',
-            Platform.isIOS ? 'Share' : 'Share · copy details',
+            defaultTargetPlatform == TargetPlatform.iOS
+                ? 'Share audio file'
+                : 'Share · copy details',
             Icons.ios_share_rounded,
           ),
         ],

@@ -401,3 +401,44 @@ and all five viewport preview flows pass. Home, Servers and the confirmation
 dialog were visually inspected, including the small phone with enlarged text.
 The startup regression also verifies that Cancel preserves saved credentials
 and only confirming Disconnect prevents account restoration on the next launch.
+
+### Share the audio file on iOS
+
+The now-playing song menu now has **Share audio file** on iOS. It downloads the
+original track with OpenSubsonic `download`, shows a cancellable glass progress
+dialog, then opens the native activity sheet with one typed local audio file.
+MP3 stays MP3 and FLAC stays FLAC; no transcoding or companion service is involved.
+The attachment uses an `Artist - Title.ext` filename. Windows retains its existing
+copy-song-details action.
+
+The streamed download uses a private, unique temporary directory, blocks
+redirects, rejects HTTP/JSON/HTML errors and empty/truncated responses, and aborts
+on Cancel or account closure. It keeps the file until the iOS activity completion
+callback, then removes it. Interrupted exports older than a day are reclaimed on
+the next export. Neither server credentials nor authenticated URLs are passed to
+other apps. An iPad popover anchor and a file-type identifier accompany the item.
+
+Discord is the primary device acceptance case. Its
+[attachment FAQ](https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ)
+lists MP3 support; its
+[February 2026 patch notes](https://discord.com/blog/discord-patch-notes-february-4-2026)
+also describe iOS share-sheet file fixes. Destination apps determine supported
+formats, upload limits and available channels. Hyperstream cannot verify remote
+delivery from the activity completion callback, and no Discord upload has been
+performed by the automated tests.
+
+Device check: play an MP3 below your Discord upload limit, open its song menu,
+choose Share audio file, and select Discord (under More if needed). Choose a
+channel/DM, send, and confirm the recipient gets a playable MP3 attachment with
+the expected name and size. Also try Save to Files/AirDrop, native-sheet Cancel,
+download Cancel, and sharing twice. Repeat on iPad to check the popover. If Discord
+is absent or its extension fails, Save to Files then attach from Discord itself.
+
+Validation: the full 225-test Flutter suite passes. Final formatting and static
+analysis are clean, and all 39 targeted API/player/share regressions pass after
+the final cleanup changes. These include real HTTP cancellation before headers
+and during the body, account closure, idle timeouts, byte-preserving MP3/FLAC
+exports, invalid responses, safe filenames, file lifetime across the native
+bridge, and progress/cancel/error flows at 320 px with 1.4x text. iOS compilation
+and paired packaging run in the release workflow; physical Discord delivery is
+the remaining device acceptance check.

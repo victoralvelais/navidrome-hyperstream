@@ -1,11 +1,14 @@
 import Flutter
 import UIKit
 import AVKit
+import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var appearanceChannel: FlutterMethodChannel?
   private var artworkChannel: FlutterMethodChannel?
+  private var shareChannel: FlutterMethodChannel?
+  private var sharing = false
   private var transparencyObserver: NSObjectProtocol?
   override func application(
     _ application: UIApplication,
@@ -38,9 +41,28 @@ import AVKit
       }
     }
     let share = FlutterMethodChannel(name: "dev.hyperstream/share", binaryMessenger: registrar.messenger())
-    share.setMethodCallHandler { call, result in
-      guard call.method == "shareText", let text = call.arguments as? String else {
+    shareChannel = share
+    share.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "shareFile" else {
         result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let self, !self.sharing else {
+        result(FlutterError(code: "busy", message: "Sharing is already open.", details: nil))
+        return
+      }
+      guard let path = call.arguments as? String,
+            let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+        result(FlutterError(code: "invalid_file", message: "The audio file is unavailable.", details: nil))
+        return
+      }
+      let file = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+      let root = cache.appendingPathComponent("hyperstream-share", isDirectory: true)
+        .standardizedFileURL.resolvingSymlinksInPath()
+      let values = try? file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+      guard file.path.hasPrefix(root.path + "/"),
+            values?.isRegularFile == true, (values?.fileSize ?? 0) > 0 else {
+        result(FlutterError(code: "invalid_file", message: "The audio file is unavailable.", details: nil))
         return
       }
       guard var presenter = UIApplication.shared.connectedScenes
@@ -51,13 +73,28 @@ import AVKit
         return
       }
       while let presented = presenter.presentedViewController { presenter = presented }
-      let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+      guard !(presenter is UIActivityViewController), !presenter.isBeingDismissed else {
+        result(FlutterError(code: "busy", message: "Another sheet is closing. Try again.", details: nil))
+        return
+      }
+      // A typed local file is the sole item. Discord receives an attachment,
+      // never an authenticated Navidrome URL or a text-only song description.
+      let controller = UIActivityViewController(activityItems: [HyperstreamAudioItem(file: file)], applicationActivities: nil)
+      self.sharing = true
+      controller.completionWithItemsHandler = { [weak self] _, completed, _, error in
+        self?.sharing = false
+        if error != nil {
+          result(FlutterError(code: "share_failed", message: "Audio sharing could not finish.", details: nil))
+        } else {
+          result(completed)
+        }
+      }
       if let popover = controller.popoverPresentationController {
         popover.sourceView = presenter.view
         popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
         popover.permittedArrowDirections = []
       }
-      presenter.present(controller, animated: true) { result(nil) }
+      presenter.present(controller, animated: true)
     }
     let channel = FlutterMethodChannel(name: "dev.hyperstream/appearance", binaryMessenger: registrar.messenger())
     appearanceChannel = channel
@@ -79,6 +116,25 @@ import AVKit
 
   deinit {
     if let observer = transparencyObserver { NotificationCenter.default.removeObserver(observer) }
+  }
+}
+
+private class HyperstreamAudioItem: NSObject, UIActivityItemSource {
+  let file: URL
+  init(file: URL) {
+    self.file = file
+    super.init()
+  }
+  func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any { file }
+  func activityViewController(_ activityViewController: UIActivityViewController,
+                              itemForActivityType activityType: UIActivity.ActivityType?) -> Any? { file }
+  func activityViewController(_ activityViewController: UIActivityViewController,
+                              dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?) -> String {
+    (UTType(filenameExtension: file.pathExtension) ?? .data).identifier
+  }
+  func activityViewController(_ activityViewController: UIActivityViewController,
+                              subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+    file.deletingPathExtension().lastPathComponent
   }
 }
 

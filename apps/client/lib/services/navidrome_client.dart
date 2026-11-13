@@ -43,6 +43,8 @@ class NavidromeClient {
   final _listens = StreamController<LocalListen>.broadcast();
   final _favoriteChanges = StreamController<(String, bool)>.broadcast();
   bool _closed = false;
+  final _closedSignal = Completer<void>();
+  bool get isClosed => _closed;
   String? _countToken;
   String? serverType;
   String? serverVersion;
@@ -661,12 +663,51 @@ class NavidromeClient {
   Uri streamUri(String trackId) =>
       _endpoint('stream', {'id': trackId, 'format': 'raw'});
 
+  /// Original bytes for an explicit user export. Never share this request URL.
+  Future<http.StreamedResponse> downloadAudio(
+    String trackId, {
+    required Future<void> abortTrigger,
+  }) async {
+    if (_closed) {
+      throw const NavidromeException('This server connection has closed.');
+    }
+    try {
+      final request = http.AbortableRequest(
+        'GET',
+        _endpoint('download', {'id': trackId}),
+        abortTrigger: Future.any([abortTrigger, _closedSignal.future]),
+      )..followRedirects = false;
+      final response = await _http
+          .send(request)
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        await response.stream.listen(null, onError: (Object _) {}).cancel();
+        throw NavidromeException(switch (response.statusCode) {
+          401 || 403 => 'Your server account could not download this song. Check its download permission.',
+          404 => 'This song is no longer available on the server.',
+          >= 300 && < 400 =>
+            'The server redirected this download. Enter its final address.',
+          _ => 'The server could not download this song. Try again.',
+        });
+      }
+      return response;
+    } on NavidromeException {
+      rethrow;
+    } on Exception {
+      throw const NavidromeException(
+        'Could not download this song. Check your connection and try again.',
+      );
+    }
+  }
+
   Future<Uint8List> coverArt(String id) async =>
       (await _get(_endpoint('getCoverArt', {'id': id, 'size': '400'})))
           .bodyBytes;
 
   void close() {
+    if (_closed) return;
     _closed = true;
+    _closedSignal.complete();
     _countToken = null;
     _http.close();
     unawaited(_listens.close());
