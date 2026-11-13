@@ -12,6 +12,10 @@ Playback continuity is implemented for remembered accounts: queue/current track,
 position, exact shuffle order, repeat and rate restore paused after verified
 login. Account changes preserve separate queues; clear/disconnect remove the
 current saved queue. See [continuity testing](docs/PLAYBACK_CONTINUITY_TESTING.md).
+Build 39 device testing exposed native Play resetting the restored selection;
+the follow-up loads the live paused target explicitly before activation. The queue
+now opens at the current song with earlier entries above it and Up Next below;
+pull-to-dismiss begins only past the first entry. Device acceptance remains open.
 Current sequence agreed with the user: validate this playback release together,
 then collaborate on smart-playlist improvements, then align the addon/streaming/
 Navidrome import vision. Do not begin those later phases during playback testing.

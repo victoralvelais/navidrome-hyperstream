@@ -101,6 +101,7 @@ void main() {
     expect(player.currentIndex, 2);
     expect(player.position, const Duration(seconds: 47));
     expect(player.shuffleIndices, [1, 2, 0]);
+    expect(playback.earlierIndices, [1]);
     expect(playback.upcomingIndices, [0]);
     expect(player.playCalls, 0);
     expect(player.preloads, [false]);
@@ -119,8 +120,37 @@ void main() {
     expect(player.activeShuffleOrder!.indices, [1, 2, 0]);
     await playback.play();
     expect(player.playCalls, 1);
+    expect(player.preloads, [false, true]);
     expect(player.position, const Duration(seconds: 47));
   });
+
+  test(
+    'pausing or clearing during restored activation prevents late playback',
+    () async {
+      store.value = savedQueue();
+      await playback.attachAccount(client, remember: true);
+      player.loadGate = Completer<void>();
+      final activating = playback.play();
+      await Future<void>.delayed(Duration.zero);
+      await playback.pause();
+      player.loadGate!.complete();
+      await activating;
+      expect(player.playCalls, 0);
+      expect(player.currentIndex, 1);
+      expect(player.position, const Duration(seconds: 47));
+      await playback.suspendForAccountSwitch();
+      await playback.attachAccount(client, remember: true);
+      player.loadGate = Completer<void>();
+      final restarting = playback.play();
+      await Future<void>.delayed(Duration.zero);
+      final clearing = playback.reset();
+      player.loadGate!.complete();
+      await Future.wait([restarting, clearing]);
+      expect(playback.queue.value, isEmpty);
+      expect(player.playCalls, 0);
+      expect(store.value, isNull);
+    },
+  );
 
   test(
     'paused seeks and queue edits survive service disposal and recreation',

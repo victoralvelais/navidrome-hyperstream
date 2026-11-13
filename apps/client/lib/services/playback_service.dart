@@ -253,14 +253,20 @@ class PlaybackService extends BaseAudioHandler {
       ? _listeningTracks[index]
       : null;
 
-  List<int> get upcomingIndices {
+  /// Entries before/after the selected occurrence in playback order, including
+  /// duplicate songs. Earlier entries are not necessarily listening history.
+  List<int> get earlierIndices => _queueIndices(beforeCurrent: true);
+  List<int> get upcomingIndices => _queueIndices(beforeCurrent: false);
+
+  List<int> _queueIndices({required bool beforeCurrent}) {
     final current = _player.currentIndex;
     if (current == null) return const [];
     final order = _player.shuffleModeEnabled
         ? _player.shuffleIndices
         : List.generate(queue.value.length, (i) => i);
     final at = order.indexOf(current);
-    return at < 0 ? const [] : order.skip(at + 1).toList();
+    if (at < 0) return const [];
+    return (beforeCurrent ? order.take(at) : order.skip(at + 1)).toList();
   }
 
   void setSleepTimer({Duration? duration, bool endOfTrack = false}) {
@@ -419,6 +425,7 @@ class PlaybackService extends BaseAudioHandler {
     bool shuffle = false,
     PlaybackSnapshot? restored,
     bool autoplay = true,
+    bool preserveSleepTimer = false,
   }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
@@ -438,7 +445,7 @@ class PlaybackService extends BaseAudioHandler {
           repeat: _player.loopMode.name,
           speed: _player.speed,
         );
-    cancelSleepTimer();
+    if (!preserveSleepTimer) cancelSleepTimer();
     _requestedArtwork.clear();
     _clearListening();
     _loading = true;
@@ -749,8 +756,14 @@ class PlaybackService extends BaseAudioHandler {
       return;
     }
     if (mediaItem.value == null) return;
-    if (error.value != null) {
-      final snapshot = _retrySnapshot ?? _snapshot();
+    if (error.value != null ||
+        _player.processingState == ProcessingState.idle) {
+      // Seeking the idle just_audio player updates its visible state but clears
+      // its deferred initial seek. Native activation would then load index 0.
+      // Capture the live paused state (including edits) and preload explicitly
+      // before Play. Use the same serialization/revision guards as queue loads.
+      final retrying = error.value != null;
+      final snapshot = retrying ? _retrySnapshot ?? _snapshot() : _snapshot();
       final client = _queueClient;
       if (snapshot != null && client != null && !client.isClosed) {
         await _loadQueue(
@@ -758,6 +771,7 @@ class PlaybackService extends BaseAudioHandler {
           snapshot.tracks,
           snapshot.index,
           restored: snapshot,
+          preserveSleepTimer: !retrying,
         );
       }
       return;

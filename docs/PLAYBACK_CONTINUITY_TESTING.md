@@ -6,6 +6,18 @@ planning, then alignment on addons, external streaming and Navidrome imports.
 Those later features are not part of this change. The user declined the Discord
 webhook alternative; leave that investigation aside.
 
+Device feedback on build 39: the saved song/position appeared correctly, but
+pressing Play restarted at the beginning of the queue. The follow-up explicitly
+loads the live paused selection/position into the native player before playing.
+This also preserves any song selection, seek, shuffle or speed changes made
+after restoration. Startup still restores paused without fetching audio.
+
+The user selected a full queue rather than a collapsed history section. It opens
+at the current song, directly above Up Next. Scroll upward to earlier entries;
+only pulling past the actual beginning starts the existing sheet-dismiss gesture.
+Earlier entries follow the current shuffle traversal when enabled and preserve
+duplicate queue occurrences. They are queue entries, not a listening-history log.
+
 ## Expected behavior
 
 After successful login to a remembered account, Hyperstream restores its queue,
@@ -44,6 +56,12 @@ normal playback.
 4. Confirm the same song, position and upcoming songs return, with no automatic
    sound. Press Play and confirm it resumes near that position and Next advances
    to the expected song.
+5. Repeat the restart, but change the paused position before Play. Confirm playback
+   starts at that new position. Also try selecting another song before Play.
+6. Open the queue: it should start at the current song with Up Next below it.
+   Drag downward to reveal earlier songs, tap one to return to it, and check the
+   list updates around that occurrence. The panel should stay open while browsing;
+   pull beyond the first song to close it. Repeat once with shuffle enabled.
 
 ## Follow-up checks
 
@@ -89,7 +107,15 @@ A native C++ check exercises that production permutation helper across all small
 permutations and rejects invalid orders.
 Physical iOS and Windows playback acceptance still requires the steps above.
 
-Release validation: all 251 Flutter tests, formatting and analysis passed.
+The follow-up regression uses the real pinned just_audio player and replaces only
+its native method/event-channel boundary. It reproduced null initial index and
+position on activation before the fix, then verified explicit load targets after
+the fix, including paused edits, exact shuffle, repeat, speed and a newly set sleep
+timer. Service tests cover Pause/Clear during activation. Queue widget tests cover
+opening at the current entry, selecting an earlier row and pulling closed only at
+the beginning, alongside the existing overlay/layout checks.
+
+Build 39 validation: all 251 Flutter tests, formatting and analysis passed.
 The compiled C++ queue traversal checks passed. The Windows host passed protected
 account storage, output enumeration and saved-queue restoration/checkpointing;
 the full audio smoke test reported skipped with zero audio outputs. Both platform
