@@ -5,7 +5,26 @@ only the existing Navidrome account. Addons and background updates
 with the app closed are deferred. Automated tests use synthetic API responses;
 real server metadata, large-library timing and device usability still need testing.
 
-The variety follow-up ships in paired **0.1.0+42** packages from commit
+Current combined release: **0.1.0+46**, source
+`131fd79ac04df32d9c02d99e02bf3513d27100f1`. The authorized work through custom
+ranking, richer metadata and generated server copies is complete; stop before
+addon implementation and align that next phase with the user.
+
+| Release | Milestone | Validation |
+| --- | --- | --- |
+| [0.1.0+43](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43504707690) | Custom ranking in Rules and Mix | 289 Flutter tests; paired IPA/Windows packages verified |
+| [0.1.0+44](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43506055356) | Genre/year/rating filters and immediate rating updates | 294 Flutter tests; paired packages verified |
+| [0.1.0+46](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43508524913) | All above, plus explicit server publication and recovery | 307 Flutter tests; both release jobs passed; all 27 manifest file hashes, archive integrity and IPA version verified |
+
+Build 45 was superseded during packaging by the zero-score display correction
+in 46. The final targeted ranking/editor checks also passed, with clean analysis
+and formatting. Source changes are committed and pushed; `releases/latest.json`
+points to 46. The Windows runner had no audio output, so audible playback was
+skipped while queue restoration checks ran. No iOS simulator launch or live
+Navidrome publication was performed. Physical-device/server checks below remain
+open, including playback recovery on the same installation.
+
+The earlier variety follow-up shipped in paired **0.1.0+42** packages from commit
 `53aa00dbc897ed220973fe98a45b526fdcd15c79`:
 [release workflow](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43499609859).
 It adds artist spacing, stable shuffle and persisted Reshuffle to Rules/Mix.

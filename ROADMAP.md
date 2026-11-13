@@ -8,6 +8,13 @@ with shared condition groups, exclusions, track preview and ordered playback.
 Server imports remain an isolated prototype; addons remain later work.
 Updated: November 13, 2026.
 
+Latest pre-addon release: **0.1.0+46**, paired iOS/Windows packages verified from
+`131fd79ac04df32d9c02d99e02bf3513d27100f1`. Custom ranking, metadata filters and
+explicit generated Navidrome copies are implemented; all 307 Flutter tests pass.
+The next collaboration is addon/streaming/import design. Do not begin addon
+implementation under the authorization for this completed batch. Physical-device
+and live-server acceptance remains open in the linked test guides.
+
 Playback continuity is implemented for remembered accounts: queue/current track,
 position, exact shuffle order, repeat and rate restore paused after verified
 login. Account changes preserve separate queues; clear/disconnect remove the
