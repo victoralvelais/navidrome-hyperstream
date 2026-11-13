@@ -493,3 +493,36 @@ extension remains unobserved. Do not keep changing attachment representations or
 lowering audio quality without new evidence. The working route remains Save to
 Files followed by Discord's own + attachment button. This update records device
 evidence only and does not change the app or produce a new sideload build.
+
+### Further Discord sharing research (2026-11-12)
+
+The Files failure remains the baseline. Further research did not establish a
+reliable Hyperstream-side fix for the App Store Discord share extension. Its
+internal error is still unknown; do not present this as a proven root cause or
+claim that the existing provider tests demonstrate successful Discord delivery.
+
+The open-source
+[ShareToDiscord extension](https://github.com/castdrian/ShareToDiscord/blob/main/Share/ShareViewController.swift)
+forwards attachment URLs through `discord://share`. However,
+[Unbound bundles a replacement extension with its modified client](https://unbound.rip/docs/user/ios-extensions).
+This is not evidence that Hyperstream can hand an app-private file URL directly
+to stock Discord. Apple documents that even an extension and its containing app
+[need explicit shared-container access](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html).
+Do not add the undocumented URL route as a verified workaround or require a
+modified Discord installation.
+
+A supported alternative for a future optional integration is a channel webhook.
+[Discord's webhook API](https://docs.discord.com/developers/resources/webhook#execute-webhook)
+accepts actual file bytes using multipart `files[n]`; `wait=true` requests server
+confirmation and the created message. Hyperstream could upload directly without
+Docker or the iOS share extension. Each destination needs a configured webhook,
+created by someone with Manage Webhooks permission. Messages use the webhook
+identity; this does not provide personal-account sharing to arbitrary channels
+or DMs. Treat the webhook URL as a secret if implemented. This remains a proposal:
+no integration was added and no Discord message was sent during this research.
+
+Keep the confirmed Save to Files -> Discord + attachment workaround. No further
+app changes or release were warranted by these findings; 0.1.0+36 remains the
+latest sideload build. Future investigation needs new device evidence, such as
+an extension error log or a confirmed working stock-Discord handoff, before
+another compatibility build.
