@@ -20,16 +20,18 @@ The connection-recovery follow-up enables Play after playback errors, retries
 unavailable saved-server logins and interrupted playback with bounded backoff,
 and cancels playback retries on Pause/Clear/account changes. Startup recovery
 continues to restore paused. The next device check focuses on outage recovery.
-Current sequence agreed with the user: validate this playback release together,
-then collaborate on smart-playlist improvements, then align the addon/streaming/
-Navidrome import vision. Do not begin those later phases during playback testing.
+The user is testing playback and authorized smart-playlist work in parallel.
+The next small milestone adds artist spacing and saved stable shuffle to both
+Rules and Mix. Custom ranking remains a later candidate; align the addon/streaming/
+Navidrome import vision before beginning that architecture.
 Discord webhook integration was declined and is not a pending milestone.
 
 Current milestone: [Recent Radio and optional provider design](docs/SMART_PLAYLISTS_AND_PROVIDERS.md).
 Device acceptance: [Recent Radio test guide](docs/RECENT_RADIO_TESTING.md).
 After reviewing Feishin-informed proposals, the user selected both a rule editor
 and a pool mixer as selectable editor types. Both use the same rule model and
-account catalog. Scoring, artist spacing, export and addons remain later work.
+account catalog. Artist spacing and stable shuffle are implemented in the current
+follow-up. Scoring, export and addons remain later work.
 See [smart-playlist device checks](docs/SMART_PLAYLISTS_TESTING.md).
 Recent Radio's status follow-up is implemented: a progress bar plus the current
 catalog total replaces the growing fetched/search-count message. A bounded native

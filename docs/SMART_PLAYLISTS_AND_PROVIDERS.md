@@ -1,6 +1,6 @@
 # Smart playlists and optional providers
 
-Design and implementation record, updated November 12, 2026. The matched sideload
+Design and implementation record, updated November 13, 2026. The matched sideload
 release is recorded in `releases/latest.json`.
 Recent Radio and qualified listen reporting shipped in **0.1.0+15**; **0.1.0+17**
 keeps the radio fixed at 30 days, updates it locally from counted listens, and
@@ -27,7 +27,7 @@ type's settings. The name, exclusions and optional track limit are shared.
 
 - **Rules:** nested all/any conditions and one ordering. Latest activity uses
   `max(addedAt, lastPlayedAt)`; ordinary choices are newest added, most recently
-  played, title, artist and least played. The starting example matches Recent
+  played, title, artist, least played and stable shuffle. The starting example matches Recent
   Radio, but the saved definition is independently editable.
 - **Mix:** 1–8 named pools, each with the same rule builder, its own order and a
   whole-number share. Shares sum to 100%; 0% disables a pool. The starting example
@@ -35,8 +35,8 @@ type's settings. The name, exclusions and optional track limit are shared.
   examples, not new fixed radio semantics.
 - Available conditions: added/played date windows, never played, favorites,
   play count, duration, title, artist and album. Global exclusions run before
-  ordering/mixing. Genre/year/rating, artist spacing, configurable random ordering
-  and scoring remain later work. Collection playback now offers Shuffle separately.
+  ordering/mixing. Genre/year/rating and scoring remain later work. Artist spacing
+  and stable shuffle are implemented below. Collection playback offers Shuffle separately.
 - Mix uses smooth weighted interleaving. Pool order resolves ties; sort ties use
   track ID. Duplicate IDs are skipped without consuming another slot and charged
   only to the pool that emitted the track. Preview reports requested shares and
@@ -69,6 +69,53 @@ treated as a complete recent-played library.
 
 See [smart-playlist device checks](SMART_PLAYLISTS_TESTING.md). The fixed Recent
 Radio entry and deferred addon architecture remain intact.
+
+### Variety and stable shuffle: November 13 follow-up
+
+The user delegated milestone priority while testing playback recovery. Start with
+these additions to both existing editor types; keep built-in Recent Radio fixed.
+
+- **Stable shuffle** is an order for Rules or an individual Mix pool. A saved
+  playlist seed and stable track-ID hash determine rank. Catalog iteration order,
+  process restart, clock changes and local listens never reseed it. With unchanged
+  eligible tracks/settings, evaluation repeats the same selection/order. Membership,
+  pool and spacing changes can still alter track positions.
+- **Reshuffle** in preview changes the unsaved editor's seed; Save commits it.
+  On a saved playlist, Reshuffle commits the new seed before publishing a result.
+  Failed writes keep the old definition/order; concurrent changes serialize.
+  Neither action requests a catalog scan or modifies the playing queue.
+- **Artist spacing** is shared by Rules and Mix, default Off (0). Choose 1–10
+  other songs between repeated primary artists. Use the primary artist ID when
+  available, otherwise a trimmed/case-folded/whitespace-normalized display name.
+  Blank/Unknown artist metadata does not group unrelated tracks into one artist.
+  Featured credits are not parsed from display names.
+- **Relax spacing when necessary** is on by default. Only when no pool has a
+  feasible candidate, reduce the gap as little as necessary for that selection.
+  Turning it off stops at the first unsatisfiable gap. Preview reports relaxed
+  selections or a strict stop; exclusions and deduplication are always enforced.
+- Mix checks spacing across all pool boundaries. Temporarily blocked tracks stay
+  eligible for later slots; a pool with blocked tracks is not considered empty.
+  The existing fill/stop-on-exhaustion policy still applies to actual exhaustion.
+  Requested and actual pool contributions remain visible because spacing can
+  make the requested shares impossible.
+- **Play** uses the evaluated selection/order and spacing. The existing transport
+  **Shuffle** randomizes the selected tracks and bypasses spacing; its behavior is
+  unchanged. Preview explains this. Queue edits, manual jumps and repeat wrapping
+  are not constrained by playlist-generation spacing.
+
+Definition schema 2 stores `artistGap`, `relaxArtistGap` and `shuffleSeed`.
+Schema 1 remains readable with spacing Off and seed 0; merely loading never writes
+or changes its ordering. The account-store envelope/key stays version 1. Unknown
+definition versions remain protected against overwrite. Stable ranks are SHA-256
+of JSON `[playlist ID, seed, track ID]`, with track ID breaking ties. The shared
+seed gives overlapping pools consistent per-song ranks without tying rank to pool
+name or index. Large previews still run in an isolate.
+
+Selection keeps a sorted head per artist in each pool. Blocked runs can be skipped
+without repeatedly scanning the whole library; used tracks are removed lazily
+across overlapping pools. Tests cover the old ordering behavior, migration,
+scarcity, artist identity, stable/local-update ordering, mixed-pool spacing,
+failed/serialized reshuffles, unchanged playback and a large same-artist library.
 
 ## Built-in Recent Radio: local updates and periodic sync
 

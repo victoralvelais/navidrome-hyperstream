@@ -41,6 +41,9 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   late final List<SmartPool> _pools = [...widget.initial.pools];
   late SmartOrder _order = widget.initial.order;
   late bool _fill = widget.initial.fillWhenEmpty;
+  late int _artistGap = widget.initial.artistGap;
+  late bool _relaxArtistGap = widget.initial.relaxArtistGap;
+  late int _shuffleSeed = widget.initial.shuffleSeed;
   late final _preview = SmartPlaylistPreview(widget.catalog);
   bool _dirty = false;
   bool _saving = false;
@@ -88,6 +91,9 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
       order: _order,
       limit: limit,
       fillWhenEmpty: _fill,
+      artistGap: _artistGap,
+      relaxArtistGap: _relaxArtistGap,
+      shuffleSeed: _shuffleSeed,
     );
     definition.validate();
     return definition;
@@ -101,6 +107,11 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
     } on FormatException catch (error) {
       setState(() => _error = error.message);
     }
+  }
+
+  void _reshuffle() {
+    _change(() => _shuffleSeed = (_shuffleSeed + 1) & 0x7fffffff);
+    _showPreview();
   }
 
   Future<void> _save() async {
@@ -351,6 +362,44 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                     ),
                   ],
                   const SizedBox(height: 16),
+                  Text(
+                    'Variety',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  GlassDropdownField<int>(
+                    initialValue: _artistGap,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Artist spacing',
+                    ),
+                    items: [
+                      for (var gap = 0; gap <= 10; gap++)
+                        DropdownMenuItem(
+                          value: gap,
+                          child: Text(
+                            gap == 0
+                                ? 'Off'
+                                : '$gap other ${gap == 1 ? 'song' : 'songs'} between repeats',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) => _change(() => _artistGap = value!),
+                  ),
+                  if (_artistGap > 0)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Relax spacing when necessary'),
+                      subtitle: Text(
+                        _relaxArtistGap
+                            ? 'Keep playing when there are not enough distinct primary artists.'
+                            : 'Stop when no track can satisfy the artist spacing.',
+                      ),
+                      value: _relaxArtistGap,
+                      onChanged: (value) =>
+                          _change(() => _relaxArtistGap = value),
+                    ),
+                  const SizedBox(height: 16),
                   SmartRuleEditor(
                     title: 'Exclude',
                     group: _exclude,
@@ -393,6 +442,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                     catalog: widget.catalog,
                     preview: _preview,
                     playback: widget.playback,
+                    onReshuffle: _reshuffle,
                     definition: _preview.result == null
                         ? null
                         : _previewDefinition(),
@@ -424,16 +474,29 @@ class SmartOrderPicker extends StatelessWidget {
   final SmartOrder order;
   final ValueChanged<SmartOrder> onChanged;
   @override
-  Widget build(BuildContext context) => GlassDropdownField<SmartOrder>(
-    initialValue: order,
-    isExpanded: true,
-    decoration: const InputDecoration(labelText: 'Order'),
-    items: SmartOrder.values
-        .map(
-          (order) => DropdownMenuItem(value: order, child: Text(order.label)),
-        )
-        .toList(),
-    onChanged: (value) => onChanged(value!),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      GlassDropdownField<SmartOrder>(
+        initialValue: order,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Order'),
+        items: SmartOrder.values
+            .map(
+              (order) =>
+                  DropdownMenuItem(value: order, child: Text(order.label)),
+            )
+            .toList(),
+        onChanged: (value) => onChanged(value!),
+      ),
+      if (order == SmartOrder.stableShuffle)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'Keeps a saved shuffle. Use Reshuffle in the preview for a new order.',
+          ),
+        ),
+    ],
   );
 }
 

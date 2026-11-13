@@ -18,6 +18,28 @@ real server metadata, large-library timing and device usability still need testi
    Play count less than 3 or Last played not within 90 days. The latter also
    includes known never-played songs. Choose Least played order and limit 100.
 
+## Stable shuffle and artist spacing
+
+1. Create/edit a custom **Rules** playlist. Choose **Order → Stable shuffle**,
+   **Artist spacing → 3 other songs between repeats**, then Preview tracks.
+   Use a broad enough selection to include at least four primary artists.
+2. Play the result and note its order. Tap **Reshuffle**: the preview should change,
+   while the playing queue stays unchanged. Save the editor. Reopen or restart;
+   the saved seed/order should survive when eligible tracks/settings are unchanged.
+3. On the saved playlist page, Reshuffle saves a new order immediately. Pulling to
+   refresh or counting a listen must not roll a new shuffle or trigger an extra
+   scan. Membership changes can still move tracks; the current queue stays intact.
+4. In a **Mix**, edit a pool and choose Stable shuffle for that pool. Other pools
+   may keep their own orders. Set artist spacing in the main editor, preview, and
+   check it across pool boundaries. Requested and actual shares may differ when
+   spacing or overlapping pools limits the possible selections.
+5. Try a selection with only one or two artists. With **Relax spacing when
+   necessary** on, the list continues and reports relaxed selections. Turn it off:
+   the list should stop rather than break the spacing, with an explanation.
+6. Use **Play** to hear the configured order and spacing. The separate transport
+   **Shuffle** bypasses spacing, as the preview explains. Existing playlists keep
+   spacing Off until edited; built-in Recent Radio is unchanged.
+
 ## A recent discovery mix
 
 1. Create another smart playlist and select Mix. The example starts with:

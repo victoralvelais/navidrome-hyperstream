@@ -1,3 +1,9 @@
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+
 import 'library.dart';
 
 enum SmartPlaylistType { rules, mix }
@@ -56,7 +62,8 @@ enum SmartOrder {
   played('Most recently played'),
   title('Title A–Z'),
   artist('Artist A–Z'),
-  leastPlayed('Least played');
+  leastPlayed('Least played'),
+  stableShuffle('Stable shuffle');
 
   const SmartOrder(this.label);
   final String label;
@@ -250,6 +257,9 @@ class SmartPlaylistDefinition {
     this.order = SmartOrder.activity,
     this.limit,
     this.fillWhenEmpty = true,
+    this.artistGap = 0,
+    this.relaxArtistGap = true,
+    this.shuffleSeed = 0,
   }) : pools = List.unmodifiable(pools);
   final String id;
   final String name;
@@ -260,11 +270,36 @@ class SmartPlaylistDefinition {
   final SmartOrder order;
   final int? limit;
   final bool fillWhenEmpty;
+  final int artistGap;
+  final bool relaxArtistGap;
+  final int shuffleSeed;
+
+  bool get usesStableShuffle => type == SmartPlaylistType.rules
+      ? order == SmartOrder.stableShuffle
+      : pools.any(
+          (pool) => pool.share > 0 && pool.order == SmartOrder.stableShuffle,
+        );
+
+  SmartPlaylistDefinition reshuffled() => SmartPlaylistDefinition(
+    id: id,
+    name: name,
+    type: type,
+    include: include,
+    exclude: exclude,
+    pools: pools,
+    order: order,
+    limit: limit,
+    fillWhenEmpty: fillWhenEmpty,
+    artistGap: artistGap,
+    relaxArtistGap: relaxArtistGap,
+    shuffleSeed: (shuffleSeed + 1) & 0x7fffffff,
+  );
 
   factory SmartPlaylistDefinition.initial(String id) => SmartPlaylistDefinition(
     id: id,
     name: 'My smart playlist',
     type: SmartPlaylistType.rules,
+    shuffleSeed: Random().nextInt(0x7fffffff),
     include: SmartGroup(
       all: false,
       children: const [
@@ -298,6 +333,14 @@ class SmartPlaylistDefinition {
   );
 
   void validate() {
+    if (artistGap < 0 ||
+        artistGap > 10 ||
+        shuffleSeed < 0 ||
+        shuffleSeed > 0x7fffffff) {
+      throw const FormatException(
+        'Choose artist spacing from 0 to 10 and a valid shuffle.',
+      );
+    }
     if (id.isEmpty ||
         id.length > 100 ||
         name.trim().isEmpty ||
@@ -352,7 +395,7 @@ class SmartPlaylistDefinition {
   }
 
   Map<String, dynamic> toJson() => {
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'id': id,
     'name': name,
     'type': type.name,
@@ -362,9 +405,13 @@ class SmartPlaylistDefinition {
     'order': order.name,
     'limit': limit,
     'fillWhenEmpty': fillWhenEmpty,
+    'artistGap': artistGap,
+    'relaxArtistGap': relaxArtistGap,
+    'shuffleSeed': shuffleSeed,
   };
   factory SmartPlaylistDefinition.fromJson(Map<String, dynamic> json) {
-    if (json['schemaVersion'] != 1) {
+    final version = json['schemaVersion'];
+    if (version != 1 && version != 2) {
       throw const FormatException('Unsupported smart playlist version.');
     }
     final value = SmartPlaylistDefinition(
@@ -383,6 +430,9 @@ class SmartPlaylistDefinition {
       order: _enum(SmartOrder.values, json['order']),
       limit: json['limit'] as int?,
       fillWhenEmpty: json['fillWhenEmpty'] as bool,
+      artistGap: version == 1 ? 0 : json['artistGap'] as int,
+      relaxArtistGap: version == 1 ? true : json['relaxArtistGap'] as bool,
+      shuffleSeed: version == 1 ? 0 : json['shuffleSeed'] as int,
     );
     value.validate();
     return value;
@@ -403,6 +453,8 @@ class SmartPlaylistResult {
     required List<int> contributions,
     required this.scarce,
     required this.evaluatedAt,
+    this.spacingRelaxations = 0,
+    this.spacingLimited = false,
   }) : matches = List.unmodifiable(matches),
        contributions = List.unmodifiable(contributions);
   final List<SmartMatch> matches;
@@ -410,6 +462,8 @@ class SmartPlaylistResult {
   final List<int> contributions;
   final bool scarce;
   final DateTime evaluatedAt;
+  final int spacingRelaxations;
+  final bool spacingLimited;
 
   static SmartPlaylistResult evaluate(
     Iterable<Track> tracks,
@@ -429,6 +483,17 @@ class SmartPlaylistResult {
     final output = <SmartMatch>[];
     final contributions = List.filled(definition.pools.length, 0);
     final limit = definition.limit ?? unique.length;
+    final shuffleRanks = <String, String>{};
+    String shuffleRank(Track track) => shuffleRanks.putIfAbsent(
+      track.id,
+      () => sha256
+          .convert(
+            utf8.encode(
+              jsonEncode([definition.id, definition.shuffleSeed, track.id]),
+            ),
+          )
+          .toString(),
+    );
 
     DateTime? dateFor(Track track, SmartOrder order) {
       final added = validSmartDate(track.addedAt, time);
@@ -443,7 +508,9 @@ class SmartPlaylistResult {
       final sorted = items.toList();
       sorted.sort((a, b) {
         final int comparison;
-        if (order == SmartOrder.title || order == SmartOrder.artist) {
+        if (order == SmartOrder.stableShuffle) {
+          comparison = shuffleRank(a).compareTo(shuffleRank(b));
+        } else if (order == SmartOrder.title || order == SmartOrder.artist) {
           comparison = (order == SmartOrder.title ? a.title : a.artist)
               .toLowerCase()
               .compareTo(
@@ -474,23 +541,18 @@ class SmartPlaylistResult {
           .join(' · ');
     }
 
-    if (definition.type == SmartPlaylistType.rules) {
-      final matching = sorted(
-        eligible.where((track) => definition.include.matches(track, time)),
-        definition.order,
-      );
-      for (final track in matching.take(limit)) {
-        output.add(SmartMatch(track, reason(definition.include, track)));
-      }
-      return SmartPlaylistResult(
-        matches: output,
-        matchedCount: matching.length,
-        contributions: contributions,
-        scarce: false,
-        evaluatedAt: time,
-      );
-    }
-    final pools = definition.pools
+    final isMix = definition.type == SmartPlaylistType.mix;
+    final poolDefinitions = isMix
+        ? definition.pools
+        : [
+            SmartPool(
+              name: 'Rules',
+              rules: definition.include,
+              share: 100,
+              order: definition.order,
+            ),
+          ];
+    final pools = poolDefinitions
         .map(
           (pool) => pool.share == 0
               ? <Track>[]
@@ -505,20 +567,34 @@ class SmartPlaylistResult {
         .map((track) => track.id)
         .toSet()
         .length;
+    final artists = <String, String>{};
+    String artistFor(Track track) => artists.putIfAbsent(track.id, () {
+      final id = track.artistId?.trim();
+      if (id != null && id.isNotEmpty) return 'id:$id';
+      final name = track.artist.trim().toLowerCase().replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+      // Unknown artists must not all become one artificial artist.
+      return name.isEmpty || name == 'unknown artist'
+          ? 'track:${track.id}'
+          : 'name:$name';
+    });
+    final candidates = pools
+        .map((tracks) => _ArtistCandidates(tracks, artistFor))
+        .toList();
     final used = <String>{};
-    final positions = List.filled(pools.length, 0);
+    final recentArtists = ListQueue<String>();
     final scores = List.filled(pools.length, 0);
     var scarce = false;
+    var spacingLimited = false;
+    var spacingRelaxations = 0;
     while (output.length < limit) {
       final active = <int>[];
       var exhausted = false;
       for (var i = 0; i < pools.length; i++) {
-        if (definition.pools[i].share == 0) continue;
-        while (positions[i] < pools[i].length &&
-            used.contains(pools[i][positions[i]].id)) {
-          positions[i]++;
-        }
-        if (positions[i] < pools[i].length) {
+        if (poolDefinitions[i].share == 0) continue;
+        if (candidates[i].first(used, const {}) != null) {
           active.add(i);
         } else {
           exhausted = true;
@@ -529,23 +605,52 @@ class SmartPlaylistResult {
         scarce = true;
         if (!definition.fillWhenEmpty) break;
       }
-      var chosen = active.first;
+      // Blocked songs remain candidates for later. Relax only if no pool can
+      // contribute, and only as far as needed to continue.
+      final feasible = <int, Track>{};
+      var gap = definition.artistGap;
+      while (true) {
+        final blocked = recentArtists
+            .skip(max(0, recentArtists.length - gap))
+            .toSet();
+        for (final i in active) {
+          final track = candidates[i].first(used, blocked);
+          if (track != null) feasible[i] = track;
+        }
+        if (feasible.isNotEmpty || !definition.relaxArtistGap || gap == 0) {
+          break;
+        }
+        gap--;
+      }
+      if (feasible.isEmpty) {
+        spacingLimited = true;
+        break;
+      }
+      final relaxed = gap < definition.artistGap;
+      if (relaxed) spacingRelaxations++;
+      var chosen = feasible.keys.first;
       var total = 0;
       for (final i in active) {
-        final share = definition.pools[i].share;
+        final share = poolDefinitions[i].share;
         scores[i] += share;
         total += share;
-        if (scores[i] > scores[chosen]) chosen = i;
+        if (feasible.containsKey(i) && scores[i] > scores[chosen]) chosen = i;
       }
       scores[chosen] -= total;
-      final track = pools[chosen][positions[chosen]++];
+      final track = feasible[chosen]!;
       used.add(track.id);
-      contributions[chosen]++;
+      if (isMix) contributions[chosen]++;
+      if (definition.artistGap > 0) {
+        recentArtists.addLast(artistFor(track));
+        if (recentArtists.length > definition.artistGap) {
+          recentArtists.removeFirst();
+        }
+      }
       output.add(
         SmartMatch(
           track,
-          '${definition.pools[chosen].name} · ${reason(definition.pools[chosen].rules, track)}',
-          pool: chosen,
+          '${isMix ? '${poolDefinitions[chosen].name} · ' : ''}${reason(poolDefinitions[chosen].rules, track)}${relaxed ? ' · Artist spacing relaxed' : ''}',
+          pool: isMix ? chosen : null,
         ),
       );
     }
@@ -555,6 +660,60 @@ class SmartPlaylistResult {
       contributions: contributions,
       scarce: scarce,
       evaluatedAt: time,
+      spacingRelaxations: spacingRelaxations,
+      spacingLimited: spacingLimited,
     );
   }
+}
+
+/// A sorted head per artist skips entire blocked runs, without scanning the
+/// remaining library for each selection. Used IDs are removed lazily across
+/// overlapping pools. At most the blocked artists plus one head are examined.
+class _ArtistCandidates {
+  _ArtistCandidates(List<Track> tracks, String Function(Track) artistFor) {
+    final groups = <String, _ArtistRun>{};
+    for (final (rank, track) in tracks.indexed) {
+      final artist = artistFor(track);
+      (groups[artist] ??= _ArtistRun(artist)).tracks.addLast((rank, track));
+    }
+    for (final group in groups.values) {
+      _heads[group.tracks.first.$1] = group;
+    }
+  }
+  final _heads = SplayTreeMap<int, _ArtistRun>();
+
+  Track? first(Set<String> used, Set<String> blocked) {
+    final held = <int, _ArtistRun>{};
+    try {
+      while (_heads.isNotEmpty) {
+        final rank = _heads.firstKey()!;
+        final group = _heads.remove(rank)!;
+        while (group.tracks.isNotEmpty &&
+            used.contains(group.tracks.first.$2.id)) {
+          group.tracks.removeFirst();
+        }
+        if (group.tracks.isEmpty) continue;
+        final next = group.tracks.first;
+        if (next.$1 != rank) {
+          _heads[next.$1] = group;
+          continue;
+        }
+        if (blocked.contains(group.artist)) {
+          held[rank] = group;
+          continue;
+        }
+        _heads[rank] = group;
+        return next.$2;
+      }
+      return null;
+    } finally {
+      _heads.addAll(held);
+    }
+  }
+}
+
+class _ArtistRun {
+  _ArtistRun(this.artist);
+  final String artist;
+  final tracks = ListQueue<(int, Track)>();
 }

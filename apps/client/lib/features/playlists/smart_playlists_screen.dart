@@ -71,6 +71,7 @@ class SmartPlaylistScreen extends StatefulWidget {
 }
 
 class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
+  bool _reshuffling = false;
   late final _preview = SmartPlaylistPreview(widget.catalog);
   SmartPlaylistDefinition? get definition =>
       widget.store.items.where((item) => item.id == widget.id).firstOrNull;
@@ -106,6 +107,22 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
       store: widget.store,
       playback: widget.playback,
     );
+  }
+
+  Future<void> _reshuffle() async {
+    if (_reshuffling || !widget.store.canWrite || definition == null) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    setState(() => _reshuffling = true);
+    final saved = await widget.store.reshuffle(widget.id);
+    if (!mounted) return;
+    setState(() => _reshuffling = false);
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save the new shuffle. Try again.'),
+        ),
+      );
+    }
   }
 
   Future<void> delete() async {
@@ -193,6 +210,8 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
               preview: _preview,
               playback: widget.playback,
               definition: value,
+              onReshuffle: widget.store.canWrite ? _reshuffle : null,
+              reshuffling: _reshuffling,
             ),
             const DockSpacer(),
           ],

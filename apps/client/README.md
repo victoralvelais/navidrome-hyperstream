@@ -91,6 +91,13 @@ then Recent Radio and ordinary server playlists. Tap any row's icon to choose
 another; smart playlists default to Sparkles. Icon choices are device-local and
 isolated by server/account. Default restores the original icon or server cover.
 
+Rules and Mix offer **Stable shuffle** ordering and shared **Artist spacing**
+from 0–10 other tracks. Relax spacing when necessary, or stop strictly when no
+candidate can satisfy it. Reshuffle changes the preview/save order without a
+catalog scan or changes to an already playing queue. Use Play for the configured
+order/spacing; the transport Shuffle button remains unrestricted. Built-in Recent
+Radio and older definitions keep their original behavior.
+
 Swipe right from the left edge to go back through menus, including nested rule
 and pool editors; unsaved changes still require the existing discard decision.
 Floating corner controls join into a title bar when the large heading scrolls

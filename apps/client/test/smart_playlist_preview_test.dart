@@ -103,7 +103,12 @@ void main() {
         addedAt: now,
       ),
     );
-    final initial = SmartPlaylistDefinition.initial('a');
+    final initial = SmartPlaylistDefinition.fromJson({
+      ...SmartPlaylistDefinition.initial('a').toJson(),
+      'order': 'stableShuffle',
+      'artistGap': 3,
+      'shuffleSeed': 42,
+    });
     final empty = SmartPlaylistDefinition.fromJson({
       ...initial.toJson(),
       'include': SmartGroup(all: false).toJson(),

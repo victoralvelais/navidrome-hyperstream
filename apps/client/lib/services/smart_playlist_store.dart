@@ -86,6 +86,14 @@ class SmartPlaylistStore extends ChangeNotifier {
   Future<bool> remove(String id) =>
       _change((items) => items.where((item) => item.id != id).toList());
 
+  /// Read the latest definition inside the write queue. Concurrent reshuffles
+  /// advance independently and can never resurrect a deleted playlist.
+  Future<bool> reshuffle(String id) => _change(
+    (items) => [
+      for (final item in items) item.id == id ? item.reshuffled() : item,
+    ],
+  );
+
   Future<bool> _change(
     List<SmartPlaylistDefinition> Function(List<SmartPlaylistDefinition>) edit,
   ) async {

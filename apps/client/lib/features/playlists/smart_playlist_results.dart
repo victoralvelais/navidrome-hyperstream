@@ -18,11 +18,15 @@ class SmartPlaylistResults extends StatelessWidget {
     required this.preview,
     required this.playback,
     this.definition,
+    this.onReshuffle,
+    this.reshuffling = false,
   });
   final LibraryCatalog catalog;
   final SmartPlaylistPreview preview;
   final PlaybackService playback;
   final SmartPlaylistDefinition? definition;
+  final VoidCallback? onReshuffle;
+  final bool reshuffling;
 
   void _play(
     SmartPlaylistResult result, [
@@ -88,6 +92,20 @@ class SmartPlaylistResults extends StatelessWidget {
               ),
           ],
           const SizedBox(height: 12),
+          if (result.spacingLimited)
+            const Text('Stopped because the artist spacing could not be met.'),
+          if (result.spacingRelaxations > 0)
+            Text(
+              'Artist spacing relaxed for ${result.spacingRelaxations} ${result.spacingRelaxations == 1 ? 'selection' : 'selections'} to keep the playlist going.',
+            ),
+          if (definition?.usesStableShuffle == true && onReshuffle != null)
+            TextButton.icon(
+              onPressed: preview.busy || reshuffling || result.matchedCount < 2
+                  ? null
+                  : onReshuffle,
+              icon: const Icon(Icons.shuffle_rounded),
+              label: Text(reshuffling ? 'Saving shuffle…' : 'Reshuffle'),
+            ),
           CollectionPlayControls(
             onPlay: result.matches.isEmpty || preview.busy
                 ? null
@@ -97,8 +115,10 @@ class SmartPlaylistResults extends StatelessWidget {
                 : () => _play(result, 0, true),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Play uses this order; Shuffle randomizes it. Later updates leave the playing queue unchanged.',
+          Text(
+            definition != null && definition!.artistGap > 0
+                ? 'Play follows this order and spacing. Shuffle randomizes the tracks without spacing. Later updates leave the playing queue unchanged.'
+                : 'Play uses this order; Shuffle randomizes it. Later updates leave the playing queue unchanged.',
           ),
           if (result.matches.isEmpty)
             const Padding(

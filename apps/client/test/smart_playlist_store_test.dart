@@ -8,6 +8,63 @@ import 'package:hyperstream_client/services/smart_playlist_store.dart';
 import 'recent_radio_service_test.dart' show api, envelope;
 
 void main() {
+  test('legacy definitions migrate on write and reshuffle survives reload and failed saves', () async {
+    final client = api((_) => envelope({}));
+    addTearDown(client.close);
+    var fail = false;
+    var writes = 0;
+    final legacy = SmartPlaylistDefinition.initial('a').toJson()
+      ..['schemaVersion'] = 1
+      ..remove('artistGap')
+      ..remove('relaxArtistGap')
+      ..remove('shuffleSeed');
+    var raw = jsonEncode({
+      'schemaVersion': 1,
+      'playlists': [legacy],
+    });
+    final original = raw;
+    SmartPlaylistStore open() => SmartPlaylistStore(
+      client,
+      read: (_) async => raw,
+      write: (_, value) async {
+        writes++;
+        if (fail) throw StateError('disk');
+        raw = value;
+      },
+    );
+    final store = open();
+    addTearDown(store.dispose);
+    await store.load();
+    expect(raw, original);
+    expect(writes, 0);
+    expect(store.items.single.artistGap, 0);
+    final edited = SmartPlaylistDefinition.fromJson({
+      ...store.items.single.toJson(),
+      'artistGap': 3,
+      'relaxArtistGap': false,
+      'order': 'stableShuffle',
+    });
+    await store.save(edited);
+    expect(await store.reshuffle('a'), isTrue);
+    expect(store.items.single.shuffleSeed, 1);
+    fail = true;
+    expect(await store.reshuffle('a'), isFalse);
+    expect(store.items.single.shuffleSeed, 1);
+    fail = false;
+    final results = await Future.wait([
+      store.reshuffle('a'),
+      store.reshuffle('a'),
+    ]);
+    expect(results, [true, true]);
+    expect(store.items.single.shuffleSeed, 3);
+    final reopened = open();
+    addTearDown(reopened.dispose);
+    await reopened.load();
+    expect(reopened.items.single.toJson(), store.items.single.toJson());
+    await Future.wait([reopened.remove('a'), reopened.reshuffle('a')]);
+    expect(reopened.items, isEmpty);
+  });
+
   test('definitions persist separately by server and user, across reload and deletion', () async {
     final clients = [
       api((_) => envelope({})),
