@@ -478,3 +478,13 @@ extension. Retry the direct share on-device before calling that route fixed.
 
 Local validation: 230 Flutter tests pass; formatting and static analysis are
 clean. The native provider check is a required release-workflow step.
+
+The user subsequently confirmed that direct Discord sharing still fails on
+0.1.0+36. Do not describe the provider change as a confirmed Discord fix. The
+same approximately 11 MB MP3 plays in Files, fails when shared from Files, and
+uploads successfully through Discord's own + attachment button. The next
+comparison is an MP3 under 5 MB shared from Files to the same channel, plus
+confirmation of whether Discord itself is installed normally or in LiveContainer.
+Until those results arrive, a share-extension size/memory issue is a hypothesis,
+not an established cause. No additional app release is warranted solely by this
+documentation update.
