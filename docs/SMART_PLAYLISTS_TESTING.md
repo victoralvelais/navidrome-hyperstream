@@ -58,6 +58,20 @@ requested. Physical-device acceptance remains open.
    **Shuffle** bypasses spacing, as the preview explains. Existing playlists keep
    spacing Off until edited; built-in Recent Radio is unchanged.
 
+## Custom ranking
+
+1. In Rules choose **Order → Custom ranking**. Leave the initial 60-point added,
+   25-point played, 15-point favorite and 20-point play-count weights. Set added
+   recency to 14 days and Preview. Each sample explains the four contributions.
+2. Move a weight to 0 and preview again; that contribution disappears. Empty or
+   invalid windows must prevent Preview/Save with an explanation. All weights at
+   zero are valid and use track ID to break ties.
+3. Save, reopen and confirm settings. Switch to Mix and give a pool different
+   ranking weights/windows. Rules settings should survive switching back.
+4. Count a listen or favorite a track. Scores should update without a library
+   scan, while the current playing queue keeps its previous order. Artist spacing
+   can move lower scores ahead; Mix shares still determine pool contributions.
+
 ## A recent discovery mix
 
 1. Create another smart playlist and select Mix. The example starts with:

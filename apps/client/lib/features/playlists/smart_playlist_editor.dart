@@ -13,6 +13,7 @@ import '../../services/smart_playlist_preview.dart';
 import '../../services/smart_playlist_store.dart';
 import 'smart_rule_editor.dart';
 import 'smart_playlist_results.dart';
+import 'smart_ranking_editor.dart';
 
 class SmartPlaylistEditor extends StatefulWidget {
   const SmartPlaylistEditor({
@@ -40,6 +41,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
   late SmartGroup _exclude = widget.initial.exclude;
   late final List<SmartPool> _pools = [...widget.initial.pools];
   late SmartOrder _order = widget.initial.order;
+  late SmartRanking _ranking = widget.initial.ranking;
   late bool _fill = widget.initial.fillWhenEmpty;
   late int _artistGap = widget.initial.artistGap;
   late bool _relaxArtistGap = widget.initial.relaxArtistGap;
@@ -94,6 +96,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
       artistGap: _artistGap,
       relaxArtistGap: _relaxArtistGap,
       shuffleSeed: _shuffleSeed,
+      ranking: _ranking,
     );
     definition.validate();
     return definition;
@@ -276,6 +279,11 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                       order: _order,
                       onChanged: (value) => _change(() => _order = value),
                     ),
+                    if (_order == SmartOrder.customRanking)
+                      SmartRankingEditor(
+                        ranking: _ranking,
+                        onChanged: (value) => _change(() => _ranking = value),
+                      ),
                     if (_order == SmartOrder.activity)
                       const Padding(
                         padding: EdgeInsets.only(top: 8),
@@ -512,6 +520,7 @@ class _PoolPageState extends State<_PoolPage> {
   late final _share = TextEditingController(text: '${widget.initial.share}');
   late SmartGroup _rules = widget.initial.rules;
   late SmartOrder _order = widget.initial.order;
+  late SmartRanking _ranking = widget.initial.ranking;
   String? _error;
   @override
   void dispose() {
@@ -521,6 +530,12 @@ class _PoolPageState extends State<_PoolPage> {
   }
 
   void _done() {
+    try {
+      _ranking.validate();
+    } on FormatException catch (error) {
+      setState(() => _error = error.message);
+      return;
+    }
     final share = int.tryParse(_share.text);
     if (_name.text.trim().isEmpty ||
         _name.text.trim().length > 80 ||
@@ -540,6 +555,7 @@ class _PoolPageState extends State<_PoolPage> {
         rules: _rules,
         share: share,
         order: _order,
+        ranking: _ranking,
       ),
     );
   }
@@ -585,6 +601,11 @@ class _PoolPageState extends State<_PoolPage> {
               order: _order,
               onChanged: (value) => setState(() => _order = value),
             ),
+            if (_order == SmartOrder.customRanking)
+              SmartRankingEditor(
+                ranking: _ranking,
+                onChanged: (value) => setState(() => _ranking = value),
+              ),
             if (_error != null)
               Text(
                 _error!,

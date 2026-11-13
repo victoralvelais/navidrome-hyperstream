@@ -35,7 +35,7 @@ type's settings. The name, exclusions and optional track limit are shared.
   examples, not new fixed radio semantics.
 - Available conditions: added/played date windows, never played, favorites,
   play count, duration, title, artist and album. Global exclusions run before
-  ordering/mixing. Genre/year/rating and scoring remain later work. Artist spacing
+  ordering/mixing. Genre/year/rating remain next. Custom ranking, artist spacing
   and stable shuffle are implemented below. Collection playback offers Shuffle separately.
 - Mix uses smooth weighted interleaving. Pool order resolves ties; sort ties use
   track ID. Duplicate IDs are skipped without consuming another slot and charged
@@ -357,6 +357,31 @@ the opposite. The selection expression is straightforward (`added OR played in
 different operation again: it chooses contributions from two eligible pools.
 This limitation is an inference from the inspected editor/serialization and
 documented sort semantics, not a claim that every future server lacks extensions.
+
+### Custom ranking: November 13 follow-up
+
+Custom ranking is an order in Rules or each individual Mix pool. Four bounded
+weights (0–100 points) combine added recency, played recency, favorites, and a
+play-count penalty. Recency contributes `weight * max(0, 1 - age/window)` using
+elapsed time; windows are 1–3650 days. Missing/future dates contribute zero.
+Favorites contribute the entire bonus. The penalty is
+`weight * clamp(playCount/fullPenaltyCount, 0, 1)`, subtracted from the total;
+the full-penalty threshold is 1–1000000 plays. Negative scores are valid.
+Defaults are 60/25/15/20 points, 30-day windows, and a 20-play penalty threshold.
+Weights are not percentages. All-zero weights intentionally order by track ID.
+
+Filter/exclude first, rank descending with track-ID tie breaks, then apply the
+existing pool interleaving, artist spacing and limit. Each selected preview row
+explains its score contributions from the pool that selected it. Spacing may move
+a lower-scored song forward. Current playing queues never change automatically.
+Local listens/favorites reuse catalog updates without scanning. The clock can
+change recency scores on reevaluation; stable shuffle keeps its separate semantics.
+
+Definition schema 3 stores Rules and per-pool ranking independently. Versions 1/2
+load with default ranking settings while retaining their original order. Unknown
+schemas or malformed ranking values remain protected by the existing store.
+The user authorized work through metadata filters and generated server publishing;
+addon design is the next collaboration boundary, not an implementation authorization.
 
 ## Configuration proposals and selection
 

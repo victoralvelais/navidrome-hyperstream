@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import 'library.dart';
+import 'smart_ranking.dart';
+export 'smart_ranking.dart';
 
 enum SmartPlaylistType { rules, mix }
 
@@ -63,7 +65,8 @@ enum SmartOrder {
   title('Title A–Z'),
   artist('Artist A–Z'),
   leastPlayed('Least played'),
-  stableShuffle('Stable shuffle');
+  stableShuffle('Stable shuffle'),
+  customRanking('Custom ranking');
 
   const SmartOrder(this.label);
   final String label;
@@ -226,23 +229,32 @@ class SmartPool {
     required this.rules,
     required this.share,
     this.order = SmartOrder.activity,
+    this.ranking = const SmartRanking(),
   });
   final String name;
   final SmartGroup rules;
   final int share;
   final SmartOrder order;
+  final SmartRanking ranking;
   Map<String, dynamic> toJson() => {
     'name': name,
     'rules': rules.toJson(),
     'share': share,
     'order': order.name,
+    'ranking': ranking.toJson(),
   };
-  factory SmartPool.fromJson(Map<String, dynamic> json) => SmartPool(
+  factory SmartPool.fromJson(
+    Map<String, dynamic> json, {
+    bool rankingRequired = false,
+  }) => SmartPool(
     name: json['name'] as String,
     rules:
         SmartRule.fromJson(json['rules'] as Map<String, dynamic>) as SmartGroup,
     share: json['share'] as int,
     order: _enum(SmartOrder.values, json['order']),
+    ranking: !rankingRequired && json['ranking'] == null
+        ? const SmartRanking()
+        : SmartRanking.fromJson(json['ranking'] as Map<String, dynamic>),
   );
 }
 
@@ -260,6 +272,7 @@ class SmartPlaylistDefinition {
     this.artistGap = 0,
     this.relaxArtistGap = true,
     this.shuffleSeed = 0,
+    this.ranking = const SmartRanking(),
   }) : pools = List.unmodifiable(pools);
   final String id;
   final String name;
@@ -273,6 +286,7 @@ class SmartPlaylistDefinition {
   final int artistGap;
   final bool relaxArtistGap;
   final int shuffleSeed;
+  final SmartRanking ranking;
 
   bool get usesStableShuffle => type == SmartPlaylistType.rules
       ? order == SmartOrder.stableShuffle
@@ -293,6 +307,7 @@ class SmartPlaylistDefinition {
     artistGap: artistGap,
     relaxArtistGap: relaxArtistGap,
     shuffleSeed: (shuffleSeed + 1) & 0x7fffffff,
+    ranking: ranking,
   );
 
   factory SmartPlaylistDefinition.initial(String id) => SmartPlaylistDefinition(
@@ -333,6 +348,7 @@ class SmartPlaylistDefinition {
   );
 
   void validate() {
+    ranking.validate();
     if (artistGap < 0 ||
         artistGap > 10 ||
         shuffleSeed < 0 ||
@@ -378,6 +394,7 @@ class SmartPlaylistDefinition {
       throw const FormatException('Use 1 to 8 mix pools.');
     }
     for (final pool in pools) {
+      pool.ranking.validate();
       if (pool.name.trim().isEmpty ||
           pool.name.length > 80 ||
           pool.share < 0 ||
@@ -395,7 +412,7 @@ class SmartPlaylistDefinition {
   }
 
   Map<String, dynamic> toJson() => {
-    'schemaVersion': 2,
+    'schemaVersion': 3,
     'id': id,
     'name': name,
     'type': type.name,
@@ -408,10 +425,11 @@ class SmartPlaylistDefinition {
     'artistGap': artistGap,
     'relaxArtistGap': relaxArtistGap,
     'shuffleSeed': shuffleSeed,
+    'ranking': ranking.toJson(),
   };
   factory SmartPlaylistDefinition.fromJson(Map<String, dynamic> json) {
     final version = json['schemaVersion'];
-    if (version != 1 && version != 2) {
+    if (version != 1 && version != 2 && version != 3) {
       throw const FormatException('Unsupported smart playlist version.');
     }
     final value = SmartPlaylistDefinition(
@@ -425,7 +443,12 @@ class SmartPlaylistDefinition {
         json['exclude'] as Map<String, dynamic>,
       ) as SmartGroup,
       pools: (json['pools'] as List)
-          .map((pool) => SmartPool.fromJson(pool as Map<String, dynamic>))
+          .map(
+            (pool) => SmartPool.fromJson(
+              pool as Map<String, dynamic>,
+              rankingRequired: version == 3,
+            ),
+          )
           .toList(),
       order: _enum(SmartOrder.values, json['order']),
       limit: json['limit'] as int?,
@@ -433,6 +456,9 @@ class SmartPlaylistDefinition {
       artistGap: version == 1 ? 0 : json['artistGap'] as int,
       relaxArtistGap: version == 1 ? true : json['relaxArtistGap'] as bool,
       shuffleSeed: version == 1 ? 0 : json['shuffleSeed'] as int,
+      ranking: version == 3
+          ? SmartRanking.fromJson(json['ranking'] as Map<String, dynamic>)
+          : const SmartRanking(),
     );
     value.validate();
     return value;
@@ -440,10 +466,11 @@ class SmartPlaylistDefinition {
 }
 
 class SmartMatch {
-  const SmartMatch(this.track, this.reason, {this.pool});
+  const SmartMatch(this.track, this.reason, {this.pool, this.score});
   final Track track;
   final String reason;
   final int? pool;
+  final SmartScore? score;
 }
 
 class SmartPlaylistResult {
@@ -504,11 +531,25 @@ class SmartPlaylistResult {
       return played == null || added.isAfter(played) ? added : played;
     }
 
-    List<Track> sorted(Iterable<Track> items, SmartOrder order) {
+    final rankScores = <SmartRanking, Map<String, SmartScore>>{};
+    SmartScore score(Track track, SmartRanking ranking) => rankScores
+        .putIfAbsent(ranking, () => {})
+        .putIfAbsent(track.id, () => ranking.score(track, time));
+
+    List<Track> sorted(
+      Iterable<Track> items,
+      SmartOrder order,
+      SmartRanking ranking,
+    ) {
       final sorted = items.toList();
       sorted.sort((a, b) {
         final int comparison;
-        if (order == SmartOrder.stableShuffle) {
+        if (order == SmartOrder.customRanking) {
+          comparison = score(
+            b,
+            ranking,
+          ).total.compareTo(score(a, ranking).total);
+        } else if (order == SmartOrder.stableShuffle) {
           comparison = shuffleRank(a).compareTo(shuffleRank(b));
         } else if (order == SmartOrder.title || order == SmartOrder.artist) {
           comparison = (order == SmartOrder.title ? a.title : a.artist)
@@ -550,6 +591,7 @@ class SmartPlaylistResult {
               rules: definition.include,
               share: 100,
               order: definition.order,
+              ranking: definition.ranking,
             ),
           ];
     final pools = poolDefinitions
@@ -559,6 +601,7 @@ class SmartPlaylistResult {
               : sorted(
                   eligible.where((track) => pool.rules.matches(track, time)),
                   pool.order,
+                  pool.ranking,
                 ),
         )
         .toList();
@@ -651,6 +694,9 @@ class SmartPlaylistResult {
           track,
           '${isMix ? '${poolDefinitions[chosen].name} · ' : ''}${reason(poolDefinitions[chosen].rules, track)}${relaxed ? ' · Artist spacing relaxed' : ''}',
           pool: isMix ? chosen : null,
+          score: poolDefinitions[chosen].order == SmartOrder.customRanking
+              ? score(track, poolDefinitions[chosen].ranking)
+              : null,
         ),
       );
     }

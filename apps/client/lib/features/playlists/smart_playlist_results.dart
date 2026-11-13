@@ -136,7 +136,9 @@ class SmartPlaylistResults extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: Text('${match.track.artist}\n${match.reason}'),
+              subtitle: Text(
+                '${match.track.artist}\n${match.reason}${match.score == null ? '' : '\n${match.score!.explanation}'}',
+              ),
               onTap: preview.busy ? null : () => _play(result, index),
             ),
           if (result.matches.length > 50)

@@ -181,6 +181,53 @@ void main() {
         expect(store.items.single.shuffleSeed, 46);
         expect(scans, 1);
         expect(playback.queue.value.map((t) => t.id), queue);
+        await tapVisible(tester, find.text('Edit configuration'));
+        await tapVisible(tester, find.text('Rules'));
+        await tapVisible(tester, find.byTooltip('Order'));
+        await tapVisible(tester, find.text('Custom ranking'));
+        await tapVisible(tester, find.byKey(const ValueKey('addedDays')));
+        await tester.enterText(find.byKey(const ValueKey('addedDays')), '');
+        await tapVisible(tester, find.text('Preview tracks'));
+        expect(
+          find.text('Ranking windows must be from 1 to 3650 days.'),
+          findsOneWidget,
+        );
+        await tapVisible(tester, find.byKey(const ValueKey('addedDays')));
+        await tester.enterText(find.byKey(const ValueKey('addedDays')), '14');
+        await tapVisible(tester, find.text('Preview tracks'));
+        expect(
+          tester
+              .widget<SmartPlaylistResults>(find.byType(SmartPlaylistResults))
+              .preview
+              .result!
+              .matches
+              .first
+              .score,
+          isNotNull,
+        );
+        await tapVisible(tester, find.text('Mix'));
+        await tapVisible(tester, find.text('First · 60%'));
+        await tapVisible(tester, find.byTooltip('Order'));
+        await tapVisible(tester, find.text('Custom ranking'));
+        await tapVisible(tester, find.byKey(const ValueKey('addedDays')));
+        await tester.enterText(find.byKey(const ValueKey('addedDays')), '60');
+        await tapVisible(tester, find.text('Done'));
+        await tapVisible(tester, find.text('Preview tracks'));
+        await tapVisible(tester, find.text('Save'));
+        expect(store.items.single.order, SmartOrder.customRanking);
+        expect(store.items.single.ranking.addedDays, 14);
+        expect(store.items.single.pools.first.ranking.addedDays, 60);
+        expect(store.items.single.pools.first.order, SmartOrder.customRanking);
+        final rankedReload = SmartPlaylistStore(
+          client,
+          read: (_) async => disk,
+          write: (_, _) async {},
+        );
+        await rankedReload.load();
+        expect(rankedReload.items.single.toJson(), store.items.single.toJson());
+        rankedReload.dispose();
+        expect(playback.queue.value.map((t) => t.id), queue);
+        expect(scans, 1);
         expect(tester.takeException(), isNull);
         await playback.pause();
         await tester.pumpWidget(const SizedBox.shrink());
