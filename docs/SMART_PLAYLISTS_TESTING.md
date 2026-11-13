@@ -413,10 +413,10 @@ copy-song-details action.
 
 The streamed download uses a private, unique temporary directory, blocks
 redirects, rejects HTTP/JSON/HTML errors and empty/truncated responses, and aborts
-on Cancel or account closure. It keeps the file until the iOS activity completion
-callback, then removes it. Interrupted exports older than a day are reclaimed on
-the next export. Neither server credentials nor authenticated URLs are passed to
-other apps. An iPad popover anchor and a file-type identifier accompany the item.
+on Cancel or account closure. The original 0.1.0+35 implementation removed the
+file after the iOS activity completion callback; the compatibility follow-up below
+replaces this with deferred cleanup. Neither server credentials nor authenticated
+URLs are passed to other apps. An iPad popover anchor accompanies the item.
 
 Discord is the primary device acceptance case. Its
 [attachment FAQ](https://support.discord.com/hc/en-us/articles/25444343291031-File-Attachments-FAQ)
@@ -442,3 +442,39 @@ exports, invalid responses, safe filenames, file lifetime across the native
 bridge, and progress/cancel/error flows at 320 px with 1.4x text. iOS compilation
 and paired packaging run in the release workflow; physical Discord delivery is
 the remaining device acceptance check.
+
+### Discord share-extension compatibility follow-up
+
+Device evidence after 0.1.0+35: an approximately 11 MB MP3 plays in Files and
+uploads successfully with Discord's own channel attachment button. Sharing the
+same saved file from Apple's Files share sheet also fails. This isolates the
+observed failure to the iOS-to-Discord share-extension route; it does not establish
+a corrupt export or upload-size rejection. Save to Files, then attach using the
+Discord + button, is the user-confirmed working route.
+
+The compatibility change supplies an `NSItemProvider` with real audio data and
+a file-copy representation, with the expected type and filename. This replaces
+the custom item source which returned a URL while overriding the data UTI.
+[Apple documents that override for NSData items](https://developer.apple.com/documentation/uikit/uiactivityitemsource/activityviewcontroller(_:datatypeidentifierforactivitytype:)).
+The provider's data consumer gets audio bytes; its file consumer can receive an
+OS-managed copy instead of depending on access to an app-private URL.
+[Apple data representation API](https://developer.apple.com/documentation/foundation/nsitemprovider/registerdatarepresentation(fortypeidentifier:visibility:loadhandler:)),
+[Apple file representation API](https://developer.apple.com/documentation/foundation/nsitemprovider/registerfilerepresentation(fortypeidentifier:fileoptions:visibility:loadhandler:)).
+
+Files offered to the system now survive sheet dismissal and extension errors.
+Exports older than one day are reclaimed on a later export. Downloads cancelled
+before handoff and native errors that prevent presentation still remove their
+temporary files immediately. Sheet completion is never treated as proof of
+Discord delivery. The iPhone no longer configures a popover; only iPad does,
+matching the Xcode 26 compatibility handling in
+[share_plus](https://github.com/fluttercommunity/plus_plugins/blob/main/packages/share_plus/share_plus/ios/share_plus/Sources/share_plus/FPPSharePlusPlugin.m).
+
+The native release check exercises the production provider with an 11 MB fixture
+through data, file-copy, legacy-item and generic-data consumers, including the
+filename/type and missing-file failure. Dart regressions cover delayed reads
+after the sheet callback, preserving recent exports, expiry and native error
+cleanup. This validates our handoff; it does not reproduce Discord's proprietary
+extension. Retry the direct share on-device before calling that route fixed.
+
+Local validation: 230 Flutter tests pass; formatting and static analysis are
+clean. The native provider check is a required release-workflow step.

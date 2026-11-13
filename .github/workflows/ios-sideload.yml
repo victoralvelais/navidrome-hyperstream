@@ -75,6 +75,15 @@ jobs:
             -o build/ci/check-system-artwork
           build/ci/check-system-artwork
 
+      - name: Verify native audio share representations
+        timeout-minutes: 2
+        run: |
+          xcrun --sdk macosx swiftc -parse-as-library \
+            -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            ios/Runner/AudioShareProvider.swift ../../tools/check_audio_share.swift \
+            -o build/ci/check-audio-share
+          build/ci/check-audio-share
+
       - name: Build for physical iPhones and iPads
         # Release mode supports launching from the home screen without a debugger.
         # Flutter manages this project's Swift Package Manager dependencies.

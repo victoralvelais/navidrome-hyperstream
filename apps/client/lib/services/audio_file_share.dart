@@ -20,12 +20,15 @@ class AudioFileShare extends ChangeNotifier {
     required this.client,
     required this.track,
     Future<Directory> Function()? temporaryDirectory,
+    DateTime Function()? now,
     this.idleTimeout = const Duration(seconds: 30),
-  }) : _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory;
+  }) : _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory,
+       _now = now ?? DateTime.now;
 
   final NavidromeClient client;
   final Track track;
   final Future<Directory> Function() _temporaryDirectory;
+  final DateTime Function() _now;
   final Duration idleTimeout;
   final _abort = Completer<void>();
   Directory? _directory;
@@ -33,6 +36,7 @@ class AudioFileShare extends ChangeNotifier {
   bool _cancelled = false;
   bool _disposed = false;
   bool _started = false;
+  bool _offeredToSystem = false;
   Future<File>? _preparation;
   int received = 0;
   int? total;
@@ -71,8 +75,9 @@ class AudioFileShare extends ChangeNotifier {
       final cache = await _temporaryDirectory();
       final root = await Directory('${cache.path}/hyperstream-share')
           .create(recursive: true);
-      // Reclaim interrupted exports left by a terminated app. Never traverse
-      // links or delete anything outside this feature's own cache directory.
+      // Reclaim expired handoffs and interrupted exports. A receiving extension
+      // can finish reading after the sheet closes, so retain recent exports.
+      // Never traverse links or delete outside this feature's cache directory.
       await for (final entry in root.list(followLinks: false)) {
         if (entry is Directory &&
             entry.uri.pathSegments
@@ -80,7 +85,7 @@ class AudioFileShare extends ChangeNotifier {
                 .last
                 .startsWith('track-')) {
           final modified = (await entry.stat()).modified;
-          if (DateTime.now().difference(modified) > const Duration(days: 1)) {
+          if (_now().difference(modified) > const Duration(days: 1)) {
             await entry.delete(recursive: true);
           }
         }
@@ -176,10 +181,23 @@ class AudioFileShare extends ChangeNotifier {
       throw StateError('Prepare an audio file before sharing it.');
     }
     try {
-      // iOS completes this call only after its activity sheet finishes, keeping
-      // the file alive while Discord/AirDrop/Files reads the attachment.
+      // Closing the activity sheet is not a delivery/read-completion receipt.
+      // Retain this file through later cleanup for delayed extension reads.
+      _offeredToSystem = true;
       await const MethodChannel('dev.hyperstream/share')
           .invokeMethod<bool>('shareFile', file.path);
+    } on MissingPluginException {
+      _offeredToSystem = false;
+      throw const NavidromeException(
+        'Audio sharing is unavailable. Try again.',
+      );
+    } on PlatformException catch (error) {
+      if (['invalid_file', 'busy', 'unavailable'].contains(error.code)) {
+        _offeredToSystem = false;
+      }
+      throw const NavidromeException(
+        'Could not finish audio sharing. Try again.',
+      );
     } on Object {
       throw const NavidromeException(
         'Could not open audio sharing. Try again.',
@@ -188,6 +206,7 @@ class AudioFileShare extends ChangeNotifier {
   }
 
   Future<void> cleanup() async {
+    if (_offeredToSystem) return;
     final directory = _directory;
     if (directory == null) return;
     try {

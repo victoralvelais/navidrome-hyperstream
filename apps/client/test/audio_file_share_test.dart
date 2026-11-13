@@ -72,7 +72,7 @@ void main() {
     );
   }
 
-  test('original streamed MP3 stays intact and alive until native sharing finishes', () async {
+  test('original MP3 survives activity completion and cleanup for a delayed reader', () async {
     final bytes = [73, 68, 51, ...List.generate(6000, (i) => i % 256)];
     setup((request) async {
       expect(request.url.path, '/navidrome/rest/download.view');
@@ -115,7 +115,39 @@ void main() {
     completed.complete(true);
     await sharing;
     await export.cleanup();
-    expect(await file.exists(), isFalse);
+    export.cancel();
+    await export.finishPreparing();
+    // This is the UI's cleanup sequence after the sheet disappears. An
+    // extension must still be able to open and read the original attachment.
+    await export.cleanup();
+    expect(await file.readAsBytes(), bytes);
+    final sameDayExport = AudioFileShare(
+      client: client,
+      track: track,
+      temporaryDirectory: () async => root,
+      now: () => DateTime.now().add(const Duration(hours: 12)),
+    );
+    try {
+      await sameDayExport.prepare();
+      await sameDayExport.cleanup();
+      expect(await file.readAsBytes(), bytes);
+    } finally {
+      sameDayExport.dispose();
+    }
+    final nextExport = AudioFileShare(
+      client: client,
+      track: track,
+      temporaryDirectory: () async => root,
+      now: () => DateTime.now().add(const Duration(days: 2)),
+    );
+    try {
+      await nextExport.prepare();
+      expect(await file.exists(), isFalse);
+      await nextExport.cleanup();
+      await expectNoFiles();
+    } finally {
+      nextExport.dispose();
+    }
   });
 
   test('names cannot escape the export directory and Unicode stays within filesystem limits', () async {
@@ -145,6 +177,40 @@ void main() {
     await export.cleanup();
     await expectNoFiles();
   });
+
+  for (final outcome in [
+    'dismissed',
+    'share_failed',
+    'busy',
+    'invalid_file',
+    'unavailable',
+  ]) {
+    test('native $outcome uses the correct temporary-file lifetime', () async {
+      setup(
+        (_) async => http.StreamedResponse(Stream.value([73, 68, 51, 0]), 200),
+      );
+      final file = await export.prepare();
+      const channel = MethodChannel('dev.hyperstream/share');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (_) async {
+        if (outcome == 'dismissed') return false;
+        throw PlatformException(code: outcome);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      if (outcome == 'dismissed') {
+        await export.share();
+      } else {
+        await expectLater(export.share(), throwsA(isA<NavidromeException>()));
+      }
+      export.cancel();
+      await export.cleanup();
+      expect(
+        await file.exists(),
+        outcome == 'dismissed' || outcome == 'share_failed',
+      );
+    });
+  }
 
   for (final status in [302, 403, 404]) {
     test('HTTP $status cannot become a shared audio file', () async {

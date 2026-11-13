@@ -1,7 +1,6 @@
 import Flutter
 import UIKit
 import AVKit
-import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -77,9 +76,10 @@ import UniformTypeIdentifiers
         result(FlutterError(code: "busy", message: "Another sheet is closing. Try again.", details: nil))
         return
       }
-      // A typed local file is the sole item. Discord receives an attachment,
-      // never an authenticated Navidrome URL or a text-only song description.
-      let controller = UIActivityViewController(activityItems: [HyperstreamAudioItem(file: file)], applicationActivities: nil)
+      // Supply actual bytes for data consumers and a copy for file consumers.
+      // dataTypeIdentifierForActivityType must not mislabel a URL as audio data.
+      let configuration = UIActivityItemsConfiguration(itemProviders: [AudioShareProvider.make(file: file)])
+      let controller = UIActivityViewController(activityItemsConfiguration: configuration)
       self.sharing = true
       controller.completionWithItemsHandler = { [weak self] _, completed, _, error in
         self?.sharing = false
@@ -89,7 +89,10 @@ import UniformTypeIdentifiers
           result(completed)
         }
       }
-      if let popover = controller.popoverPresentationController {
+      // Xcode 26 can expose this controller on iPhone too. Only iPad should
+      // enter the anchored popover presentation path.
+      if UIDevice.current.userInterfaceIdiom == .pad,
+         let popover = controller.popoverPresentationController {
         popover.sourceView = presenter.view
         popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
         popover.permittedArrowDirections = []
@@ -116,25 +119,6 @@ import UniformTypeIdentifiers
 
   deinit {
     if let observer = transparencyObserver { NotificationCenter.default.removeObserver(observer) }
-  }
-}
-
-private class HyperstreamAudioItem: NSObject, UIActivityItemSource {
-  let file: URL
-  init(file: URL) {
-    self.file = file
-    super.init()
-  }
-  func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any { file }
-  func activityViewController(_ activityViewController: UIActivityViewController,
-                              itemForActivityType activityType: UIActivity.ActivityType?) -> Any? { file }
-  func activityViewController(_ activityViewController: UIActivityViewController,
-                              dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?) -> String {
-    (UTType(filenameExtension: file.pathExtension) ?? .data).identifier
-  }
-  func activityViewController(_ activityViewController: UIActivityViewController,
-                              subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
-    file.deletingPathExtension().lastPathComponent
   }
 }
 
