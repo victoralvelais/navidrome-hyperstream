@@ -77,5 +77,9 @@ edits, account isolation, verified-login gating, temporary sessions, clears and
 selections racing a disk read, periodic/lifecycle checkpoints, storage failures,
 unknown schema preservation and no phantom listens. A real Windows native audio
 test recreates the player, verifies lazy paused restoration and resumes playback.
-That check is a required release step; physical iOS acceptance requires the
-steps above.
+The release always checks saved-queue restoration/checkpointing in a real Windows
+app. HTTP playback, native seeking and transitions additionally run when a real
+audio output is enumerated; runners without one report that smoke test skipped.
+Run 37 reached zero-duration/completed audio before restoration, so the follow-up
+explicitly probes device availability rather than claiming a playback pass.
+Physical iOS and Windows playback acceptance still requires the steps above.
