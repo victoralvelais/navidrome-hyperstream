@@ -47,6 +47,12 @@ shares, firewall rules, folder permissions, Tailscale, or the Navidrome deployme
 
 ## Validation and dependencies
 
+Release **0.1.0+47**, source `ca507e1c67bd08910a43b53ad3e306bc31ba60b4`,
+passed [the paired release run](https://github.com/victoralvelais/navidrome-hyperstream/actions/runs/43545192791).
+Formatting, analysis, 317 Flutter tests, 12 release-tool tests, the real encrypted
+Windows SMB test, and native account/playback checks passed. Both artifacts were
+collected and checksum-verified under `releases/v0.1.0+47-r1/`.
+
 Tests cover address validation, protected-storage failure, probe cleanup, collisions,
 partial writes, cancellation, lost rename acknowledgements, and the configuration UI.
 The Windows release runner additionally creates an encrypted temporary SMB share
