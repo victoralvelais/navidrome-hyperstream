@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:hyperstream_client/models/library.dart';
+import 'package:hyperstream_client/services/app_preferences.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/recent_radio_service.dart';
 
@@ -43,6 +44,50 @@ NavidromeClient api(
 
 void main() {
   final now = DateTime.utc(2026, 11, 11, 18);
+  test('batch setting is captured per sync and new choices apply on the next refresh', () async {
+    final firstPage = Completer<http.Response>();
+    final sizes = <String?>[];
+    final preferences = AppPreferences();
+    await preferences.setCatalogBatchSize(5000);
+    final client = api((request) {
+      sizes.add(request.url.queryParameters['songCount']);
+      if (sizes.length == 1) return firstPage.future;
+      return envelope({
+        'searchResult3': {
+          'song': request.url.queryParameters['songOffset'] == '0'
+              ? [song('a'), song('b')]
+              : [],
+        },
+      });
+    });
+    final service = RecentRadioService(
+      client,
+      preferences: preferences,
+      now: () => now,
+    );
+    addTearDown(() {
+      service.dispose();
+      client.close();
+      preferences.dispose();
+    });
+    final pending = service.refresh();
+    await Future<void>.delayed(Duration.zero);
+    expect(sizes, ['5000']);
+    await preferences.setCatalogBatchSize(10000);
+    expect(sizes, ['5000']);
+    firstPage.complete(
+      envelope({
+        'searchResult3': {
+          'song': [song('a'), song('b')],
+        },
+      }),
+    );
+    await pending;
+    expect(sizes, ['5000', '5000']);
+    await service.refresh();
+    expect(sizes, ['5000', '5000', '10000', '10000']);
+    expect(service.tracks.map((track) => track.id), ['a', 'b']);
+  });
   test(
     '15,000 tracks sync in nine catalog requests, with capped-server support',
     () async {

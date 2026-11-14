@@ -353,7 +353,11 @@ class NavidromeClient {
   Future<List<Track>> radioTracks({
     required bool Function() cancelled,
     void Function(int)? onProgress,
+    int pageSize = 2000,
   }) async {
+    if (pageSize <= 0) {
+      throw ArgumentError.value(pageSize, 'pageSize', 'Must be positive.');
+    }
     final songs = <String, Track>{};
     var offset = 0;
     while (!cancelled()) {
@@ -364,7 +368,7 @@ class NavidromeClient {
         songOffset: offset,
         // Reduce round trips and repeated server pagination work on large
         // libraries. Advance by the actual response size for servers that cap it.
-        songCount: 2000,
+        songCount: pageSize,
       );
       if (cancelled()) return [];
       if (page.tracks.isEmpty) break;

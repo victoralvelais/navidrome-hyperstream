@@ -15,13 +15,16 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:hyperstream_client/app_theme.dart';
 import 'package:hyperstream_client/features/library/library_screen.dart';
+import 'package:hyperstream_client/features/playlists/recent_radio_screen.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/widgets/glass_settings.dart';
 import 'package:hyperstream_client/widgets/glass_surface.dart';
+import 'package:hyperstream_client/widgets/pull_to_refresh.dart';
 
 import 'support/fake_player.dart';
+import 'catalog_cache_test.dart' show MemoryCatalogCache;
 import 'support/account_fakes.dart';
 
 import 'package:hyperstream_client/services/account_session.dart';
@@ -89,6 +92,7 @@ Future<void> main() async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final player = FakePlayer();
+      final catalogBatchSizes = <String?>[];
       var disconnectCalls = 0;
       final playback = PlaybackService(player: player);
       final homeAccount = SavedAccount(
@@ -118,6 +122,12 @@ Future<void> main() async {
         username: 'test',
         password: 'test',
         httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('search3.view') &&
+              request.url.queryParameters['query'] == '' &&
+              request.url.queryParameters['albumCount'] == '0' &&
+              request.url.queryParameters['artistCount'] == '0') {
+            catalogBatchSizes.add(request.url.queryParameters['songCount']);
+          }
           if (request.url.path.endsWith('getCoverArt.view') &&
               covers.isNotEmpty) {
             final index = [
@@ -338,6 +348,7 @@ Future<void> main() async {
               accountSession: accounts,
               client: client,
               playback: playback,
+              catalogCache: MemoryCatalogCache(),
               onDisconnect: () async {
                 disconnectCalls++;
               },
@@ -379,6 +390,23 @@ Future<void> main() async {
         );
       }
       await _capturePreview(tester, '${viewport.name}-home');
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Library sync')),
+        alignment: .35,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Library sync'));
+      await tester.pumpAndSettle();
+      expect(find.text('2,000 songs'), findsOneWidget);
+      await tester.tap(find.byType(GlassDropdownField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('10,000 songs').last);
+      await tester.pumpAndSettle();
+      expect(playback.preferences.catalogBatchSize, 10000);
+      expect(tester.takeException(), isNull);
+      await _capturePreview(tester, '${viewport.name}-library-sync');
+      await tester.tap(find.byTooltip('Back to home'));
+      await tester.pumpAndSettle();
       await tester.tap(nav('Library'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Playlists'));
@@ -390,6 +418,18 @@ Future<void> main() async {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Recent Radio'));
       await tester.pumpAndSettle();
+      catalogBatchSizes.clear();
+      final refresh = tester
+          .widget<PullToRefresh>(
+            find.descendant(
+              of: find.byType(RecentRadioScreen),
+              matching: find.byType(PullToRefresh),
+            ),
+          )
+          .onRefresh();
+      await tester.pumpAndSettle();
+      await refresh;
+      expect(catalogBatchSizes, ['10000', '10000']);
       expect(find.text('Play'), findsOneWidget);
       expect(find.text('Choose an album or artist to explore.'), findsNothing);
       await _capturePreview(tester, '${viewport.name}-radio');

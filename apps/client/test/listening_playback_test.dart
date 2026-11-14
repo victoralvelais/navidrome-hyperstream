@@ -24,6 +24,7 @@ class RecordingClient extends NavidromeClient {
   Future<List<Track>> radioTracks({
     required bool Function() cancelled,
     void Function(int)? onProgress,
+    int pageSize = 2000,
   }) async {
     scans++;
     return [];

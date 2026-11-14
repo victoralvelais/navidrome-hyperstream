@@ -92,6 +92,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     _radio = RecentRadioService(
       widget.client,
       cache: widget.catalogCache ?? FileCatalogCache(widget.client),
+      preferences: widget.playback.preferences,
     );
     _smartStore = SmartPlaylistStore(widget.client);
     _icons = PlaylistIconStore(widget.client);

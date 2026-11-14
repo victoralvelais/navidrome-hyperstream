@@ -72,6 +72,7 @@ void main() {
       await preferences.setThemeMode(ThemeMode.dark);
       await preferences.setGlassEffects(false);
       await preferences.setReportListens(false);
+      await preferences.setCatalogBatchSize(5000);
       final restored = AppPreferences()..restore(saved!);
       expect(restored.volume, 0);
       expect(restored.audibleVolume, .35);
@@ -79,6 +80,7 @@ void main() {
       expect(restored.themeMode, ThemeMode.dark);
       expect(restored.glassEffects, isFalse);
       expect(restored.reportListens, isFalse);
+      expect(restored.catalogBatchSize, 5000);
       preferences.dispose();
       restored.dispose();
     },
@@ -120,6 +122,39 @@ void main() {
     expect(preferences.volume, 0);
     expect(preferences.audibleVolume, 1);
     expect(preferences.themeMode, ThemeMode.system);
+    expect(preferences.catalogBatchSize, 2000);
     preferences.dispose();
+  });
+
+  test(
+    'unsupported saved batch sizes fall back while other settings restore',
+    () {
+      for (final value in [null, 0, -1, 2000.5, '5000', 15000, true]) {
+        final preferences = AppPreferences()
+          ..restore(jsonEncode({'catalogBatchSize': value, 'volume': .3}));
+        expect(preferences.catalogBatchSize, 2000);
+        expect(preferences.volume, .3);
+        preferences.dispose();
+      }
+    },
+  );
+
+  test('all batch choices persist across restarts and invalid edits preserve the choice', () async {
+    String? saved;
+    final preferences = AppPreferences(save: (json) async => saved = json);
+    addTearDown(preferences.dispose);
+    for (final size in [500, 1000, 2000, 5000, 10000]) {
+      await preferences.setCatalogBatchSize(size);
+      await preferences.setVolume(.5);
+      final restored = await AppPreferences.load(
+        storage: FakePreferenceStorage(read: () async => saved),
+      );
+      expect(restored.catalogBatchSize, size);
+      restored.dispose();
+    }
+    final before = saved;
+    expect(() => preferences.setCatalogBatchSize(0), throwsArgumentError);
+    expect(preferences.catalogBatchSize, 10000);
+    expect(saved, before);
   });
 }

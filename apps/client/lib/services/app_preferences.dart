@@ -9,6 +9,8 @@ class AppPreferences extends ChangeNotifier {
   AppPreferences({this._save});
 
   static const storageKey = 'hyperstream.preferences.v1';
+  static const defaultCatalogBatchSize = 2000;
+  static const catalogBatchSizes = [500, 1000, 2000, 5000, 10000];
   final Future<void> Function(String)? _save;
   Future<void> _pending = Future.value();
   double volume = 1;
@@ -16,6 +18,7 @@ class AppPreferences extends ChangeNotifier {
   bool mixWithOthers = false;
   bool glassEffects = true;
   bool reportListens = true;
+  int catalogBatchSize = defaultCatalogBatchSize;
   ThemeMode themeMode = ThemeMode.system;
   String? notice;
 
@@ -53,6 +56,10 @@ class AppPreferences extends ChangeNotifier {
     mixWithOthers = data['mixWithOthers'] == true;
     glassEffects = data['glassEffects'] != false;
     reportListens = data['reportListens'] != false;
+    final batchSize = data['catalogBatchSize'];
+    catalogBatchSize = batchSize is int && catalogBatchSizes.contains(batchSize)
+        ? batchSize
+        : defaultCatalogBatchSize;
     themeMode = ThemeMode.values.firstWhere(
       (mode) => mode.name == data['theme'],
       orElse: () => ThemeMode.system,
@@ -85,6 +92,18 @@ class AppPreferences extends ChangeNotifier {
     return _persist();
   }
 
+  Future<void> setCatalogBatchSize(int value) {
+    if (!catalogBatchSizes.contains(value)) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        'Choose a supported batch size.',
+      );
+    }
+    catalogBatchSize = value;
+    return _persist();
+  }
+
   Future<void> _persist() {
     final json = jsonEncode({
       'volume': volume,
@@ -92,6 +111,7 @@ class AppPreferences extends ChangeNotifier {
       'mixWithOthers': mixWithOthers,
       'glassEffects': glassEffects,
       'reportListens': reportListens,
+      'catalogBatchSize': catalogBatchSize,
       'theme': themeMode.name,
     });
     notifyListeners();

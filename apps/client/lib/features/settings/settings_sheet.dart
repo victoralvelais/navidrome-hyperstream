@@ -5,6 +5,7 @@ import '../../widgets/glass_surface.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/account_session.dart';
+import '../../services/app_preferences.dart';
 import '../../services/playback_service.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/floating_chrome.dart';
@@ -253,6 +254,11 @@ class SettingsPageState extends State<SettingsPage> {
                       : '${session.savedServers.length} saved connections',
                   onTap: () => _open('Servers'),
                 ),
+              _row(
+                'Library sync',
+                'Recent Radio and smart playlists',
+                onTap: () => _open('Library sync'),
+              ),
             ]),
           ],
           if (_page == 'Appearance')
@@ -287,6 +293,41 @@ class SettingsPageState extends State<SettingsPage> {
                 subtitle: const Text('Soft blur and translucent controls'),
                 value: preferences.glassEffects,
                 onChanged: preferences.setGlassEffects,
+              ),
+            ]),
+          if (_page == 'Library sync')
+            _group([
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GlassDropdownField<int>(
+                      initialValue: preferences.catalogBatchSize,
+                      decoration: const InputDecoration(
+                        labelText: 'Songs per request',
+                      ),
+                      items: [
+                        for (final size in AppPreferences.catalogBatchSizes)
+                          DropdownMenuItem(
+                            value: size,
+                            child: Text(
+                              '${MaterialLocalizations.of(context).formatDecimal(size)} songs',
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          preferences.setCatalogBatchSize(value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Larger batches use fewer requests and more memory. Changes apply on the next sync.',
+                    ),
+                  ],
+                ),
               ),
             ]),
           if (_page == 'Playback') ...[

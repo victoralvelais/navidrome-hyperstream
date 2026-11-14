@@ -3,13 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/library.dart';
+import 'app_preferences.dart';
 import 'navidrome_client.dart';
 import 'catalog_cache.dart';
 
 /// Shared account catalog for radio and smart playlists. Local changes never scan.
 class LibraryCatalog extends ChangeNotifier {
-  LibraryCatalog(this.client, {DateTime Function()? now, this._cache})
-    : _now = now ?? DateTime.now {
+  LibraryCatalog(
+    this.client, {
+    DateTime Function()? now,
+    this._cache,
+    this.preferences,
+  }) : _now = now ?? DateTime.now {
     _subscription = client.localListens.listen(_onListen);
     _favoritesSubscription = client.favoriteChanges.listen(_onFavorite);
     _ratingsSubscription = client.ratingChanges.listen(_onRating);
@@ -21,6 +26,7 @@ class LibraryCatalog extends ChangeNotifier {
 
   static const syncInterval = Duration(minutes: 30);
   final NavidromeClient client;
+  final AppPreferences? preferences;
   final DateTime Function() _now;
   final CatalogCache? _cache;
   Future<void>? _restoring;
@@ -265,6 +271,8 @@ class LibraryCatalog extends ChangeNotifier {
     syncTotal = null;
     error = null;
     final revision = _revision;
+    final batchSize =
+        preferences?.catalogBatchSize ?? AppPreferences.defaultCatalogBatchSize;
     var syncFinished = false;
     _notify();
     // Progress metadata must not delay the catalog. A slow count may finish
@@ -280,6 +288,7 @@ class LibraryCatalog extends ChangeNotifier {
     );
     try {
       final tracks = await client.radioTracks(
+        pageSize: batchSize,
         cancelled: () => _disposed,
         onProgress: (count) {
           loadedCount = count;
