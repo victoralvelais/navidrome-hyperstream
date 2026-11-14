@@ -43,6 +43,46 @@ NavidromeClient api(
 
 void main() {
   final now = DateTime.utc(2026, 11, 11, 18);
+  test(
+    '15,000 tracks sync in nine catalog requests, with capped-server support',
+    () async {
+      for (final serverLimit in [2000, 500]) {
+        final source = List.generate(15000, (index) => song('$index'));
+        final offsets = <int>[];
+        final progress = <int>[];
+        final client = api((request) {
+          final parameters = request.url.queryParameters;
+          expect(parameters['songCount'], '2000');
+          expect(parameters['albumCount'], '0');
+          expect(parameters['artistCount'], '0');
+          final offset = int.parse(parameters['songOffset']!);
+          offsets.add(offset);
+          return envelope({
+            'searchResult3': {
+              'song': source.skip(offset).take(serverLimit).toList(),
+            },
+          });
+        });
+        addTearDown(client.close);
+        final tracks = await client.radioTracks(
+          cancelled: () => false,
+          onProgress: progress.add,
+        );
+        expect(
+          tracks.map((track) => track.id),
+          source.map((track) => track['id']),
+        );
+        expect(
+          offsets,
+          serverLimit == 2000
+              ? [0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 15000]
+              : List.generate(31, (index) => index * 500),
+        );
+        expect(progress.last, 15000);
+        expect(progress.toSet().length, progress.length);
+      }
+    },
+  );
   test('complete pagination uses actual page size, deduplicates, and preserves metadata', () async {
     final offsets = <int>[];
     final client = api((request) {

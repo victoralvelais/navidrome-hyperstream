@@ -35,7 +35,7 @@ void main() {
       expect(identical(pending, radio.refresh()), isTrue);
       client.recordLocalListen(Track.fromJson(song('a')), now);
       await Future<void>.delayed(Duration.zero);
-      expect(calls, 1);
+      expect(calls, 2); // Catalog reads start while the count login is pending.
       gate.complete(login());
       await pending;
       expect(radio.preview!.matches.single.track.id, 'a');
@@ -248,7 +248,7 @@ void main() {
     expect(radio.error, isNull);
   });
   test(
-    'dispose during count prevents catalog fetch and late status publication',
+    'dispose during concurrent count and catalog reads prevents later requests',
     () async {
       final gate = Completer<http.Response>();
       final entered = Completer<void>();
@@ -264,10 +264,53 @@ void main() {
       radio.dispose();
       gate.complete(login());
       await pending;
-      expect(requests, 1);
+      expect(requests, 2);
       expect(radio.lastSyncedAt, isNull);
       expect(radio.syncTotal, isNull);
       client.close();
+    },
+  );
+  test(
+    'slow counts never delay sync or overwrite a later completed total',
+    () async {
+      final oldCount = Completer<http.Response>();
+      var countRequests = 0;
+      var trackCount = 2;
+      final client = countClient((request) {
+        if (request.method == 'POST') return login();
+        if (request.url.path.endsWith('/api/song')) {
+          countRequests++;
+          return countRequests == 1 ? oldCount.future : count('$trackCount');
+        }
+        return envelope({
+          'searchResult3': {
+            'song': request.url.queryParameters['songOffset'] == '0'
+                ? List.generate(trackCount, (index) => song('$index'))
+                : [],
+          },
+        });
+      });
+      final radio = RecentRadioService(client, now: () => now);
+      addTearDown(() {
+        if (!oldCount.isCompleted) oldCount.complete(count('99'));
+        radio.dispose();
+        client.close();
+      });
+      var completed = false;
+      final first = radio.refresh().then((_) => completed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(countRequests, 1);
+      expect(completed, isTrue);
+      await first;
+      expect(radio.lastSyncTrackCount, 2);
+      trackCount = 1;
+      await radio.refresh();
+      expect(radio.lastSyncTrackCount, 1);
+      oldCount.complete(count('99'));
+      await Future<void>.delayed(Duration.zero);
+      expect(radio.syncTotal, 1);
+      expect(radio.syncProgress, 1);
+      expect(radio.loading, isFalse);
     },
   );
   testWidgets(

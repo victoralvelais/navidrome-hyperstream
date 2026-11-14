@@ -362,7 +362,9 @@ class NavidromeClient {
         browse: true,
         albumCount: 0,
         songOffset: offset,
-        songCount: 500,
+        // Reduce round trips and repeated server pagination work on large
+        // libraries. Advance by the actual response size for servers that cap it.
+        songCount: 2000,
       );
       if (cancelled()) return [];
       if (page.tracks.isEmpty) break;

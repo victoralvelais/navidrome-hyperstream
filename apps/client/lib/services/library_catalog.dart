@@ -265,11 +265,20 @@ class LibraryCatalog extends ChangeNotifier {
     syncTotal = null;
     error = null;
     final revision = _revision;
+    var syncFinished = false;
     _notify();
+    // Progress metadata must not delay the catalog. A slow count may finish
+    // after this sync or a subsequent one, so only accept it while this run lives.
+    unawaited(
+      client.catalogTrackCount(cancelled: () => _disposed || syncFinished).then(
+        (total) {
+          if (_disposed || syncFinished) return;
+          syncTotal = total != null && total >= loadedCount ? total : null;
+          _notify();
+        },
+      ),
+    );
     try {
-      syncTotal = await client.catalogTrackCount(cancelled: () => _disposed);
-      if (_disposed) return;
-      _notify();
       final tracks = await client.radioTracks(
         cancelled: () => _disposed,
         onProgress: (count) {
@@ -325,6 +334,7 @@ class LibraryCatalog extends ChangeNotifier {
         error = failure is NavidromeException ? failure.message : 'The library could not sync. Your current list is still available.';
       }
     } finally {
+      syncFinished = true;
       loading = false;
       // Failed attempts also wait 30 minutes, avoiding a tight retry loop.
       _nextSyncAt = _now().add(syncInterval);
