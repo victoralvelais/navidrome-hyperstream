@@ -6,10 +6,12 @@ import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
+import '../../services/remote_folder.dart';
 import '../../widgets/glass_overlays.dart';
 import '../library/collection_actions.dart';
 import '../playlists/playlist_dialogs.dart';
 import 'audio_share_dialog.dart';
+import 'remote_send_dialog.dart';
 
 class NowPlayingTrackActions extends StatefulWidget {
   const NowPlayingTrackActions({
@@ -42,6 +44,8 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
     });
     await collectionAction(context, () async {
       switch (action) {
+        case 'remote':
+          await sendSongToRemote(context, collections.client, song);
         case 'mix':
           final tracks = await collections.client.instantMix(song.id);
           if (mounted) {
@@ -146,7 +150,7 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.collections,
+    listenable: Listenable.merge([widget.collections, RemoteFolders.instance]),
     builder: (context, _) {
       final song = widget.song;
       final store = widget.collections;
@@ -158,7 +162,9 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
       return GlassPopupMenuButton<String>(
         tooltip: 'Song actions for ${song.title}',
         enabled: !_busy,
-        icon: _busy && !['rating', 'playlist', 'share'].contains(_action)
+        icon:
+            _busy &&
+                !['rating', 'playlist', 'share', 'remote'].contains(_action)
             ? const SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
@@ -193,6 +199,13 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
             enabled: !store.ratingPending(song),
           ),
           menuAction('playlist', 'Add to playlist', Icons.playlist_add_rounded),
+          if (RemoteFolders.instance.destination != null)
+            menuAction(
+              'remote',
+              'Send to remote folder',
+              Icons.drive_folder_upload_outlined,
+              enabled: !RemoteFolders.instance.busy,
+            ),
           menuAction(
             'share',
             defaultTargetPlatform == TargetPlatform.iOS

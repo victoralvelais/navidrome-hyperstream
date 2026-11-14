@@ -4,6 +4,11 @@ Prepared 2026-11-11. This is a snapshot of the completed work, user preferences,
 and the next exploration. Read the repository before making changes; this file
 does not turn proposals into approved requirements.
 
+November 13 update: the user selected a [direct SMB remote-folder test](REMOTE_FOLDER_TEST.md),
+without a Files-app handoff or new receiving service. App-side conversion and
+optional phone/server storage supersede this historical document's server-only
+acquisition preference. Preserve the completed UI/playback/playlist work.
+
 For subsequent implementations and the November 12 playlist/UI follow-up, read
 [the current implementation record](SMART_PLAYLISTS_AND_PROVIDERS.md) and
 [device checks](SMART_PLAYLISTS_TESTING.md). `releases/latest.json` identifies the

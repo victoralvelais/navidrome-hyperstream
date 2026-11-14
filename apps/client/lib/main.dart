@@ -9,7 +9,9 @@ import 'features/startup/startup_screen.dart';
 import 'services/account_session.dart';
 import 'services/app_preferences.dart';
 import 'services/playback_service.dart';
+import 'services/remote_folder.dart';
 import 'services/startup_stage.dart';
+import 'services/third_party_licenses.dart';
 import 'widgets/glass_settings.dart';
 
 typedef AppInitializer = Future<PlaybackService> Function(
@@ -26,6 +28,8 @@ Future<PlaybackService> initializeHyperstream(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  registerNativeLicenses();
+  unawaited(RemoteFolders.instance.restore());
   runApp(const HyperstreamApp());
 }
 

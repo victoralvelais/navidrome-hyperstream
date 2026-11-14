@@ -31,7 +31,7 @@
 		<string>audio</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your Navidrome server and play music on your local network.</string>
+	<string>Connect to your Navidrome server and send songs to shared folders on your local network.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

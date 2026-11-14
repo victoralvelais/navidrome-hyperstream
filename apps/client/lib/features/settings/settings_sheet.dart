@@ -10,6 +10,7 @@ import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/floating_chrome.dart';
 import '../connect/connection_screen.dart';
 import '../player/volume_controls.dart';
+import 'remote_folder_settings.dart';
 
 /// Part of the Home navigation stack, so the floating player stays available.
 class SettingsPage extends StatefulWidget {
@@ -239,6 +240,11 @@ class SettingsPageState extends State<SettingsPage> {
                 'Music volume and other audio',
                 onTap: () => _open('Playback'),
               ),
+              _row(
+                'Remote folder',
+                'Send songs to a computer or NAS',
+                onTap: () => _open('Remote folder'),
+              ),
               if (session != null || widget.onDisconnect != null)
                 _row(
                   'Servers',
@@ -403,6 +409,7 @@ class SettingsPageState extends State<SettingsPage> {
               adding: true,
               beforeSwitch: widget.playback.suspendForAccountSwitch,
             ),
+          if (_page == 'Remote folder') const RemoteFolderSettings(),
           if (widget.playback.continuityNotice.value ??
                   widget.playback.settingsError.value ??
                   preferences.notice

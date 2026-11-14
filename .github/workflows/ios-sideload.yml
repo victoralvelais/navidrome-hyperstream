@@ -197,6 +197,10 @@ jobs:
         working-directory: .
         run: python -m unittest tests.test_release_tools -v
 
+      - name: Verify encrypted SMB transfers
+        timeout-minutes: 5
+        run: ../../tools/check_remote_smb.ps1
+
       - name: Verify native account storage
         # Includes a real DPAPI roundtrip using a separate synthetic account key.
         # The hosted VS installation includes the secure-storage plugin's ATL dependency.

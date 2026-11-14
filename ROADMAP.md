@@ -1,5 +1,9 @@
 # Navidrome Hyperstream: draft roadmap
 
+November 13 direction update: see [the direct SMB test](docs/REMOTE_FOLDER_TEST.md).
+App-side acquisition/conversion and optional phone or remote-folder storage supersede
+mandatory-companion/server-only proposals below.
+
 Status: UI/multiple-server release complete at 0.1.0+14; counted listening and
 Recent Radio shipped at 0.1.0+15. Release 0.1.0+17 keeps Recent Radio fixed at 30 days,
 updates it immediately from local listens, and syncs on refresh/every 30 minutes

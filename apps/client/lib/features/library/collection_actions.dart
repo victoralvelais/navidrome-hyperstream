@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
+import '../../services/remote_folder.dart';
+import '../player/remote_send_dialog.dart';
 import '../playlists/playlist_dialogs.dart';
 
 Future<void> collectionAction(
@@ -62,7 +64,7 @@ class FavoriteButton extends StatelessWidget {
   );
 }
 
-enum _SongAction { favorite, playlist, remove }
+enum _SongAction { favorite, playlist, remove, remote }
 
 class SongActions extends StatelessWidget {
   const SongActions({
@@ -79,7 +81,7 @@ class SongActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: collections,
+    listenable: Listenable.merge([collections, RemoteFolders.instance]),
     builder: (context, _) {
       final favorite = collections.isFavorite(
         song.id,
@@ -102,6 +104,12 @@ class SongActions extends StatelessWidget {
             value: _SongAction.playlist,
             child: Text('Add to playlist'),
           ),
+          if (RemoteFolders.instance.destination != null)
+            PopupMenuItem(
+              value: _SongAction.remote,
+              enabled: !RemoteFolders.instance.busy,
+              child: const Text('Send to remote folder'),
+            ),
           if (onRemove != null)
             const PopupMenuItem(
               value: _SongAction.remove,
@@ -119,6 +127,8 @@ class SongActions extends StatelessWidget {
               await addSongToPlaylist(context, collections, song);
             case _SongAction.remove:
               await collectionAction(context, onRemove!);
+            case _SongAction.remote:
+              await sendSongToRemote(context, collections.client, song);
           }
         },
       );
