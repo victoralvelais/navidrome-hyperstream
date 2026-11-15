@@ -97,7 +97,7 @@ pushed checkout, this command starts both builds, waits, verifies, and downloads
 python tools/release.py build
 ```
 
-Packages land in `releases/vVERSION+BUILD-rATTEMPT/`, with the IPA, a Windows ZIP,
+Packages land in `releases/vVERSION/`, with the IPA, a Windows ZIP,
 an extracted `windows/hyperstream_client.exe` beside its DLLs/data, checksums, and
 commit/run metadata. `releases/latest.json` points to the newest collected pair.
 Existing versions stay intact and release binaries are ignored by Git. To download

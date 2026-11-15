@@ -29,17 +29,21 @@ class ReleaseToolsTests(unittest.TestCase):
                 release_version()
 
     def test_source_semantic_version_preserves_patch_and_rejects_leading_zeros(self):
-        with patch('pathlib.Path.read_text', return_value='version: 0.50.1+1\n'):
+        with patch('pathlib.Path.read_text', return_value='version: 0.50.1\n'):
             self.assertEqual(source_version(), '0.50.1')
-        with patch('pathlib.Path.read_text', return_value='version: 0.051.0+1\n'):
-            with self.assertRaises(ReleaseError):
-                source_version()
+        for invalid in ['0.051.0', '0.52.0+1', '0.52.0+53', '0.52', '0.52.0-beta']:
+            with self.subTest(version=invalid), patch('pathlib.Path.read_text', return_value=f'version: {invalid}\n'):
+                with self.assertRaises(ReleaseError):
+                    source_version()
 
     def test_new_display_version_is_verified_inside_ipa_and_pair_metadata(self):
         ios = self.artifact('ios', version='0.51.0')
         windows = self.artifact('windows', version='0.51.0')
         destination, metadata = publish_pair(ios, windows, self.run, 'owner/repo', self.root / 'releases')
-        self.assertEqual(destination.name, 'v0.51.0+7-r1')
+        self.assertEqual(destination.name, 'v0.51.0')
+        self.assertEqual(metadata['version'], '0.51.0')
+        self.assertEqual(metadata['ipa'], 'hyperstream-0.51.0-ios-unsigned.ipa')
+        self.assertEqual(metadata['windows_zip'], 'hyperstream-0.51.0-windows-x64.zip')
         verify_ipa(destination / metadata['ipa'], '0.51.0', 7)
         with self.assertRaises(ReleaseError):
             verify_ipa(destination / metadata['ipa'], '0.50.1', 7)
@@ -54,7 +58,7 @@ class ReleaseToolsTests(unittest.TestCase):
                     'status': 'completed', 'conclusion': 'success',
                     'path': '.github/workflows/ios-sideload.yml'}
 
-    def artifact(self, platform, *, version='0.1.0', commit=None, checksum=None, bad_windows_path=None):
+    def artifact(self, platform, *, version='0.1.0', commit=None, checksum=None, bad_windows_path=None, schema=2, file_version=None):
         package = self.root / PACKAGES[platform]
         with zipfile.ZipFile(package, 'w') as archive:
             if platform == 'ios':
@@ -75,12 +79,12 @@ class ReleaseToolsTests(unittest.TestCase):
                     archive.writestr(name, b'fixture')
                 if bad_windows_path:
                     archive.writestr(bad_windows_path, b'unsafe')
-        manifest = {'schema': 1, 'platform': platform, 'version': version, 'configuration': 'release',
+        manifest = {'schema': schema, 'platform': platform, 'version': version, 'configuration': 'release',
                     'build_number': 7, 'run_id': 123, 'run_attempt': 1, 'repository': 'owner/repo',
                     'commit': commit or self.run['head_sha'], 'package': package.name,
                     'sha256': checksum or sha256(package)}
         if platform == 'windows':
-            manifest['file_version'] = version + '+7'
+            manifest['file_version'] = file_version or (version + '+7' if schema == 1 else version)
         destination = self.root / (platform + '-artifact.zip')
         with zipfile.ZipFile(destination, 'w') as archive:
             archive.write(package, package.name)
@@ -93,7 +97,7 @@ class ReleaseToolsTests(unittest.TestCase):
 
     def test_complete_pair_is_versioned_and_repeat_download_is_idempotent(self):
         destination, metadata = self.publish()
-        self.assertEqual(destination.name, 'v0.1.0+7-r1')
+        self.assertEqual(destination.name, 'v0.1.0')
         self.assertTrue((destination / metadata['ipa']).is_file())
         self.assertTrue((destination / 'windows/hyperstream_client.exe').is_file())
         self.assertTrue((destination / 'windows/flutter_windows.dll').is_file())
@@ -105,6 +109,20 @@ class ReleaseToolsTests(unittest.TestCase):
         repeated, _ = publish_pair(self.root / 'ios-artifact.zip', self.root / 'windows-artifact.zip',
                                    self.run, 'owner/repo', self.root / 'releases')
         self.assertEqual(destination, repeated)
+
+    def test_historical_release_pair_can_still_be_fetched(self):
+        destination, metadata = publish_pair(self.artifact('ios', schema=1), self.artifact('windows', schema=1),
+                                             self.run, 'owner/repo', self.root / 'releases')
+        self.assertEqual(destination.name, 'v0.1.0+7-r1')
+        self.assertEqual(metadata['schema'], 1)
+        self.assertTrue((destination / metadata['ipa']).is_file())
+
+    def test_plain_release_rejects_windows_build_suffix_and_mixed_formats(self):
+        with self.assertRaisesRegex(ReleaseError, 'Windows version'):
+            self.publish(file_version='0.1.0+7')
+        with self.assertRaisesRegex(ReleaseError, 'different release formats'):
+            self.publish(schema=1)
+        self.assertFalse((self.root / 'releases/latest.json').exists())
 
     def test_existing_modified_files_are_not_overwritten(self):
         destination, _ = self.publish()

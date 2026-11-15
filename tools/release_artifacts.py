@@ -27,9 +27,9 @@ def sha256(path):
 def source_version():
     text = (ROOT / 'apps/client/pubspec.yaml').read_text(encoding='utf-8')
     number = r'(?:0|[1-9]\d*)'
-    match = re.search(rf'^version:\s*({number}\.{number}\.{number})\+\d+\s*$', text, re.MULTILINE)
+    match = re.search(rf'^version:\s*({number}\.{number}\.{number})\s*$', text, re.MULTILINE)
     if not match:
-        raise ReleaseError('Expected version: MAJOR.MINOR.PATCH+BUILD in pubspec.yaml.')
+        raise ReleaseError('Expected version: MAJOR.MINOR.PATCH in pubspec.yaml.')
     return match[1]
 
 
@@ -104,7 +104,7 @@ def verify_windows(path):
 
 def make_manifest(platform, package):
     return {
-        'schema': 1, 'platform': platform, 'version': release_version(),
+        'schema': 2, 'platform': platform, 'version': release_version(),
         'build_number': int(os.environ['GITHUB_RUN_NUMBER']),
         'run_id': int(os.environ['GITHUB_RUN_ID']),
         'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
@@ -140,13 +140,13 @@ def main():
         verify_ipa(package, manifest['version'], manifest['build_number'])
     else:
         file_version = os.environ.get('HYPERSTREAM_WINDOWS_VERSION', '')
-        expected = f"{manifest['version']}+{manifest['build_number']}"
+        expected = manifest['version']
         if file_version != expected:
             raise ReleaseError(f'Windows version does not match {expected}.')
         manifest['file_version'] = file_version
     (args.output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     (args.output / (package.name + '.sha256')).write_text(f"{manifest['sha256']}  {package.name}\n", encoding='ascii')
-    print(f"Packaged {args.platform}: {manifest['version']}+{manifest['build_number']}")
+    print(f"Packaged {args.platform}: {manifest['version']}")
 
 
 if __name__ == '__main__':

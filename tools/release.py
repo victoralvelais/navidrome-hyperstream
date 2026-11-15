@@ -147,7 +147,10 @@ def unpack_artifact(archive_path, platform, run, repository, destination):
         if archive.getinfo('release-manifest.json').file_size > 65536:
             raise ReleaseError('Release manifest is too large.')
         manifest = json.loads(archive.read('release-manifest.json'))
-        expected = {'schema': 1, 'platform': platform, 'repository': repository,
+        schema = manifest.get('schema')
+        if schema not in (1, 2):
+            raise ReleaseError('Artifact metadata schema is unsupported.')
+        expected = {'schema': schema, 'platform': platform, 'repository': repository,
                     'run_id': run['id'], 'run_attempt': run['run_attempt'],
                     'build_number': run['run_number'], 'commit': run['head_sha'],
                     'package': PACKAGES[platform], 'configuration': 'release'}
@@ -164,7 +167,9 @@ def unpack_artifact(archive_path, platform, run, repository, destination):
     if platform == 'ios':
         verify_ipa(package, manifest['version'], manifest['build_number'])
     else:
-        expected_version = f"{manifest['version']}+{manifest['build_number']}"
+        expected_version = manifest['version']
+        if schema == 1:
+            expected_version += f"+{manifest['build_number']}"
         if manifest.get('file_version') != expected_version:
             raise ReleaseError('Windows version does not match the release.')
         verify_windows(package)
@@ -197,12 +202,18 @@ def publish_pair(ios_archive, windows_archive, run, repository, release_root):
         windows, windows_zip = unpack_artifact(windows_archive, 'windows', run, repository, result)
         if ios['version'] != windows['version']:
             raise ReleaseError('iOS and Windows have different app versions.')
-        version = f"{ios['version']}+{run['run_number']}"
-        tag = f"v{version}-r{run['run_attempt']}"
+        if ios['schema'] != windows['schema']:
+            raise ReleaseError('iOS and Windows have different release formats.')
+        version = ios['version']
+        tag = f'v{version}'
+        if ios['schema'] == 1:
+            # Historical artifacts retain their original names when fetched.
+            version += f"+{run['run_number']}"
+            tag = f"v{version}-r{run['run_attempt']}"
         ipa.rename(result / f'hyperstream-{version}-ios-unsigned.ipa')
         windows_zip.rename(result / f'hyperstream-{version}-windows-x64.zip')
         files = {p.relative_to(result).as_posix(): sha256(p) for p in sorted(result.rglob('*')) if p.is_file()}
-        metadata = {'schema': 1, 'version': version, 'commit': run['head_sha'], 'repository': repository,
+        metadata = {'schema': ios['schema'], 'version': version, 'commit': run['head_sha'], 'repository': repository,
                     'run_id': run['id'], 'run_number': run['run_number'], 'run_attempt': run['run_attempt'],
                     'workflow_url': run['html_url'], 'files': files,
                     'ipa': f'hyperstream-{version}-ios-unsigned.ipa',

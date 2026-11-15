@@ -31,22 +31,24 @@ checks a protected save/read/delete, and never uses a real Navidrome account.
 Local builds also need the C++ ATL component required by this plugin.
 
 Both apps use the semantic version declared in `apps/client/pubspec.yaml`.
-The next version is `0.51.0`, following the user's designated `0.50.1` baseline.
-Fix releases increment PATCH, such as `0.51.1`, and feature releases increment
-MINOR, such as `0.52.0`. Set the version explicitly when preparing a release.
+Use a plain `MAJOR.MINOR.PATCH`, such as `0.52.0`, in the source, displayed app
+version, release directory, and package filenames. Fix releases increment PATCH,
+such as `0.52.1`, and feature releases increment MINOR, such as `0.53.0`.
+Set the version explicitly when preparing a release.
 
-The Actions run number supplies the separate build number. A `0.51.0` release
-built by run 52 reports `0.51.0` in the IPA's `CFBundleShortVersionString` and
-`52` in `CFBundleVersion`. Windows and artifact manifests use the same values.
-Rebuilding a semantic version gives it a new build number. The version reader
+The Actions run number supplies the platform's internal build metadata in the
+IPA's `CFBundleVersion` and the fourth numeric Windows version component.
+Windows `FileVersion` and `ProductVersion` strings contain the plain semantic
+version. Artifact manifests record the version and CI run in separate fields.
+The version reader
 lives in `tools/release_artifacts.py`. A release has this directory structure.
 
 ```text
 releases/
   latest.json
-  v0.51.0+52-r1/
-    hyperstream-0.51.0+52-ios-unsigned.ipa
-    hyperstream-0.51.0+52-windows-x64.zip
+  v0.52.0/
+    hyperstream-0.52.0-ios-unsigned.ipa
+    hyperstream-0.52.0-windows-x64.zip
     windows/
       hyperstream_client.exe
       flutter_windows.dll
