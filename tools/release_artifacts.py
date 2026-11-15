@@ -26,19 +26,19 @@ def sha256(path):
 
 def source_version():
     text = (ROOT / 'apps/client/pubspec.yaml').read_text(encoding='utf-8')
-    match = re.search(r'^version:\s*(\d+\.\d+\.\d+)\+\d+\s*$', text, re.MULTILINE)
+    number = r'(?:0|[1-9]\d*)'
+    match = re.search(rf'^version:\s*({number}\.{number}\.{number})\+\d+\s*$', text, re.MULTILINE)
     if not match:
         raise ReleaseError('Expected version: MAJOR.MINOR.PATCH+BUILD in pubspec.yaml.')
     return match[1]
 
 
 def release_version():
-    """Use the CI run as the displayed patch version on both platforms."""
+    """Use the declared semantic version with an independent CI build number."""
     build = int(os.environ['GITHUB_RUN_NUMBER'])
     if not 1 <= build <= 65535:
         raise ReleaseError('Release number must fit a Windows version component.')
-    major_minor = source_version().rsplit('.', 1)[0]
-    return f'{major_minor}.{build}'
+    return source_version()
 
 
 def checked_members(archive):

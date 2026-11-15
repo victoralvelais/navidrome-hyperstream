@@ -13,27 +13,36 @@ from types import SimpleNamespace
 import zipfile
 
 from tools.release import GitHub, artifacts_for, publish_pair, repository_from_remote
-from tools.release_artifacts import PACKAGES, ReleaseError, checked_members, sha256, release_version, verify_ipa
+from tools.release_artifacts import PACKAGES, ReleaseError, checked_members, sha256, release_version, source_version, verify_ipa
 
 
 class ReleaseToolsTests(unittest.TestCase):
-    def test_displayed_version_tracks_release_number_and_source_major_minor(self):
-        for base, run, expected in [('0.1.0', '51', '0.1.51'), ('1.2.0', '52', '1.2.52')]:
-            with patch('tools.release_artifacts.source_version', return_value=base), \
-                    patch.dict('os.environ', {'GITHUB_RUN_NUMBER': run}):
-                self.assertEqual(release_version(), expected)
+    def test_displayed_semantic_version_is_independent_of_build_number(self):
+        for version in ['0.50.1', '0.51.0', '0.51.1', '1.0.0']:
+            for run in ['52', '90']:
+                with self.subTest(version=version, run=run), \
+                        patch('tools.release_artifacts.source_version', return_value=version), \
+                        patch.dict('os.environ', {'GITHUB_RUN_NUMBER': run}):
+                    self.assertEqual(release_version(), version)
         with patch.dict('os.environ', {'GITHUB_RUN_NUMBER': '65536'}):
             with self.assertRaises(ReleaseError):
                 release_version()
 
+    def test_source_semantic_version_preserves_patch_and_rejects_leading_zeros(self):
+        with patch('pathlib.Path.read_text', return_value='version: 0.50.1+1\n'):
+            self.assertEqual(source_version(), '0.50.1')
+        with patch('pathlib.Path.read_text', return_value='version: 0.051.0+1\n'):
+            with self.assertRaises(ReleaseError):
+                source_version()
+
     def test_new_display_version_is_verified_inside_ipa_and_pair_metadata(self):
-        ios = self.artifact('ios', version='0.1.7')
-        windows = self.artifact('windows', version='0.1.7')
+        ios = self.artifact('ios', version='0.51.0')
+        windows = self.artifact('windows', version='0.51.0')
         destination, metadata = publish_pair(ios, windows, self.run, 'owner/repo', self.root / 'releases')
-        self.assertEqual(destination.name, 'v0.1.7+7-r1')
-        verify_ipa(destination / metadata['ipa'], '0.1.7', 7)
+        self.assertEqual(destination.name, 'v0.51.0+7-r1')
+        verify_ipa(destination / metadata['ipa'], '0.51.0', 7)
         with self.assertRaises(ReleaseError):
-            verify_ipa(destination / metadata['ipa'], '0.1.0', 7)
+            verify_ipa(destination / metadata['ipa'], '0.50.1', 7)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

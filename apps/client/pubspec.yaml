@@ -3,9 +3,9 @@ name: hyperstream_client
 description: "A native Navidrome library player for iPhone, iPad, and Windows."
 # Prevent accidental publishing to the pub.dev package registry.
 publish_to: 'none'
-# Local development version. CI uses MAJOR.MINOR.RUN as the displayed version
-# and RUN as the build number on iOS and Windows.
-version: 0.1.0+1
+# Semantic release version. Bump PATCH for fixes and MINOR for feature releases.
+# CI supplies its separate run number as the build number on iOS and Windows.
+version: 0.51.0+1
 
 environment:
   # Dart SDK constraint. The tested Flutter SDK is 3.47.9 (also pinned in CI).
