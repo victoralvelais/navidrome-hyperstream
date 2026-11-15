@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum RemoteBackgroundMode { desktop, continued, limited, foreground }
+enum RemoteBackgroundMode { desktop, quiet, continued, limited, foreground }
 
 /// Owns the OS execution grant for one user-started remote transfer.
 class RemoteTransferBackground {
@@ -19,7 +19,10 @@ class RemoteTransferBackground {
   DateTime? _lastUpdate;
   String? _lastStage;
 
-  Future<RemoteBackgroundMode> begin(VoidCallback onExpired) async {
+  Future<RemoteBackgroundMode> begin(
+    VoidCallback onExpired, {
+    bool continued = false,
+  }) async {
     if (_started) throw StateError('The background transfer already started.');
     _started = true;
     if (!_isIOS) return RemoteBackgroundMode.desktop;
@@ -31,8 +34,10 @@ class RemoteTransferBackground {
     try {
       final mode = await _channel.invokeMethod<String>('begin', {
         'token': _token,
+        'continued': continued,
       });
       return switch (mode) {
+        'quiet' => RemoteBackgroundMode.quiet,
         'continued' => RemoteBackgroundMode.continued,
         'limited' => RemoteBackgroundMode.limited,
         _ => RemoteBackgroundMode.foreground,
@@ -50,6 +55,21 @@ class RemoteTransferBackground {
       await _channel.invokeMethod<void>('prepareDirectory', directory.path);
     } on MissingPluginException {
       // The UI already requires foreground execution when the bridge is absent.
+    }
+  }
+
+  Future<bool> notifyResult({required bool success}) async {
+    if (!_isIOS || !_started || _finished) return false;
+    try {
+      return await _channel.invokeMethod<bool>('notifyResult', {
+            'token': _token,
+            'success': success,
+          }) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 

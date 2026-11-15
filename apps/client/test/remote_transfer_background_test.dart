@@ -22,7 +22,7 @@ void main() {
 
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  for (final mode in ['continued', 'limited', 'foreground']) {
+  for (final mode in ['quiet', 'continued', 'limited', 'foreground']) {
     test(
       '$mode grant forwards progress, matches expiry and ends exactly once',
       () async {
@@ -34,6 +34,7 @@ void main() {
         final execution = RemoteTransferBackground(isIOS: true);
         var expired = 0;
         expect((await execution.begin(() => expired++)).name, mode);
+        expect((calls.single.arguments as Map)['continued'], isFalse);
         final token = (calls.single.arguments as Map)['token'] as String;
         await execution.prepareDirectory(Directory('/private/cache/test'));
         execution.update(completed: 2, total: 11, stage: 'Downloading audio');
@@ -69,6 +70,7 @@ void main() {
       final execution = RemoteTransferBackground(isIOS: true);
       expect(await execution.begin(() {}), RemoteBackgroundMode.foreground);
       await execution.prepareDirectory(Directory('/private/cache/test'));
+      expect(await execution.notifyResult(success: true), isFalse);
       execution.update(completed: 1, total: 3, stage: 'Sending audio');
       await execution.finish(success: true);
     },
@@ -80,6 +82,7 @@ void main() {
     });
     final execution = RemoteTransferBackground(isIOS: true);
     expect(await execution.begin(() {}), RemoteBackgroundMode.foreground);
+    expect(await execution.notifyResult(success: false), isFalse);
     execution.update(completed: 1, total: 3, stage: 'Sending audio');
     await execution.finish(success: true);
   });
@@ -91,8 +94,32 @@ void main() {
     );
     final execution = RemoteTransferBackground(isIOS: false);
     expect(await execution.begin(() {}), RemoteBackgroundMode.desktop);
+    expect(await execution.notifyResult(success: true), isFalse);
     await execution.prepareDirectory(Directory('cache'));
     execution.update(completed: 1, total: 3, stage: 'Sending audio');
     await execution.finish(success: true);
   });
+
+  test(
+    'explicit retry requests an iOS activity and completion notification',
+    () async {
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return switch (call.method) {
+          'begin' => 'continued',
+          'notifyResult' => true,
+          _ => null,
+        };
+      });
+      final execution = RemoteTransferBackground(isIOS: true);
+      await execution.begin(() {}, continued: true);
+      expect((calls.first.arguments as Map)['continued'], isTrue);
+      expect(await execution.notifyResult(success: true), isTrue);
+      expect(calls.last.method, 'notifyResult');
+      expect((calls.last.arguments as Map)['success'], isTrue);
+      await execution.finish(success: true);
+      expect(await execution.notifyResult(success: true), isFalse);
+    },
+  );
 }

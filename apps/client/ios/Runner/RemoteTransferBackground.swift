@@ -1,5 +1,6 @@
 import BackgroundTasks
 import UIKit
+import UserNotifications
 
 /// Keeps a user-started SMB export running while Flutter's window is backgrounded.
 /// All state is owned by the main queue. The transfer itself stays in Dart/SMB workers.
@@ -12,6 +13,8 @@ final class RemoteTransferBackground {
     var requestIdentifier: String?
     var timeout: DispatchWorkItem?
     var expired = false
+    var notificationSent = false
+    var notificationsAllowed = false
 
     init(token: String, reply: @escaping (String) -> Void) {
       self.token = token
@@ -22,16 +25,27 @@ final class RemoteTransferBackground {
   var onExpired: ((String) -> Void)?
   private var session: Session?
 
-  func begin(token: String, reply: @escaping (String) -> Void) {
+  func begin(token: String, continued: Bool, reply: @escaping (String) -> Void) {
     guard session == nil, UIApplication.shared.applicationState == .active else {
       reply("foreground")
       return
     }
     let job = Session(token: token, reply: reply)
     session = job
+    prepareNotifications(job)
     job.grace = UIApplication.shared.beginBackgroundTask(withName: "Send audio") { [weak self, weak job] in
       guard let self, let job, job.grace != .invalid else { return }
       self.expire(job)
+    }
+    // The initial transfer stays quiet. A foreground retry can explicitly opt
+    // into iOS's visible continued-processing activity after an interruption.
+    guard continued else {
+      if #available(iOS 26.0, *), job.grace != .invalid {
+        resolve(job, mode: "quiet")
+      } else {
+        resolve(job, mode: fallbackMode(job))
+      }
+      return
     }
     guard #available(iOS 26.0, *), let bundle = Bundle.main.bundleIdentifier else {
       resolve(job, mode: fallbackMode(job))
@@ -101,6 +115,65 @@ final class RemoteTransferBackground {
     session = nil
   }
 
+  private func prepareNotifications(_ job: Session) {
+    let center = UNUserNotificationCenter.current()
+    center.getNotificationSettings { settings in
+      // Provisional permission delivers quietly to Notification Center and
+      // respects an existing denial without opening a permission prompt.
+      if settings.authorizationStatus == .notDetermined {
+        center.requestAuthorization(options: [.alert, .provisional]) { granted, _ in
+          DispatchQueue.main.async { job.notificationsAllowed = granted }
+        }
+      } else {
+        DispatchQueue.main.async {
+          job.notificationsAllowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+        }
+      }
+    }
+  }
+
+  func notifyResult(token: String, success: Bool, reply: @escaping (Bool) -> Void) {
+    guard let job = session, job.token == token,
+          UIApplication.shared.applicationState != .active else {
+      reply(false)
+      return
+    }
+    if job.notificationSent && !success {
+      reply(true)
+      return
+    }
+    let center = UNUserNotificationCenter.current()
+    center.getNotificationSettings { settings in
+      DispatchQueue.main.async {
+        guard UIApplication.shared.applicationState != .active,
+              settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
+          reply(false)
+          return
+        }
+        Self.postNotification(job, success: success, reply: reply)
+      }
+    }
+  }
+
+  private static func postNotification(_ job: Session, success: Bool, reply: @escaping (Bool) -> Void) {
+    let content = UNMutableNotificationContent()
+    content.title = success ? "Song sent" : "Transfer interrupted"
+    content.body = success
+      ? "Your song was sent to the remote folder."
+      : "Open Hyperstream to review the issue and retry."
+    content.threadIdentifier = "hyperstream.remote-transfer"
+    content.interruptionLevel = success ? .passive : .active
+    let request = UNNotificationRequest(
+      identifier: "hyperstream.remote-transfer." + job.token, content: content, trigger: nil
+    )
+    UNUserNotificationCenter.current().add(request) { error in
+      DispatchQueue.main.async {
+        job.notificationSent = error == nil
+        reply(error == nil)
+      }
+    }
+  }
+
   /// This private staging directory remains encrypted and readable after lock.
   /// Files created inside it inherit the protection class.
   static func prepareDirectory(path: String) throws {
@@ -135,6 +208,11 @@ final class RemoteTransferBackground {
   private func expire(_ job: Session) {
     guard session === job, !job.expired else { return }
     job.expired = true
+    // Enqueue before ending the grant, without waiting for an asynchronous
+    // settings query. The system still enforces current notification permissions.
+    if job.notificationsAllowed && UIApplication.shared.applicationState != .active {
+      Self.postNotification(job, success: false) { _ in }
+    }
     onExpired?(job.token)
     resolve(job, mode: "foreground")
     stop(job, success: false)

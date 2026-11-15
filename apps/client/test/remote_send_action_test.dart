@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hyperstream_client/features/player/remote_send_dialog.dart';
+import 'package:hyperstream_client/features/player/remote_send_action.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/audio_file_share.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
@@ -83,12 +85,21 @@ class FakeBackground extends RemoteTransferBackground {
   VoidCallback? expire;
   final results = <bool>[];
   final stages = <String>[];
+  bool notified = false;
+  final requests = <bool>[];
   @override
-  Future<RemoteBackgroundMode> begin(VoidCallback onExpired) async {
+  Future<RemoteBackgroundMode> begin(
+    VoidCallback onExpired, {
+    bool continued = false,
+  }) async {
+    requests.add(continued);
     expire = onExpired;
     await grant?.future;
     return mode;
   }
+
+  @override
+  Future<bool> notifyResult({required bool success}) async => notified;
 
   @override
   void update({
@@ -107,16 +118,22 @@ class FakeBackground extends RemoteTransferBackground {
 
 void main() {
   for (final scenario in [
+    'quiet',
     'continued',
     'limited',
     'desktop',
     'expire-download',
     'expire-upload',
-    'cancel',
+    'disconnect',
+    'notified',
+    'failure',
+    'retry',
     'foreground',
     'delayed-denial',
   ]) {
-    testWidgets('remote transfer lifecycle $scenario', (tester) async {
+    testWidgets('quiet remote transfer survives navigation and $scenario', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -131,7 +148,17 @@ void main() {
       final fs = PendingRemoteFs();
       final store = MemoryRemoteStore()
         ..value = RemoteFolderConfig.forDestination(destination());
-      final remote = RemoteFolders(store: store, connect: (_) async => fs);
+      var connections = 0;
+      final remote = RemoteFolders(
+        store: store,
+        connect: (_) async {
+          connections++;
+          if (scenario == 'failure' || connections > 1) {
+            throw const RemoteFolderException('Check the server connection.');
+          }
+          return fs;
+        },
+      );
       await remote.restore();
       addTearDown(remote.dispose);
       final export = PendingExport(client);
@@ -139,9 +166,12 @@ void main() {
         'limited' => RemoteBackgroundMode.limited,
         'desktop' => RemoteBackgroundMode.desktop,
         'foreground' || 'delayed-denial' => RemoteBackgroundMode.foreground,
-        _ => RemoteBackgroundMode.continued,
+        'continued' => RemoteBackgroundMode.continued,
+        _ => RemoteBackgroundMode.quiet,
       });
+      background.notified = scenario == 'notified';
       if (scenario == 'delayed-denial') background.grant = Completer<void>();
+      var startReturned = false;
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
@@ -151,16 +181,32 @@ void main() {
           ),
           home: Scaffold(
             body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => sendSongToRemote(
-                  context,
-                  client,
-                  song,
-                  remote: remote,
-                  export: export,
-                  background: background,
-                ),
-                child: const Text('Send'),
+              builder: (context) => Column(
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      await sendSongToRemote(
+                        context,
+                        client,
+                        song,
+                        remote: remote,
+                        export: export,
+                        background: background,
+                      );
+                      startReturned = true;
+                    },
+                    child: const Text('Send'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const Scaffold(body: Text('Another page')),
+                      ),
+                    ),
+                    child: const Text('Browse'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -169,16 +215,25 @@ void main() {
       await tester.tap(find.text('Send'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(remote.busy, isTrue);
-
-      if (scenario == 'cancel') {
-        await tester.tap(find.text('Cancel'));
-      } else {
+      expect(startReturned, isTrue);
+      expect(background.requests, [false]);
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      if (scenario != 'failure') expect(find.byType(SnackBar), findsNothing);
+      await tester.tap(find.text('Browse'));
+      await tester.pumpAndSettle();
+      expect(find.text('Send'), findsNothing);
+      expect(find.text('Another page'), findsOneWidget);
+      if (scenario == 'disconnect') {
+        client.close();
+        export.prepared.complete(MemoryAudioFile());
+      } else if (scenario != 'failure') {
+        expect(remote.busy, isTrue);
         tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
         await tester.pump();
         if (scenario == 'delayed-denial') {
           background.grant!.complete();
-        } else if (scenario == 'expire-download') {
+        } else if (scenario == 'expire-download' || scenario == 'retry') {
           background.expire!();
         } else if (scenario != 'foreground') {
           expect(export.cancelled, isFalse);
@@ -193,11 +248,17 @@ void main() {
       }
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
-      final success = ['continued', 'limited', 'desktop'].contains(scenario);
+      final success = [
+        'quiet',
+        'continued',
+        'limited',
+        'desktop',
+        'notified',
+      ].contains(scenario);
       expect(background.results, [success]);
       expect(remote.busy, isFalse);
       expect(export.cleaned, isTrue);
-      expect(fs.closed, scenario != 'delayed-denial');
+      expect(fs.closed, !['delayed-denial', 'failure'].contains(scenario));
       expect(
         fs.files,
         success
@@ -211,16 +272,48 @@ void main() {
           background.stages,
           containsAllInOrder(['Sending audio', 'Finishing']),
         );
-        expect(find.textContaining('Sent Song.mp3'), findsOneWidget);
-      } else if (scenario != 'cancel') {
         expect(
-          find.textContaining('Background execution ended'),
+          find.textContaining('Sent Song.mp3'),
+          scenario == 'notified' ? findsNothing : findsOneWidget,
+        );
+      } else if (!['disconnect', 'failure'].contains(scenario)) {
+        expect(
+          find.textContaining('iOS ended background time'),
           findsOneWidget,
         );
       }
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(find.text('Send'), findsOneWidget);
+      if (scenario == 'retry') {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        const channel = MethodChannel('dev.hyperstream/remote_transfer');
+        final messenger = tester.binding.defaultBinaryMessenger;
+        final requests = <MethodCall>[];
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          requests.add(call);
+          return call.method == 'begin' ? 'continued' : null;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        expect(
+          find.textContaining('Retry starts again using iOS activity.'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect((requests.first.arguments as Map)['continued'], isTrue);
+        expect(connections, 2);
+        expect(
+          find.textContaining('Check the server connection.'),
+          findsOneWidget,
+        );
+        expect(find.byType(Dialog), findsNothing);
+        debugDefaultTargetPlatformOverride = null;
+      }
+      if (!success) {
+        expect(
+          tester.widget<SnackBar>(find.byType(SnackBar)).duration,
+          const Duration(days: 1),
+        );
+      }
       expect(tester.takeException(), isNull);
     });
   }

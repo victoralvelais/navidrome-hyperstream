@@ -6,7 +6,7 @@ import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/remote_folder.dart';
-import '../player/remote_send_dialog.dart';
+import '../player/remote_send_action.dart';
 import '../playlists/playlist_dialogs.dart';
 
 Future<void> collectionAction(

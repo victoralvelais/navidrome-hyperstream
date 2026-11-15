@@ -44,7 +44,9 @@ import AVKit
       }
       switch call.method {
       case "begin":
-        self.remoteTransfer.begin(token: token) { result($0) }
+        self.remoteTransfer.begin(token: token, continued: args["continued"] as? Bool ?? false) { result($0) }
+      case "notifyResult":
+        self.remoteTransfer.notifyResult(token: token, success: args["success"] as? Bool ?? false) { result($0) }
       case "update":
         if let completed = args["completed"] as? NSNumber, let total = args["total"] as? NSNumber,
            let stage = args["stage"] as? String {

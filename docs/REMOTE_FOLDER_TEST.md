@@ -34,13 +34,16 @@ service, additional Docker deployment, or Navidrome plugin is required.
    the saved login and previous destination.
 5. Choose **Send to remote folder** from a song menu in Albums, Songs, Search,
    Favorites, playlists, or Now Playing. It downloads the original file from
-   Navidrome and sends it without conversion. On iOS/iPadOS 26+, the app requests
-   continued background processing and shows its availability in the transfer
-   dialog. With a grant, lock the screen during both download and upload and
-   verify the completed file. Repeat in Low Power Mode and while using another app.
-   Progress and cancellation are available in the system activity.
-   Older iOS versions and denied requests use a limited UIKit background grant
-   when available. The dialog explains when a long transfer needs to stay open.
+   Navidrome and sends it without conversion. The transfer runs quietly while you
+   browse, play music, or navigate away from the initiating screen. A brief message
+   confirms success in the app. A background completion can send a quiet iOS
+   notification. Provisional notification permission delivers to Notification
+   Center history and respects an existing denial. Network addresses, credentials,
+   and song details are excluded from system notification content.
+   Lock the screen during download and upload and repeat in Low Power Mode.
+   If iOS ends the quiet background grant, the app shows an interruption notice.
+   On iOS/iPadOS 26+, the interruption message explains that **Retry** restarts
+   with continued processing and Apple's visible progress/cancellation activity.
 6. Verify playable audio on the computer. Send again: the original must remain
    unchanged and a numbered copy should appear. Test cancellation during download
    and upload, network interruption, and destination persistence across relaunch.
@@ -61,12 +64,17 @@ shares, firewall rules, folder permissions, Tailscale, or the Navidrome deployme
 - Unique `.hyperstream-<random>.part` uploads are flushed and size-checked before
   a non-replacing server-side rename. Collisions yield numbered copies. A lost
   final acknowledgement is reported as uncertain and never retried automatically.
-- A user-started transfer acquires its execution grant before connecting. iOS 26
-  uses `BGContinuedProcessingTask` with a unique request identifier, immediate
-  submission, byte progress, and system cancellation/expiration handling. A
-  five-second launch-callback deadline falls back to limited background time.
-  Native grants are released after completion or failure. The staging directory
-  uses encrypted protection that remains readable after the device is locked.
+- A user-started transfer acquires a limited, quiet UIKit execution grant before
+  connecting. Its lifetime is independent of the initiating widget. Normal work
+  has no transfer dialog, spinner, or start notification. Failures show a
+  dismissible message that stays available, including after page navigation.
+- An explicit foreground retry on iOS 26 uses `BGContinuedProcessingTask` with
+  a unique identifier, immediate submission, byte progress, and system
+  cancellation/expiration handling. Apple requires foreground submission, so a
+  background timeout cannot automatically switch into this activity. The retry
+  restarts the transfer. A five-second launch-callback deadline falls back to
+  limited background time. Native grants are released after completion or failure.
+  The staging directory uses encrypted protection that is readable after lock.
 - Screen lock and app switching preserve transfers with an execution grant.
   Cancellation joins pending writes before cleanup. System expiration or
   cancellation stops unfinished work and reports the reason. Final publication
@@ -89,9 +97,10 @@ collected and checksum-verified under `releases/v0.1.0+47-r1/`.
 
 Tests cover address validation, protected-storage failure, probe cleanup, collisions,
 partial writes, cancellation, lost rename acknowledgements, and the configuration UI.
-Background tests cover screen-off during download and upload, continued and
-limited grants, denied/delayed grants, system expiration, manual cancellation,
-grant release, stale callbacks, progress throttling, and private staging setup.
+Background tests cover navigation during download and upload, quiet and continued
+grants, denied/delayed grants, system expiration, account disconnection, explicit
+activity retries, completion notification fallback, grant release, stale callbacks,
+progress throttling, and private staging setup.
 Connection tests also cover login-only persistence, legacy destination migration,
 plain usernames, both domain separators, per-stage failures, changing accounts,
 share discovery, nested navigation, manual fallback, and interrupted UI setup.

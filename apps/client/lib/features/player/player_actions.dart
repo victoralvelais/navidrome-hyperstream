@@ -11,7 +11,7 @@ import '../../widgets/glass_overlays.dart';
 import '../library/collection_actions.dart';
 import '../playlists/playlist_dialogs.dart';
 import 'audio_share_dialog.dart';
-import 'remote_send_dialog.dart';
+import 'remote_send_action.dart';
 
 class NowPlayingTrackActions extends StatefulWidget {
   const NowPlayingTrackActions({
