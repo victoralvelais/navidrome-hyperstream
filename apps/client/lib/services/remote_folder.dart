@@ -570,9 +570,25 @@ class RemoteFolders extends ChangeNotifier {
     try {
       _checking(RemoteCheckStage.shares);
       final shares = await listShares(connection);
-      return _folderNames(
-        shares.where((share) => share.isDisk).map((share) => share.name),
+      final candidates = _folderNames(
+        shares
+            .where((share) => share.isDisk && !share.isHidden)
+            .map((share) => share.name),
       );
+      final accessible = <String>[];
+      // Bound native sessions while checking each share's directory permissions.
+      for (var offset = 0; offset < candidates.length; offset += 3) {
+        final checked = await Future.wait(
+          candidates
+              .skip(offset)
+              .take(3)
+              .map(
+                (name) => _accessibleShare(connection.destination(share: name)),
+              ),
+        );
+        accessible.addAll(checked.whereType<String>());
+      }
+      return accessible;
     } on Object catch (e) {
       throw RemoteCheckException(
         RemoteCheckStage.shares,
@@ -580,6 +596,31 @@ class RemoteFolders extends ChangeNotifier {
       );
     } finally {
       end();
+    }
+  }
+
+  Future<String?> _accessibleShare(RemoteDestination location) async {
+    RemoteFileSystem? fs;
+    try {
+      fs = await connect(location);
+      await fs.listFolders('');
+      return location.share;
+    } on Smb2Exception catch (e) {
+      switch (e.type) {
+        case Smb2ErrorType.accessDenied:
+        case Smb2ErrorType.notFound:
+        case Smb2ErrorType.notADirectory:
+          return null;
+        default:
+          // Connection and login failures need a visible error and retry.
+          rethrow;
+      }
+    } finally {
+      try {
+        await fs?.close();
+      } on Object {
+        // Preserve the access-check result.
+      }
     }
   }
 

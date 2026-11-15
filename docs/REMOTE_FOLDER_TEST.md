@@ -23,15 +23,24 @@ service, additional Docker deployment, or Navidrome plugin is required.
    any level, including the share root. Selection checks creation, rename, and
    removal of a tiny unique probe before saving the destination. Browsing uses
    encrypted, signed SMB3 and reads directory entries. Files are excluded from the
-   folder list. The server can advertise shares that your account cannot open;
-   opening one shows its access result. **Enter path manually** is available if
-   the server restricts share enumeration. Reopening this settings page restores
+   folder list. Hidden shares, including Windows administrative shares, are
+   omitted from discovery. Ordinary shares are opened and their root directory
+   is listed to verify browse access, using at most three simultaneous sessions.
+   Shares that deny access or have disappeared are omitted. Network and login
+   failures show an error so the user can retry. **Enter path manually** supports
+   hidden shares and servers that restrict share enumeration. Reopening this settings page restores
    the saved login and loads the shares automatically. **Open saved folder** goes
    directly to the selected destination. Failed listing or write checks retain
    the saved login and previous destination.
 5. Choose **Send to remote folder** from a song menu in Albums, Songs, Search,
-   Favorites, playlists, or Now Playing. Keep Hyperstream open until completion.
-   It downloads the original file from Navidrome and sends it without conversion.
+   Favorites, playlists, or Now Playing. It downloads the original file from
+   Navidrome and sends it without conversion. On iOS/iPadOS 26+, the app requests
+   continued background processing and shows its availability in the transfer
+   dialog. With a grant, lock the screen during both download and upload and
+   verify the completed file. Repeat in Low Power Mode and while using another app.
+   Progress and cancellation are available in the system activity.
+   Older iOS versions and denied requests use a limited UIKit background grant
+   when available. The dialog explains when a long transfer needs to stay open.
 6. Verify playable audio on the computer. Send again: the original must remain
    unchanged and a numbered copy should appear. Test cancellation during download
    and upload, network interruption, and destination persistence across relaunch.
@@ -52,8 +61,18 @@ shares, firewall rules, folder permissions, Tailscale, or the Navidrome deployme
 - Unique `.hyperstream-<random>.part` uploads are flushed and size-checked before
   a non-replacing server-side rename. Collisions yield numbered copies. A lost
   final acknowledgement is reported as uncertain and never retried automatically.
-- Cancellation joins pending writes before cleanup. Backgrounding cancels unfinished
-  work; final publication can finish once started. No automatic relaunch recovery.
+- A user-started transfer acquires its execution grant before connecting. iOS 26
+  uses `BGContinuedProcessingTask` with a unique request identifier, immediate
+  submission, byte progress, and system cancellation/expiration handling. A
+  five-second launch-callback deadline falls back to limited background time.
+  Native grants are released after completion or failure. The staging directory
+  uses encrypted protection that remains readable after the device is locked.
+- Screen lock and app switching preserve transfers with an execution grant.
+  Cancellation joins pending writes before cleanup. System expiration or
+  cancellation stops unfinished work and reports the reason. Final publication
+  can finish once started. iOS resource policy can still end background execution,
+  including under Low Power Mode. Force-quitting ends the process. There is no
+  automatic relaunch recovery or resumable transfer journal.
 - Remote cleanup is best effort: an outage/process kill can leave a unique partial
   or probe file. No recursive or blanket remote cleanup is performed.
 - This is a file-copy test, not library ingestion: no scanning, conversion, source
@@ -70,13 +89,17 @@ collected and checksum-verified under `releases/v0.1.0+47-r1/`.
 
 Tests cover address validation, protected-storage failure, probe cleanup, collisions,
 partial writes, cancellation, lost rename acknowledgements, and the configuration UI.
+Background tests cover screen-off during download and upload, continued and
+limited grants, denied/delayed grants, system expiration, manual cancellation,
+grant release, stale callbacks, progress throttling, and private staging setup.
 Connection tests also cover login-only persistence, legacy destination migration,
 plain usernames, both domain separators, per-stage failures, changing accounts,
 share discovery, nested navigation, manual fallback, and interrupted UI setup.
 The Windows release runner additionally creates an encrypted temporary SMB share
 and synthetic account, compares bytes through the actual native library, checks
 collisions/bad credentials, independent IPC$ authentication, and missing shares and
-folders, encrypted share discovery, and directory-only nested listings, then
+folders, encrypted share discovery, exclusion of a second explicitly denied
+share, and directory-only nested listings, then
 removes the test share/account. The script refuses
 to run outside GitHub Actions. Physical iPhone acceptance remains a
 device test; successful packaging alone does not establish it.

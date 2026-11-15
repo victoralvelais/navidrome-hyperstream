@@ -18,6 +18,10 @@ Future<List<Smb2ShareInfo>> fakeShares(RemoteConnection connection) async =>
     const [
       Smb2ShareInfo(name: 'Music', type: 0),
       Smb2ShareInfo(name: 'Restricted', type: 0),
+      Smb2ShareInfo(name: r'ADMIN$', type: Smb2ShareType.hidden),
+      Smb2ShareInfo(name: r'C$', type: 0),
+      Smb2ShareInfo(name: r'D$', type: Smb2ShareType.hidden),
+      Smb2ShareInfo(name: r'E$', type: Smb2ShareType.hidden),
     ];
 
 Future<void> mount(WidgetTester tester, RemoteFolders remote) async {
@@ -131,52 +135,45 @@ Future<void> main() async {
     },
   );
 
-  testWidgets('denied share permits back navigation and a different folder', (
-    tester,
-  ) async {
-    final fs = MemoryRemoteFs();
-    final remote = RemoteFolders(
-      store: MemoryRemoteStore(),
-      checkLogin: (_) async {},
-      listShares: fakeShares,
-      connect: (location) async {
-        if (location.share == 'Restricted') {
-          throw const Smb2Exception(
-            'private response',
-            type: Smb2ErrorType.accessDenied,
-          );
-        }
-        return fs;
-      },
-    );
-    await mount(tester, remote);
-    await enterLogin(tester);
-    await tap(tester, 'Check connection');
-    await tap(tester, 'Restricted');
-    expect(find.textContaining('cannot open that share'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Use this folder'),
-          )
-          .onPressed,
-      isNull,
-    );
-    expect(remote.connection, isNotNull);
-    await tap(tester, 'All shares');
-    await tap(tester, 'Music');
-    await tap(tester, 'Use this folder');
-    expect(remote.destination?.folder, isEmpty);
-    await tap(tester, 'Edit or recheck connection');
-    expect(find.text('Shared folders'), findsNothing);
-    await tester.enterText(field('Server address'), 'another-server');
-    await tap(tester, 'Check connection');
-    expect(remote.destination, isNull);
-    expect(find.text('Music'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-    remote.dispose();
-  });
+  testWidgets(
+    'hidden and denied shares are omitted while an accessible share remains usable',
+    (tester) async {
+      final fs = MemoryRemoteFs();
+      final remote = RemoteFolders(
+        store: MemoryRemoteStore(),
+        checkLogin: (_) async {},
+        listShares: fakeShares,
+        connect: (location) async {
+          if (location.share == 'Restricted') {
+            throw const Smb2Exception(
+              'private response',
+              type: Smb2ErrorType.accessDenied,
+            );
+          }
+          return fs;
+        },
+      );
+      await mount(tester, remote);
+      await enterLogin(tester);
+      await tap(tester, 'Check connection');
+      for (final name in ['Restricted', r'ADMIN$', r'C$', r'D$', r'E$']) {
+        expect(find.text(name), findsNothing);
+      }
+      expect(remote.connection, isNotNull);
+      await tap(tester, 'Music');
+      await tap(tester, 'Use this folder');
+      expect(remote.destination?.folder, isEmpty);
+      await tap(tester, 'Edit or recheck connection');
+      expect(find.text('Shared folders'), findsNothing);
+      await tester.enterText(field('Server address'), 'another-server');
+      await tap(tester, 'Check connection');
+      expect(remote.destination, isNull);
+      expect(find.text('Music'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      remote.dispose();
+    },
+  );
 
   testWidgets(
     'saved login opens browser on relaunch without re-entering credentials',
@@ -234,10 +231,11 @@ Future<void> main() async {
       expect(find.textContaining('does not allow listing'), findsOneWidget);
       expect(remote.connection, isNotNull);
       await tap(tester, 'Enter path manually');
-      await tester.enterText(field('Share name'), 'Music');
+      await tester.enterText(field('Share name'), r'Music$');
       await tester.enterText(field('Subfolder (optional)'), 'Test');
       await tap(tester, 'Use this folder');
-      expect(remote.destination?.address, 'smb://server/Music/Test');
+      expect(remote.destination?.share, r'Music$');
+      expect(remote.destination?.folder, 'Test');
       expect(find.text('Login verified'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       remote.dispose();
@@ -261,7 +259,10 @@ Future<void> main() async {
         listShares: (connection) async => empty ? [] : fakeShares(connection),
       );
       await mount(tester, remote);
-      expect(find.textContaining('No shared folders'), findsOneWidget);
+      expect(
+        find.textContaining('No accessible shared folders'),
+        findsOneWidget,
+      );
       await tap(tester, 'Enter path manually');
       empty = false;
       await tap(tester, 'Browse shared folders');

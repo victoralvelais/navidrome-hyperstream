@@ -36,10 +36,13 @@ void main() {
       await remote.checkAndSaveConnection(destination.connection);
       expect(remote.connection?.host, destination.host);
       expect(remote.destination, isNull);
-      expect(
-        await remote.browseShares(destination.connection),
-        contains(destination.share),
-      );
+      final deniedShare = '${destination.share}-Denied';
+      final advertised = await listRemoteShares(destination.connection);
+      expect(advertised.map((share) => share.name), contains(deniedShare));
+      final accessible = await remote.browseShares(destination.connection);
+      expect(accessible, contains(destination.share));
+      expect(accessible, isNot(contains(deniedShare)));
+      expect(accessible.where((name) => name.endsWith(r'$')), isEmpty);
       expect(await remote.browseFolders(destination), ['Albums']);
       final albums = destination.connection.destination(
         share: destination.share,

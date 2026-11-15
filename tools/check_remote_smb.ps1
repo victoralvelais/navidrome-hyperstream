@@ -13,6 +13,7 @@ $testName = 'HyperstreamSmbTest'
 $testUser = 'hs_smb_test'
 $createdUser = $false
 $createdShare = $false
+$createdDeniedShare = $false
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     $testPassword = 'Hs!9' + [Guid]::NewGuid().ToString('N')
@@ -27,6 +28,8 @@ try {
     Set-Content -LiteralPath (Join-Path $testRoot 'example.txt') -Value 'SMB listing fixture'
     New-SmbShare -Name $testName -Path $testRoot -ChangeAccess $identity -EncryptData $true | Out-Null
     $createdShare = $true
+    New-SmbShare -Name "$testName-Denied" -Path $testRoot -NoAccess $identity -EncryptData $true | Out-Null
+    $createdDeniedShare = $true
     $env:HYPERSTREAM_SMB_TEST_ADDRESS = "smb://127.0.0.1/$testName"
     $env:HYPERSTREAM_SMB_TEST_USER = $identity
     $env:HYPERSTREAM_SMB_TEST_PASSWORD = $testPassword
@@ -36,6 +39,7 @@ try {
     Remove-Item Env:HYPERSTREAM_SMB_TEST_PASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:HYPERSTREAM_SMB_TEST_USER -ErrorAction SilentlyContinue
     Remove-Item Env:HYPERSTREAM_SMB_TEST_ADDRESS -ErrorAction SilentlyContinue
+    if ($createdDeniedShare) { Remove-SmbShare -Name "$testName-Denied" -Force }
     if ($createdShare) { Remove-SmbShare -Name $testName -Force }
     if ($createdUser) { Remove-LocalUser -Name $testUser }
     # Recheck the resolved target immediately before recursive cleanup.

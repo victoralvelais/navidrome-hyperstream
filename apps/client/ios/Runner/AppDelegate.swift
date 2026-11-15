@@ -7,6 +7,8 @@ import AVKit
   private var appearanceChannel: FlutterMethodChannel?
   private var artworkChannel: FlutterMethodChannel?
   private var shareChannel: FlutterMethodChannel?
+  private var remoteTransferChannel: FlutterMethodChannel?
+  private let remoteTransfer = RemoteTransferBackground()
   private var sharing = false
   private var transparencyObserver: NSObjectProtocol?
   override func application(
@@ -20,6 +22,42 @@ import AVKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HyperstreamAppearance") else { return }
     registrar.register(HyperstreamRouteFactory(), withId: "dev.hyperstream/audio_route_picker")
+    let remote = FlutterMethodChannel(name: "dev.hyperstream/remote_transfer", binaryMessenger: registrar.messenger())
+    remoteTransferChannel = remote
+    remoteTransfer.onExpired = { [weak self] token in
+      self?.remoteTransferChannel?.invokeMethod("expired", arguments: token)
+    }
+    remote.setMethodCallHandler { [weak self] call, result in
+      guard let self else { result(nil); return }
+      if call.method == "prepareDirectory", let path = call.arguments as? String {
+        do {
+          try RemoteTransferBackground.prepareDirectory(path: path)
+          result(nil)
+        } catch {
+          result(FlutterError(code: "file_protection", message: "Could not prepare background audio storage.", details: nil))
+        }
+        return
+      }
+      guard let args = call.arguments as? [String: Any], let token = args["token"] as? String else {
+        result(FlutterError(code: "invalid_transfer", message: "The transfer is unavailable.", details: nil))
+        return
+      }
+      switch call.method {
+      case "begin":
+        self.remoteTransfer.begin(token: token) { result($0) }
+      case "update":
+        if let completed = args["completed"] as? NSNumber, let total = args["total"] as? NSNumber,
+           let stage = args["stage"] as? String {
+          self.remoteTransfer.update(token: token, completed: completed.int64Value, total: total.int64Value, stage: stage)
+        }
+        result(nil)
+      case "finish":
+        self.remoteTransfer.finish(token: token, success: args["success"] as? Bool ?? false)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
     let artwork = FlutterMethodChannel(name: "dev.hyperstream/system_artwork", binaryMessenger: registrar.messenger())
     artworkChannel = artwork
     artwork.setMethodCallHandler { call, result in

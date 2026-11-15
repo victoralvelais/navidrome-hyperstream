@@ -21,6 +21,7 @@ class AudioFileShare extends ChangeNotifier {
     required this.track,
     Future<Directory> Function()? temporaryDirectory,
     DateTime Function()? now,
+    this.prepareDirectory,
     this.idleTimeout = const Duration(seconds: 30),
   }) : _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory,
        _now = now ?? DateTime.now;
@@ -30,6 +31,7 @@ class AudioFileShare extends ChangeNotifier {
   final Future<Directory> Function() _temporaryDirectory;
   final DateTime Function() _now;
   final Duration idleTimeout;
+  final Future<void> Function(Directory)? prepareDirectory;
   final _abort = Completer<void>();
   Directory? _directory;
   File? _file;
@@ -92,6 +94,7 @@ class AudioFileShare extends ChangeNotifier {
       }
       _checkActive();
       _directory = await root.createTemp('track-');
+      await prepareDirectory?.call(_directory!);
       _checkActive();
       final response = await client.downloadAudio(
         track.id,

@@ -51,6 +51,7 @@ void main() {
   void setup(
     Future<http.StreamedResponse> Function(http.BaseRequest) handler, {
     Track song = track,
+    Future<void> Function(Directory)? prepareDirectory,
   }) {
     client = NavidromeClient(
       serverUrl: 'https://music.example.com/navidrome/',
@@ -62,6 +63,7 @@ void main() {
       client: client,
       track: song,
       temporaryDirectory: () async => root,
+      prepareDirectory: prepareDirectory,
     );
   }
 
@@ -71,6 +73,62 @@ void main() {
       isEmpty,
     );
   }
+
+  test(
+    'background file protection is prepared before audio is downloaded',
+    () async {
+      var protected = false;
+      setup(
+        (request) async {
+          expect(protected, isTrue);
+          return http.StreamedResponse(
+            Stream.value([73, 68, 51]),
+            200,
+            contentLength: 3,
+          );
+        },
+        prepareDirectory: (directory) async {
+          expect(await directory.exists(), isTrue);
+          expect(directory.path, contains('hyperstream-share'));
+          expect(await directory.list().toList(), isEmpty);
+          protected = true;
+        },
+      );
+      final file = await export.prepare();
+      expect(await file.readAsBytes(), [73, 68, 51]);
+      await export.cleanup();
+      await expectNoFiles();
+    },
+  );
+
+  test(
+    'background file protection errors stop preparation and clean the cache',
+    () async {
+      setup(
+        (request) async => throw StateError('Download should not start'),
+        prepareDirectory: (_) async {
+          throw PlatformException(
+            code: 'file_protection',
+            message: 'private details',
+          );
+        },
+      );
+      await expectLater(
+        export.prepare(),
+        throwsA(
+          isA<NavidromeException>().having(
+            (error) => error.message,
+            'sanitized error',
+            isNot(contains('private details')),
+          ),
+        ),
+      );
+      expect(
+        await Directory('${root.path}/hyperstream-share').list().toList(),
+        isEmpty,
+      );
+    },
+  );
 
   test('original MP3 survives activity completion and cleanup for a delayed reader', () async {
     final bytes = [73, 68, 51, ...List.generate(6000, (i) => i % 256)];

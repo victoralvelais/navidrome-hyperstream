@@ -35,6 +35,7 @@ class MemoryRemoteFs implements RemoteFileSystem {
   Object? writeError;
   Object? listError;
   void Function()? afterWrite;
+  void Function()? afterClose;
   @override
   Future<List<String>> listFolders(String path) async {
     listed.add(path);
@@ -92,6 +93,7 @@ class MemoryRemoteFs implements RemoteFileSystem {
   @override
   Future<void> close() async {
     closed = true;
+    afterClose?.call();
   }
 }
 
@@ -393,38 +395,152 @@ void main() {
   });
 
   group('remote folder browser', () {
-    test('plain username persists and share discovery filters and sorts disk shares', () async {
-      final connection = RemoteConnection(
-        address: 'server',
-        username: 'Listener',
-        password: 'synthetic',
-      );
-      final store = MemoryRemoteStore();
-      final remote = RemoteFolders(
-        store: store,
-        checkLogin: (_) async {},
-        listShares: (login) async {
-          expect(login.username, 'Listener');
-          expect(login.domain, isEmpty);
-          return const [
-            Smb2ShareInfo(name: 'Music', type: 0),
-            Smb2ShareInfo(name: 'docs', type: 0),
-            Smb2ShareInfo(name: r'C$', type: Smb2ShareType.hidden),
-            Smb2ShareInfo(name: r'IPC$', type: 3),
-            Smb2ShareInfo(name: 'Printer', type: 1),
-            Smb2ShareInfo(name: '..', type: 0),
-            Smb2ShareInfo(name: 'Music', type: 0),
-          ];
-        },
-      );
-      await remote.checkAndSaveConnection(connection);
-      expect(await remote.browseShares(connection), [r'C$', 'docs', 'Music']);
-      final restored = RemoteFolders(store: store);
-      await restored.restore();
-      expect(restored.connection?.username, 'Listener');
-      expect(remote.destination, isNull);
-      expect(remote.busy, isFalse);
-    });
+    test(
+      'discovery skips hidden shares and verifies ordinary share access',
+      () async {
+        final connection = RemoteConnection(
+          address: 'server',
+          username: 'Listener',
+          password: 'synthetic',
+        );
+        final store = MemoryRemoteStore();
+        final checked = <String>[];
+        final sessions = <MemoryRemoteFs>[];
+        final remote = RemoteFolders(
+          store: store,
+          checkLogin: (_) async {},
+          connect: (location) async {
+            checked.add(location.share);
+            if (location.share == 'Denied') {
+              throw const Smb2Exception(
+                'Denied',
+                type: Smb2ErrorType.accessDenied,
+              );
+            }
+            if (location.share == 'Missing') {
+              throw const Smb2Exception(
+                'Missing',
+                type: Smb2ErrorType.notFound,
+              );
+            }
+            final fs = MemoryRemoteFs();
+            if (location.share == 'RootDenied') {
+              fs.listError = const Smb2Exception(
+                'Denied',
+                type: Smb2ErrorType.accessDenied,
+              );
+            }
+            sessions.add(fs);
+            return fs;
+          },
+          listShares: (login) async {
+            expect(login.username, 'Listener');
+            expect(login.domain, isEmpty);
+            return const [
+              Smb2ShareInfo(name: 'Music', type: 0),
+              Smb2ShareInfo(name: 'docs', type: 0),
+              Smb2ShareInfo(name: r'C$', type: Smb2ShareType.hidden),
+              Smb2ShareInfo(name: r'ADMIN$', type: 0),
+              Smb2ShareInfo(name: 'HiddenFlag', type: Smb2ShareType.hidden),
+              Smb2ShareInfo(name: 'Denied', type: 0),
+              Smb2ShareInfo(name: 'RootDenied', type: 0),
+              Smb2ShareInfo(name: 'Missing', type: 0),
+              Smb2ShareInfo(name: r'IPC$', type: 3),
+              Smb2ShareInfo(name: 'Printer', type: 1),
+              Smb2ShareInfo(name: '..', type: 0),
+              Smb2ShareInfo(name: 'Music', type: 0),
+            ];
+          },
+        );
+        await remote.checkAndSaveConnection(connection);
+        expect(await remote.browseShares(connection), ['docs', 'Music']);
+        expect(checked, ['Denied', 'docs', 'Missing', 'Music', 'RootDenied']);
+        expect(
+          sessions.every(
+            (fs) => fs.closed && fs.listed.single.isEmpty && fs.files.isEmpty,
+          ),
+          isTrue,
+        );
+        final restored = RemoteFolders(store: store);
+        await restored.restore();
+        expect(restored.connection?.username, 'Listener');
+        expect(remote.destination, isNull);
+        expect(remote.busy, isFalse);
+      },
+    );
+
+    test(
+      'connection or login failures stay visible and preserve saved settings',
+      () async {
+        for (final type in [
+          Smb2ErrorType.connection,
+          Smb2ErrorType.timeout,
+          Smb2ErrorType.auth,
+        ]) {
+          final fs = MemoryRemoteFs()
+            ..listError = Smb2Exception('private response', type: type);
+          final store = MemoryRemoteStore()
+            ..value = RemoteFolderConfig.forDestination(destination());
+          final remote = RemoteFolders(
+            store: store,
+            connect: (_) async => fs,
+            listShares: (_) async => const [
+              Smb2ShareInfo(name: 'Music', type: 0),
+            ],
+          );
+          await remote.restore();
+          await expectLater(
+            remote.browseShares(remote.connection!),
+            throwsA(
+              isA<RemoteCheckException>()
+                  .having((e) => e.stage, 'stage', RemoteCheckStage.shares)
+                  .having(
+                    (e) => e.message,
+                    'redacted',
+                    isNot(contains('private response')),
+                  ),
+            ),
+          );
+          expect(fs.closed, isTrue);
+          expect(remote.destination?.address, destination().address);
+          expect(remote.busy, isFalse);
+        }
+      },
+    );
+
+    test(
+      'share access checks use at most three sessions at once and close all',
+      () async {
+        final gate = Completer<void>();
+        var active = 0;
+        var peak = 0;
+        var opened = 0;
+        final remote = RemoteFolders(
+          store: MemoryRemoteStore(),
+          listShares: (_) async => List.generate(
+            8,
+            (index) => Smb2ShareInfo(name: 'Share$index', type: 0),
+          ),
+          connect: (_) async {
+            opened++;
+            active++;
+            if (active > peak) peak = active;
+            await gate.future;
+            return MemoryRemoteFs()..afterClose = () => active--;
+          },
+        );
+        final pending = remote.browseShares(destination().connection);
+        await Future<void>.delayed(Duration.zero);
+        expect(opened, 3);
+        expect(remote.busy, isTrue);
+        gate.complete();
+        expect(await pending, hasLength(8));
+        expect(opened, 8);
+        expect(peak, 3);
+        expect(active, 0);
+        expect(remote.busy, isFalse);
+      },
+    );
 
     test(
       'browsing closes its session and leaves selection and files untouched',

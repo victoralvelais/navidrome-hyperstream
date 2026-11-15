@@ -255,7 +255,7 @@ class _RemoteFolderBrowserState extends State<RemoteFolderBrowser> {
           ] else if (_ready && _names.isEmpty)
             Text(
               _location == null
-                  ? 'No shared folders were listed. You can enter a share name manually.'
+                  ? 'No accessible shared folders were found. You can enter a path manually.'
                   : 'This folder has no subfolders.',
             )
           else if (_names.isNotEmpty)
