@@ -171,6 +171,9 @@ final class Smb2Pool {
     String? password,
     String? domain,
     Duration timeout = const Duration(seconds: 15),
+    bool seal = false,
+    bool signing = false,
+    Smb2Version version = Smb2Version.any,
   }) {
     return Isolate.run(
       () => Smb2Client.listShares(
@@ -179,6 +182,9 @@ final class Smb2Pool {
         password: password,
         domain: domain,
         timeout: timeout,
+        seal: seal,
+        signing: signing,
+        version: version,
       ),
       debugName: 'dart_smb2 listShares',
     );

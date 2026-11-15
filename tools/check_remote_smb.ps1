@@ -23,6 +23,8 @@ try {
     $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.AddAccessRule($rule)
     Set-Acl -LiteralPath $testRoot -AclObject $acl
+    New-Item -ItemType Directory -Path (Join-Path $testRoot 'Albums\Nested') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $testRoot 'example.txt') -Value 'SMB listing fixture'
     New-SmbShare -Name $testName -Path $testRoot -ChangeAccess $identity -EncryptData $true | Out-Null
     $createdShare = $true
     $env:HYPERSTREAM_SMB_TEST_ADDRESS = "smb://127.0.0.1/$testName"

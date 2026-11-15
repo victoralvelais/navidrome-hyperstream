@@ -13,10 +13,28 @@ from types import SimpleNamespace
 import zipfile
 
 from tools.release import GitHub, artifacts_for, publish_pair, repository_from_remote
-from tools.release_artifacts import PACKAGES, ReleaseError, checked_members, sha256
+from tools.release_artifacts import PACKAGES, ReleaseError, checked_members, sha256, release_version, verify_ipa
 
 
 class ReleaseToolsTests(unittest.TestCase):
+    def test_displayed_version_tracks_release_number_and_source_major_minor(self):
+        for base, run, expected in [('0.1.0', '51', '0.1.51'), ('1.2.0', '52', '1.2.52')]:
+            with patch('tools.release_artifacts.source_version', return_value=base), \
+                    patch.dict('os.environ', {'GITHUB_RUN_NUMBER': run}):
+                self.assertEqual(release_version(), expected)
+        with patch.dict('os.environ', {'GITHUB_RUN_NUMBER': '65536'}):
+            with self.assertRaises(ReleaseError):
+                release_version()
+
+    def test_new_display_version_is_verified_inside_ipa_and_pair_metadata(self):
+        ios = self.artifact('ios', version='0.1.7')
+        windows = self.artifact('windows', version='0.1.7')
+        destination, metadata = publish_pair(ios, windows, self.run, 'owner/repo', self.root / 'releases')
+        self.assertEqual(destination.name, 'v0.1.7+7-r1')
+        verify_ipa(destination / metadata['ipa'], '0.1.7', 7)
+        with self.assertRaises(ReleaseError):
+            verify_ipa(destination / metadata['ipa'], '0.1.0', 7)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name).resolve()

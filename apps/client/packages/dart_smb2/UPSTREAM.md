@@ -3,7 +3,10 @@
 Source: https://github.com/ales-drnz/dart_smb2
 Revision: `bd513bf9d25b4389c1b14dea0023b1b94b86fbc5` (0.3.0).
 
-The runtime source and native build hook are unchanged. The package manifest
+The native build hook follows the pinned upstream revision. Share enumeration
+accepts the same optional `seal`, `signing`, and `version` arguments as a regular
+connection, forwarding them through the pool to the native context. Hyperstream
+requires encrypted, signed SMB3 for share discovery. The package manifest
 uses `code_assets ^1.2.1` and `hooks ^2.0.2`, matching Hyperstream's existing
 Flutter native-assets toolchain. Upstream development-only dependencies and
 screenshots are omitted. Public registry requests returned HTTP 403 during

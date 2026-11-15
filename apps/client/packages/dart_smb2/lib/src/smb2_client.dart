@@ -121,6 +121,9 @@ final class Smb2Client implements Finalizable {
     String? password,
     String? domain,
     Duration timeout = const Duration(seconds: 30),
+    bool seal = false,
+    bool signing = false,
+    Smb2Version version = Smb2Version.any,
   }) {
     final ctx = _newContext(
       user: user,
@@ -129,6 +132,11 @@ final class Smb2Client implements Finalizable {
       timeout: timeout,
     );
     try {
+      if (seal) smb2_set_seal(ctx, 1);
+      if (signing) smb2_set_sign(ctx, 1);
+      if (version != Smb2Version.any) {
+        smb2_set_version(ctx, smb2_negotiate_version.fromValue(version.value));
+      }
       _connectContext(ctx, host: host, share: r'IPC$', user: user);
       try {
         final reply = smb2_share_enum_sync(

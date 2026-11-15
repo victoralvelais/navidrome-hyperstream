@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/remote_folder.dart';
 import '../../widgets/glass_overlays.dart';
 import '../../widgets/glass_surface.dart';
+import 'remote_folder_browser.dart';
 
 class RemoteFolderSettings extends StatefulWidget {
   const RemoteFolderSettings({super.key, this.remote});
@@ -16,19 +17,15 @@ class RemoteFolderSettings extends StatefulWidget {
 class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
   late final RemoteFolders _remote = widget.remote ?? RemoteFolders.instance;
   final _loginForm = GlobalKey<FormState>();
-  final _folderForm = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _address = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
-  final _share = TextEditingController();
-  final _folder = TextEditingController();
   bool _hidden = true;
-  RemoteConnection? _verified;
+  RemoteConnection? _connection;
+  bool _verified = false;
   String? _loginMessage;
   bool _loginFailed = false;
-  String? _folderMessage;
-  bool _folderFailed = false;
 
   @override
   void initState() {
@@ -48,24 +45,23 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
     _address.text = saved?.address ?? '';
     _username.text = saved?.username ?? '';
     _password.text = saved?.password ?? '';
-    _share.text = _remote.destination?.share ?? '';
-    _folder.text = _remote.destination?.folder ?? '';
+    _connection = saved;
     setState(() {});
   }
 
   void _loginChanged(String _) => setState(() {
-    _verified = null;
+    _connection = null;
+    _verified = false;
     _loginMessage = null;
-    _folderMessage = null;
   });
 
   Future<void> _checkConnection() async {
     if (_remote.busy || !_loginForm.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
     setState(() {
-      _verified = null;
+      _connection = null;
+      _verified = false;
       _loginMessage = null;
-      _folderMessage = null;
       _loginFailed = false;
     });
     try {
@@ -75,15 +71,11 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
         password: _password.text,
         name: _name.text,
       );
-      final previous = _remote.connection;
       await _remote.checkAndSaveConnection(connection);
       if (!mounted) return;
-      if (previous != null && !previous.sameAccount(connection)) {
-        _share.clear();
-        _folder.clear();
-      }
       setState(() {
-        _verified = connection;
+        _connection = connection;
+        _verified = true;
         _hidden = true;
         _loginMessage =
             'Login verified over encrypted SMB. Saved securely on this device.';
@@ -96,47 +88,6 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
             e is RemoteCheckException && e.stage == RemoteCheckStage.save
             ? 'Login verified. ${remoteFolderError(e)}'
             : remoteFolderError(e);
-      });
-    }
-  }
-
-  Future<void> _saveFolder() async {
-    final connection = _verified;
-    if (connection == null ||
-        _remote.busy ||
-        !_folderForm.currentState!.validate()) {
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _folderMessage = null;
-      _folderFailed = false;
-    });
-    try {
-      final destination = connection.destination(
-        share: _share.text,
-        folder: _folder.text,
-      );
-      await _remote.testAndSave(destination);
-      if (!mounted) return;
-      setState(
-        () => _folderMessage =
-            'Folder verified and saved. Ready to receive songs.',
-      );
-    } on Object catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _folderFailed = true;
-        final stage = e is RemoteCheckException
-            ? switch (e.stage) {
-                RemoteCheckStage.share => 'Share check failed. ',
-                RemoteCheckStage.folder => 'Folder check failed. ',
-                RemoteCheckStage.write => 'Write check failed. ',
-                RemoteCheckStage.save => 'Folder verified. ',
-                RemoteCheckStage.login => '',
-              }
-            : '';
-        _folderMessage = '$stage${remoteFolderError(e)}';
       });
     }
   }
@@ -165,21 +116,14 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
     try {
       await _remote.forget();
       if (!mounted) return;
-      for (final controller in [
-        _name,
-        _address,
-        _username,
-        _password,
-        _share,
-        _folder,
-      ]) {
+      for (final controller in [_name, _address, _username, _password]) {
         controller.clear();
       }
       setState(() {
-        _verified = null;
+        _connection = null;
+        _verified = false;
         _hidden = true;
         _loginMessage = null;
-        _folderMessage = null;
       });
     } on Object catch (e) {
       if (!mounted) return;
@@ -192,14 +136,7 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
 
   @override
   void dispose() {
-    for (final controller in [
-      _name,
-      _address,
-      _username,
-      _password,
-      _share,
-      _folder,
-    ]) {
+    for (final controller in [_name, _address, _username, _password]) {
       controller.dispose();
     }
     super.dispose();
@@ -237,6 +174,7 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
         const LinearProgressIndicator(),
         _status(switch (_remote.checking!) {
           RemoteCheckStage.login => 'Checking server login…',
+          RemoteCheckStage.shares => 'Finding shared folders…',
           RemoteCheckStage.share => 'Opening the share…',
           RemoteCheckStage.folder => 'Checking the folder…',
           RemoteCheckStage.write => 'Checking write access…',
@@ -265,7 +203,6 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
         );
       }
       final enabled = !_remote.busy;
-      final folderEnabled = enabled && _verified != null;
       final titleStyle = Theme.of(context).textTheme.titleLarge;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -274,28 +211,34 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
             Row(
               children: [
                 Icon(
-                  _verified == null
-                      ? Icons.dns_outlined
-                      : Icons.check_circle_outline_rounded,
+                  _verified
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.dns_outlined,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _verified == null ? 'Server connection' : 'Login verified',
+                    _connection == null
+                        ? 'Server connection'
+                        : _verified
+                        ? 'Login verified'
+                        : 'Saved connection',
                     style: titleStyle,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            if (_verified != null) ...[
+            if (_connection != null) ...[
               Text(
-                _verified!.displayName,
+                _connection!.displayName,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              Text(_verified!.address),
-              if (_loginMessage != null)
-                _status(_loginMessage!, failed: _loginFailed),
+              Text(_connection!.address),
+              _status(
+                _loginMessage ?? 'Your login is saved securely on this device.',
+                failed: _loginFailed,
+              ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
@@ -353,8 +296,9 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
                       enableSuggestions: false,
                       decoration: const InputDecoration(
                         labelText: 'Username',
-                        hintText: r'COMPUTER\username',
-                        helperText: r'COMPUTER\username or COMPUTER/username both work.',
+                        hintText: 'username',
+                        helperText:
+                            'Use the username that works for file sharing.',
                         helperMaxLines: 4,
                       ),
                       validator: (value) => value?.trim().isEmpty != false
@@ -410,74 +354,15 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
           _card([
             Text('Destination folder', style: titleStyle),
             const SizedBox(height: 12),
-            if (_verified == null)
-              const Text(
-                'Verify your server login above to set up the folder.',
+            if (_connection == null)
+              const Text('Connect to show the available shared folders.')
+            else
+              RemoteFolderBrowser(
+                key: ObjectKey(_connection),
+                remote: _remote,
+                connection: _connection!,
+                onVerified: () => setState(() => _verified = true),
               ),
-            if (_remote.destination != null) ...[
-              Text(
-                'Saved folder',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              Text(_remote.destination!.address),
-            ],
-            const SizedBox(height: 16),
-            Form(
-              key: _folderForm,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    controller: _share,
-                    enabled: folderEnabled,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: (_) => setState(() => _folderMessage = null),
-                    decoration: const InputDecoration(
-                      labelText: 'Share name',
-                      hintText: 'Music',
-                      helperText: 'The shared name shown in Windows Sharing properties.',
-                      helperMaxLines: 4,
-                    ),
-                    validator: (value) => value?.trim().isEmpty != false
-                        ? 'Enter the share name.'
-                        : null,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _folder,
-                    enabled: folderEnabled,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: (_) => setState(() => _folderMessage = null),
-                    decoration: const InputDecoration(
-                      labelText: 'Subfolder (optional)',
-                      hintText: 'Hyperstream Test',
-                      helperText: 'Leave empty to use the share itself. Any subfolder must already exist.',
-                      helperMaxLines: 4,
-                    ),
-                    onFieldSubmitted: folderEnabled
-                        ? (_) => _saveFolder()
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'This check creates, renames, and removes a tiny test file to verify write access.',
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: folderEnabled ? _saveFolder : null,
-                    icon: const Icon(Icons.folder_open_rounded),
-                    label: const Text('Test and save folder'),
-                  ),
-                  if (_folderMessage != null)
-                    _status(_folderMessage!, failed: _folderFailed),
-                  if (_remote.checking != null && _verified != null)
-                    _progress(),
-                ],
-              ),
-            ),
           ]),
           if (_remote.connection != null)
             TextButton(

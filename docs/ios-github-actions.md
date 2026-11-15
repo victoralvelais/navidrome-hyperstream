@@ -30,15 +30,19 @@ secure-storage plugin before the release build. It uses a separate synthetic key
 checks a protected save/read/delete, and never uses a real Navidrome account.
 Local builds also need the C++ ATL component required by this plugin.
 
-Both apps use the version in `apps/client/pubspec.yaml` and the Actions run number
-as their build number. For example:
+Both apps use the major/minor version from `apps/client/pubspec.yaml` and the
+Actions run number as the displayed patch version and build number. Run 51 on
+the `0.1` line displays `0.1.51` in the IPA's `CFBundleShortVersionString`, with
+`51` in `CFBundleVersion`. Windows and artifact manifests use the same values.
+The shared calculation lives in `tools/release_artifacts.py`. A release has this
+directory structure.
 
 ```text
 releases/
   latest.json
-  v0.1.0+7-r1/
-    hyperstream-0.1.0+7-ios-unsigned.ipa
-    hyperstream-0.1.0+7-windows-x64.zip
+  v0.1.51+51-r1/
+    hyperstream-0.1.51+51-ios-unsigned.ipa
+    hyperstream-0.1.51+51-windows-x64.zip
     windows/
       hyperstream_client.exe
       flutter_windows.dll

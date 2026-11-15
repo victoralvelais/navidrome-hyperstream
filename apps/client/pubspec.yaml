@@ -3,7 +3,8 @@ name: hyperstream_client
 description: "A native Navidrome library player for iPhone, iPad, and Windows."
 # Prevent accidental publishing to the pub.dev package registry.
 publish_to: 'none'
-# App version + build number. CI supplies its run number for iOS builds.
+# Local development version. CI uses MAJOR.MINOR.RUN as the displayed version
+# and RUN as the build number on iOS and Windows.
 version: 0.1.0+1
 
 environment:

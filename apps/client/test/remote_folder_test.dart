@@ -21,17 +21,31 @@ class MemoryRemoteStore implements RemoteFolderStore {
 
 class MemoryRemoteFs implements RemoteFileSystem {
   final files = <String, List<int>>{};
+  final folders = <String, List<String>>{
+    '': ['Test'],
+    'Test': ['Deep'],
+    'Test/Deep': [],
+  };
+  final listed = <String>[];
   final renames = <(String, String)>[];
   bool closed = false;
   bool truncateWrite = false;
   bool loseRenameReply = false;
   Object? statError;
   Object? writeError;
+  Object? listError;
   void Function()? afterWrite;
+  @override
+  Future<List<String>> listFolders(String path) async {
+    listed.add(path);
+    if (listError != null) throw listError!;
+    return folders[path] ?? [];
+  }
+
   @override
   Future<({bool directory, int size})> stat(String path) async {
     if (statError != null) throw statError!;
-    return path == 'Test' || path.isEmpty
+    return folders.containsKey(path)
         ? (directory: true, size: 0)
         : (directory: false, size: files[path]?.length ?? 0);
   }
@@ -376,6 +390,99 @@ void main() {
         expect(remote.destination, isNull);
       },
     );
+  });
+
+  group('remote folder browser', () {
+    test('plain username persists and share discovery filters and sorts disk shares', () async {
+      final connection = RemoteConnection(
+        address: 'server',
+        username: 'Listener',
+        password: 'synthetic',
+      );
+      final store = MemoryRemoteStore();
+      final remote = RemoteFolders(
+        store: store,
+        checkLogin: (_) async {},
+        listShares: (login) async {
+          expect(login.username, 'Listener');
+          expect(login.domain, isEmpty);
+          return const [
+            Smb2ShareInfo(name: 'Music', type: 0),
+            Smb2ShareInfo(name: 'docs', type: 0),
+            Smb2ShareInfo(name: r'C$', type: Smb2ShareType.hidden),
+            Smb2ShareInfo(name: r'IPC$', type: 3),
+            Smb2ShareInfo(name: 'Printer', type: 1),
+            Smb2ShareInfo(name: '..', type: 0),
+            Smb2ShareInfo(name: 'Music', type: 0),
+          ];
+        },
+      );
+      await remote.checkAndSaveConnection(connection);
+      expect(await remote.browseShares(connection), [r'C$', 'docs', 'Music']);
+      final restored = RemoteFolders(store: store);
+      await restored.restore();
+      expect(restored.connection?.username, 'Listener');
+      expect(remote.destination, isNull);
+      expect(remote.busy, isFalse);
+    });
+
+    test(
+      'browsing closes its session and leaves selection and files untouched',
+      () async {
+        final fs = MemoryRemoteFs()
+          ..folders['Test'] = ['Zoo', '..', '.', 'alpha', r'a\b'];
+        final store = MemoryRemoteStore()
+          ..value = RemoteFolderConfig.forDestination(destination());
+        final remote = RemoteFolders(store: store, connect: (_) async => fs);
+        await remote.restore();
+        expect(await remote.browseFolders(destination()), ['alpha', 'Zoo']);
+        expect(fs.closed, isTrue);
+        expect(fs.listed, ['Test']);
+        expect(fs.files, isEmpty);
+        expect(fs.renames, isEmpty);
+        expect(remote.destination?.address, destination().address);
+      },
+    );
+
+    test('listing failures preserve the login, sanitize errors, and close sessions', () async {
+      const failure = Smb2Exception(
+        'private server response',
+        type: Smb2ErrorType.accessDenied,
+      );
+      final fs = MemoryRemoteFs()..listError = failure;
+      final store = MemoryRemoteStore()
+        ..value = RemoteFolderConfig(destination().connection);
+      final remote = RemoteFolders(
+        store: store,
+        connect: (_) async => fs,
+        listShares: (_) async => throw failure,
+      );
+      await remote.restore();
+      await expectLater(
+        remote.browseShares(remote.connection!),
+        throwsA(
+          isA<RemoteCheckException>()
+              .having((e) => e.stage, 'stage', RemoteCheckStage.shares)
+              .having((e) => e.message, 'fallback', contains('manually')),
+        ),
+      );
+      await expectLater(
+        remote.browseFolders(destination()),
+        throwsA(
+          isA<RemoteCheckException>()
+              .having((e) => e.stage, 'stage', RemoteCheckStage.folder)
+              .having(
+                (e) => e.message,
+                'redacted',
+                isNot(contains('private server response')),
+              ),
+        ),
+      );
+      expect(fs.closed, isTrue);
+      expect(remote.connection, isNotNull);
+      expect(remote.destination, isNull);
+      expect(remote.busy, isFalse);
+    });
   });
 
   group('staged uploads', () {

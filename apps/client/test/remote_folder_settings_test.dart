@@ -14,6 +14,12 @@ import 'remote_folder_test.dart'
 
 Finder field(String label) => find.widgetWithText(TextFormField, label);
 
+Future<List<Smb2ShareInfo>> fakeShares(RemoteConnection connection) async =>
+    const [
+      Smb2ShareInfo(name: 'Music', type: 0),
+      Smb2ShareInfo(name: 'Restricted', type: 0),
+    ];
+
 Future<void> mount(WidgetTester tester, RemoteFolders remote) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -38,8 +44,17 @@ Future<void> tap(WidgetTester tester, String label) async {
 Future<void> enterLogin(WidgetTester tester) async {
   await tester.enterText(field('Name (optional)'), 'Test server');
   await tester.enterText(field('Server address'), 'smb://server/');
-  await tester.enterText(field('Username'), 'COMPUTER/Listener');
+  await tester.enterText(field('Username'), 'Listener');
   await tester.enterText(field('Password'), 'synthetic-password');
+}
+
+Future<void> capture(WidgetTester tester, String name) async {
+  if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('../build/previews/$name.png'),
+    );
+  }
 }
 
 Future<void> main() async {
@@ -53,8 +68,9 @@ Future<void> main() async {
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   }
+
   testWidgets(
-    'login saves independently, then a folder can be tested on a small phone',
+    'save plain login, browse shares and nested folders, select on a small phone',
     (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1;
@@ -66,17 +82,15 @@ Future<void> main() async {
       final remote = RemoteFolders(
         store: store,
         connect: (_) async => fs,
+        listShares: fakeShares,
         checkLogin: (connection) async {
           loginChecks++;
-          expect(connection.domain, 'COMPUTER');
+          expect(connection.domain, isEmpty);
           expect(connection.user, 'Listener');
         },
       );
       await mount(tester, remote);
-      expect(
-        tester.widget<TextFormField>(field('Share name')).enabled,
-        isFalse,
-      );
+      expect(field('Share name'), findsNothing);
       await enterLogin(tester);
       expect(
         tester
@@ -91,108 +105,105 @@ Future<void> main() async {
       );
       await tap(tester, 'Check connection');
       expect(loginChecks, 1);
+      expect(store.value?.connection.username, 'Listener');
       expect(store.value?.connection.password, 'synthetic-password');
       expect(store.value?.destination, isNull);
-      expect(fs.closed, isFalse);
+      expect(fs.files, isEmpty);
       expect(find.text('Login verified'), findsOneWidget);
-      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
-        await tester.ensureVisible(find.text('Login verified'));
-        await tester.pumpAndSettle();
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('../build/previews/remote-login-verified.png'),
-        );
-      }
-      await tester.enterText(field('Share name'), 'Music');
-      await tester.enterText(field('Subfolder (optional)'), 'Test');
-      await tap(tester, 'Test and save folder');
+      expect(find.text('Music'), findsOneWidget);
+      await capture(tester, 'remote-shares');
+      await tap(tester, 'Music');
+      await tap(tester, 'Test');
+      await tap(tester, 'Deep');
+      expect(find.text('This folder has no subfolders.'), findsOneWidget);
+      await tap(tester, 'Up one folder');
+      expect(find.text('Music / Test'), findsOneWidget);
+      expect(fs.renames, isEmpty);
+      await capture(tester, 'remote-browse');
+      await tap(tester, 'Use this folder');
       expect(remote.destination?.address, 'smb://server/Music/Test');
       expect(fs.files, isEmpty);
       expect(find.textContaining('Folder verified and saved'), findsOneWidget);
-      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
-        await tester.ensureVisible(
-          find.textContaining('Folder verified and saved'),
-        );
-        await tester.pumpAndSettle();
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('../build/previews/remote-folder-verified.png'),
-        );
-      }
+      await capture(tester, 'remote-folder-selected');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       remote.dispose();
     },
   );
 
-  testWidgets(
-    'failed share leaves the login verified and permits a corrected share',
-    (tester) async {
-      final fs = MemoryRemoteFs();
-      var loginChecks = 0;
-      final remote = RemoteFolders(
-        store: MemoryRemoteStore(),
-        checkLogin: (_) async {
-          loginChecks++;
-        },
-        connect: (destination) async {
-          if (destination.share != 'Music') {
-            throw const Smb2Exception(
-              'private server response',
-              type: Smb2ErrorType.notFound,
-            );
-          }
-          return fs;
-        },
-      );
-      await mount(tester, remote);
-      await enterLogin(tester);
-      await tap(tester, 'Check connection');
-      await tester.enterText(field('Share name'), 'Wrong');
-      await tap(tester, 'Test and save folder');
-      expect(find.textContaining('Share check failed.'), findsOneWidget);
-      expect(find.text('Login verified'), findsOneWidget);
-      expect(remote.connection, isNotNull);
-      expect(remote.destination, isNull);
-      await tester.enterText(field('Share name'), 'Music');
-      await tap(tester, 'Test and save folder');
-      expect(remote.destination?.folder, isEmpty);
-      expect(loginChecks, 1);
-      await tap(tester, 'Edit or recheck connection');
-      expect(find.text('Login verified'), findsNothing);
-      expect(
-        tester.widget<TextFormField>(field('Share name')).enabled,
-        isFalse,
-      );
-      await tester.enterText(field('Server address'), 'another-server');
-      await tap(tester, 'Check connection');
-      expect(remote.destination, isNull);
-      expect(
-        tester.widget<TextFormField>(field('Share name')).controller!.text,
-        isEmpty,
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      remote.dispose();
-    },
-  );
+  testWidgets('denied share permits back navigation and a different folder', (
+    tester,
+  ) async {
+    final fs = MemoryRemoteFs();
+    final remote = RemoteFolders(
+      store: MemoryRemoteStore(),
+      checkLogin: (_) async {},
+      listShares: fakeShares,
+      connect: (location) async {
+        if (location.share == 'Restricted') {
+          throw const Smb2Exception(
+            'private response',
+            type: Smb2ErrorType.accessDenied,
+          );
+        }
+        return fs;
+      },
+    );
+    await mount(tester, remote);
+    await enterLogin(tester);
+    await tap(tester, 'Check connection');
+    await tap(tester, 'Restricted');
+    expect(find.textContaining('cannot open that share'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Use this folder'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(remote.connection, isNotNull);
+    await tap(tester, 'All shares');
+    await tap(tester, 'Music');
+    await tap(tester, 'Use this folder');
+    expect(remote.destination?.folder, isEmpty);
+    await tap(tester, 'Edit or recheck connection');
+    expect(find.text('Shared folders'), findsNothing);
+    await tester.enterText(field('Server address'), 'another-server');
+    await tap(tester, 'Check connection');
+    expect(remote.destination, isNull);
+    expect(find.text('Music'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    remote.dispose();
+  });
 
   testWidgets(
-    'saved login is prefilled but does not claim current verification',
+    'saved login opens browser on relaunch without re-entering credentials',
     (tester) async {
       final store = MemoryRemoteStore()
         ..value = RemoteFolderConfig.forDestination(destination());
-      final remote = RemoteFolders(store: store, checkLogin: (_) async {});
+      var loginChecks = 0;
+      var shareLists = 0;
+      final remote = RemoteFolders(
+        store: store,
+        connect: (_) async => MemoryRemoteFs(),
+        checkLogin: (_) async {
+          loginChecks++;
+        },
+        listShares: (connection) async {
+          shareLists++;
+          expect(connection.password, 'secret');
+          return fakeShares(connection);
+        },
+      );
       await mount(tester, remote);
-      expect(
-        tester.widget<TextFormField>(field('Server address')).controller!.text,
-        'smb://server',
-      );
-      expect(
-        tester.widget<TextFormField>(field('Share name')).controller!.text,
-        'share',
-      );
-      expect(find.text('Login verified'), findsNothing);
+      expect(field('Username'), findsNothing);
+      expect(find.text('Music'), findsOneWidget);
+      expect(shareLists, 1);
+      expect(loginChecks, 0);
+      await tap(tester, 'Open saved folder');
+      expect(find.text('share / Test'), findsOneWidget);
       await tap(tester, 'Forget remote connection');
       await tap(tester, 'Forget');
       expect(store.value, isNull);
@@ -205,13 +216,74 @@ Future<void> main() async {
     },
   );
 
-  testWidgets('login error and secure-save error are distinct and sanitized', (
+  testWidgets(
+    'share-list permission failure keeps saved login and manual fallback',
+    (tester) async {
+      final store = MemoryRemoteStore()
+        ..value = RemoteFolderConfig(destination().connection);
+      final remote = RemoteFolders(
+        store: store,
+        connect: (_) async => MemoryRemoteFs(),
+        listShares: (_) async => throw const Smb2Exception(
+          'private response',
+          type: Smb2ErrorType.accessDenied,
+        ),
+      );
+      await mount(tester, remote);
+      expect(find.text('Saved connection'), findsOneWidget);
+      expect(find.textContaining('does not allow listing'), findsOneWidget);
+      expect(remote.connection, isNotNull);
+      await tap(tester, 'Enter path manually');
+      await tester.enterText(field('Share name'), 'Music');
+      await tester.enterText(field('Subfolder (optional)'), 'Test');
+      await tap(tester, 'Use this folder');
+      expect(remote.destination?.address, 'smb://server/Music/Test');
+      expect(find.text('Login verified'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      remote.dispose();
+    },
+  );
+
+  testWidgets(
+    'empty share list can retry and write failure does not save a destination',
+    (tester) async {
+      var empty = true;
+      final fs = MemoryRemoteFs()
+        ..writeError = const Smb2Exception(
+          'private response',
+          type: Smb2ErrorType.accessDenied,
+        );
+      final store = MemoryRemoteStore()
+        ..value = RemoteFolderConfig(destination().connection);
+      final remote = RemoteFolders(
+        store: store,
+        connect: (_) async => fs,
+        listShares: (connection) async => empty ? [] : fakeShares(connection),
+      );
+      await mount(tester, remote);
+      expect(find.textContaining('No shared folders'), findsOneWidget);
+      await tap(tester, 'Enter path manually');
+      empty = false;
+      await tap(tester, 'Browse shared folders');
+      await tap(tester, 'Music');
+      await tap(tester, 'Use this folder');
+      expect(find.textContaining('Write check failed.'), findsOneWidget);
+      expect(remote.destination, isNull);
+      expect(remote.connection, isNotNull);
+      expect(fs.files, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      remote.dispose();
+    },
+  );
+
+  testWidgets('login error and secure-save error stay distinct and sanitized', (
     tester,
   ) async {
     for (final failSave in [false, true]) {
       final store = MemoryRemoteStore()..failWrite = failSave;
       final remote = RemoteFolders(
         store: store,
+        listShares: fakeShares,
         checkLogin: (_) async {
           if (!failSave) {
             throw const Smb2Exception(
@@ -233,10 +305,7 @@ Future<void> main() async {
         findsOneWidget,
       );
       expect(find.text('Login verified'), findsNothing);
-      expect(
-        tester.widget<TextFormField>(field('Share name')).enabled,
-        isFalse,
-      );
+      expect(find.text('Shared folders'), findsNothing);
       expect(store.value, isNull);
       await tester.pumpWidget(const SizedBox());
       remote.dispose();
@@ -244,25 +313,33 @@ Future<void> main() async {
   });
 
   testWidgets(
-    'leaving during login saves safely and restores without a folder',
+    'leaving during share discovery ignores the late result and retains login',
     (tester) async {
-      final pending = Completer<void>();
-      final store = MemoryRemoteStore();
+      final pending = Completer<List<Smb2ShareInfo>>();
+      final store = MemoryRemoteStore()
+        ..value = RemoteFolderConfig(destination().connection);
       final remote = RemoteFolders(
         store: store,
-        checkLogin: (_) => pending.future,
+        listShares: (_) => pending.future,
       );
-      await mount(tester, remote);
-      await enterLogin(tester);
-      await tester.ensureVisible(find.text('Check connection'));
-      await tester.tap(find.text('Check connection'));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RemoteFolderSettings(remote: remote),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
       await tester.pump();
       expect(remote.busy, isTrue);
       await tester.pumpWidget(const SizedBox());
-      pending.complete();
+      pending.complete([]);
       await tester.pumpAndSettle();
       expect(store.value?.connection.host, 'server');
       expect(store.value?.destination, isNull);
+      expect(remote.busy, isFalse);
       expect(tester.takeException(), isNull);
       remote.dispose();
     },

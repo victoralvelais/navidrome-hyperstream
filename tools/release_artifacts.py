@@ -32,6 +32,15 @@ def source_version():
     return match[1]
 
 
+def release_version():
+    """Use the CI run as the displayed patch version on both platforms."""
+    build = int(os.environ['GITHUB_RUN_NUMBER'])
+    if not 1 <= build <= 65535:
+        raise ReleaseError('Release number must fit a Windows version component.')
+    major_minor = source_version().rsplit('.', 1)[0]
+    return f'{major_minor}.{build}'
+
+
 def checked_members(archive):
     """Reject traversal, symlinks, and Windows filename collisions before extraction."""
     seen = set()
@@ -95,7 +104,7 @@ def verify_windows(path):
 
 def make_manifest(platform, package):
     return {
-        'schema': 1, 'platform': platform, 'version': source_version(),
+        'schema': 1, 'platform': platform, 'version': release_version(),
         'build_number': int(os.environ['GITHUB_RUN_NUMBER']),
         'run_id': int(os.environ['GITHUB_RUN_ID']),
         'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
@@ -107,10 +116,15 @@ def make_manifest(platform, package):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('platform', choices=PACKAGES)
+    parser.add_argument('platform', choices=[*PACKAGES, 'version'])
     parser.add_argument('--source', type=Path)
-    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--output', type=Path)
     args = parser.parse_args()
+    if args.platform == 'version':
+        print(release_version())
+        return
+    if args.output is None:
+        parser.error('--output is required when packaging a platform')
     args.output.mkdir(parents=True, exist_ok=True)
     package = args.output / PACKAGES[args.platform]
     if args.platform == 'windows':

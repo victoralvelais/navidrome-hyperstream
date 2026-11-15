@@ -29,7 +29,7 @@ class RemoteConnection {
         this.username.split(r'\').any((part) => part.isEmpty) ||
         this.username.split(r'\').length > 2) {
       throw const FormatException(
-        r'Enter your file-sharing username and password. You can use COMPUTER\username.',
+        'Enter the username and password that work for file sharing.',
       );
     }
     host = uri.host;
@@ -311,6 +311,7 @@ class RemoteSendCancelled implements Exception {
 /// Narrow filesystem boundary: no recursive deletion or replacement operations.
 abstract interface class RemoteFileSystem {
   Future<({bool directory, int size})> stat(String path);
+  Future<List<String>> listFolders(String path);
   Future<void> write(
     String path,
     Stream<List<int>> chunks,
@@ -325,6 +326,28 @@ abstract interface class RemoteFileSystem {
 
 typedef RemoteConnector = Future<RemoteFileSystem> Function(RemoteDestination);
 typedef RemoteLoginCheck = Future<void> Function(RemoteConnection);
+typedef RemoteShareListing = Future<List<Smb2ShareInfo>> Function(
+  RemoteConnection,
+);
+
+Future<List<Smb2ShareInfo>> listRemoteShares(RemoteConnection connection) =>
+    Smb2Pool.listSharesOn(
+      host: connection.host,
+      user: connection.user,
+      domain: connection.domain,
+      password: connection.password,
+      timeout: const Duration(seconds: 15),
+      version: Smb2Version.any3,
+      seal: true,
+      signing: true,
+    );
+
+List<String> _folderNames(Iterable<String> names) =>
+    names
+        .where((name) => name.isNotEmpty && _validComponent(name))
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
 /// IPC$ authenticates a server session independently of a disk share or folder.
 Future<void> checkRemoteLogin(RemoteConnection connection) async {
@@ -357,6 +380,12 @@ Future<RemoteFileSystem> connectRemoteFolder(
 class _SmbFileSystem implements RemoteFileSystem {
   _SmbFileSystem(this.pool);
   final Smb2Pool pool;
+  @override
+  Future<List<String>> listFolders(String path) async =>
+      (await pool.listDirectory(path))
+          .where((entry) => entry.isDirectory)
+          .map((entry) => entry.name)
+          .toList();
   @override
   Future<({bool directory, int size})> stat(String path) async {
     final entry = await pool.stat(path);
@@ -430,7 +459,7 @@ String remoteFolderError(Object error) {
   return 'Could not complete the remote transfer. Check the connection and try again.';
 }
 
-enum RemoteCheckStage { login, share, folder, write, save }
+enum RemoteCheckStage { login, shares, share, folder, write, save }
 
 class RemoteCheckException extends RemoteFolderException {
   const RemoteCheckException(this.stage, super.message);
@@ -451,6 +480,7 @@ String _checkError(Object error, RemoteCheckStage stage) {
       case Smb2ErrorType.accessDenied:
         return switch (stage) {
           RemoteCheckStage.login => 'The server denied the login check. Check the account’s network access and access to the server’s IPC\$ service.',
+          RemoteCheckStage.shares => 'This server does not allow listing its shares with this account. You can enter a share name manually.',
           RemoteCheckStage.share => 'Login was verified, but this account cannot open that share. Check its sharing permissions.',
           RemoteCheckStage.folder => 'The share opened, but this account cannot read that folder. Check its folder permissions.',
           _ => 'The folder opened, but creating, renaming, or removing the test file was denied. Check its write permissions.',
@@ -459,6 +489,7 @@ String _checkError(Object error, RemoteCheckStage stage) {
       case Smb2ErrorType.notADirectory:
         return switch (stage) {
           RemoteCheckStage.login => 'The server’s login-check service (IPC\$) is unavailable. Check that SMB file sharing is enabled.',
+          RemoteCheckStage.shares => 'The server’s share list is unavailable. You can enter a share name manually.',
           RemoteCheckStage.share => 'That share name was not found on the server. Use the name shown in the folder’s Windows Sharing properties.',
           _ => 'The share opened, but that folder was not found. Enter an existing path inside the share or leave it empty for the share root.',
         };
@@ -477,11 +508,13 @@ class RemoteFolders extends ChangeNotifier {
     this.store = const SecureRemoteFolderStore(),
     this.connect = connectRemoteFolder,
     this.checkLogin = checkRemoteLogin,
+    this.listShares = listRemoteShares,
   });
   static final instance = RemoteFolders();
   final RemoteFolderStore store;
   final RemoteConnector connect;
   final RemoteLoginCheck checkLogin;
+  final RemoteShareListing listShares;
   RemoteFolderConfig? _config;
   RemoteConnection? get connection => _config?.connection;
   RemoteDestination? get destination => _config?.destination;
@@ -526,6 +559,54 @@ class RemoteFolders extends ChangeNotifier {
   void _checking(RemoteCheckStage stage) {
     checking = stage;
     notifyListeners();
+  }
+
+  Future<List<String>> browseShares(RemoteConnection connection) async {
+    if (!begin()) {
+      throw const RemoteFolderException(
+        'Wait for the current transfer or check to finish.',
+      );
+    }
+    try {
+      _checking(RemoteCheckStage.shares);
+      final shares = await listShares(connection);
+      return _folderNames(
+        shares.where((share) => share.isDisk).map((share) => share.name),
+      );
+    } on Object catch (e) {
+      throw RemoteCheckException(
+        RemoteCheckStage.shares,
+        _checkError(e, RemoteCheckStage.shares),
+      );
+    } finally {
+      end();
+    }
+  }
+
+  Future<List<String>> browseFolders(RemoteDestination location) async {
+    if (!begin()) {
+      throw const RemoteFolderException(
+        'Wait for the current transfer or check to finish.',
+      );
+    }
+    RemoteFileSystem? fs;
+    var stage = RemoteCheckStage.share;
+    try {
+      _checking(stage);
+      fs = await connect(location);
+      stage = RemoteCheckStage.folder;
+      _checking(stage);
+      return _folderNames(await fs.listFolders(location.folder));
+    } on Object catch (e) {
+      throw RemoteCheckException(stage, _checkError(e, stage));
+    } finally {
+      try {
+        await fs?.close();
+      } on Object {
+        // Preserve the listing result.
+      }
+      end();
+    }
   }
 
   Future<void> checkAndSaveConnection(RemoteConnection next) async {

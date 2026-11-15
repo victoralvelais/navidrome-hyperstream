@@ -94,7 +94,9 @@ jobs:
         # Flutter manages this project's Swift Package Manager dependencies.
         run: |
           mkdir -p build/ci
+          release_version=$(python3 ../../tools/release_artifacts.py version)
           flutter build ios --release --no-codesign --no-pub \
+            --build-name="$release_version" \
             --build-number="$GITHUB_RUN_NUMBER" 2>&1 | tee build/ci/ios-build.log
 
       - name: Package unsigned IPA
@@ -213,7 +215,10 @@ jobs:
         run: flutter test integration_test/playback_smoke_test.dart -d windows --no-pub
 
       - name: Build Windows release
-        run: flutter build windows --release --no-pub --build-number="$env:GITHUB_RUN_NUMBER"
+        run: |
+          $releaseVersion = python ../../tools/release_artifacts.py version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release --no-pub --build-name="$releaseVersion" --build-number="$env:GITHUB_RUN_NUMBER"
 
       - name: Bundle Windows runtime and package
         run: |

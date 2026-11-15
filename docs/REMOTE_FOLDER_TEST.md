@@ -10,20 +10,25 @@ service, additional Docker deployment, or Navidrome plugin is required.
    separate from the production music library and Syncthing mirror.
 2. Open **Home > Remote folder**. Enter the server name or IP address, optionally
    prefixed with `smb://`, and the file-sharing username/password.
-   Both `COMPUTER\username` and `COMPUTER/username` work. Use the account password.
+   A plain username works. Include a computer/domain prefix only when your server
+   requires it. Both `COMPUTER\username` and `COMPUTER/username` are accepted.
+   Use the account password.
    Windows PINs cannot authenticate this SMB connection.
 3. Choose **Check connection**. Hyperstream verifies an encrypted SMB3 session
    using the server's `IPC$` service and saves the login in platform secure storage.
    You can leave setup here and choose a destination later. **Login verified**
    records the successful check. Sessions are opened on demand for later operations.
-4. Enter the **Share name** shown in the Windows folder's Sharing properties.
-   Enter an existing **Subfolder**, or leave it empty to use the share
-   root. For `smb://computer/Music/Hyperstream Test`, the share is `Music` and the
-   folder is `Hyperstream Test`. Choose **Test and save folder** to check share
-   access, folder access, and creation/rename/removal of a tiny unique probe.
-   Errors identify the failing stage. A failed folder check keeps the saved login.
-   Folder selection currently uses text fields. Existing saved destinations migrate
-   automatically, and reconnecting to the same account retains the selected folder.
+4. The app lists shared folders after connecting. Open a share, then navigate its
+   subfolders using the list and **Up one folder**. Choose **Use this folder** at
+   any level, including the share root. Selection checks creation, rename, and
+   removal of a tiny unique probe before saving the destination. Browsing uses
+   encrypted, signed SMB3 and reads directory entries. Files are excluded from the
+   folder list. The server can advertise shares that your account cannot open;
+   opening one shows its access result. **Enter path manually** is available if
+   the server restricts share enumeration. Reopening this settings page restores
+   the saved login and loads the shares automatically. **Open saved folder** goes
+   directly to the selected destination. Failed listing or write checks retain
+   the saved login and previous destination.
 5. Choose **Send to remote folder** from a song menu in Albums, Songs, Search,
    Favorites, playlists, or Now Playing. Keep Hyperstream open until completion.
    It downloads the original file from Navidrome and sends it without conversion.
@@ -66,11 +71,13 @@ collected and checksum-verified under `releases/v0.1.0+47-r1/`.
 Tests cover address validation, protected-storage failure, probe cleanup, collisions,
 partial writes, cancellation, lost rename acknowledgements, and the configuration UI.
 Connection tests also cover login-only persistence, legacy destination migration,
-both domain separators, per-stage failures, changing accounts, and interrupted UI
-setup. The Windows release runner additionally creates an encrypted temporary SMB share
+plain usernames, both domain separators, per-stage failures, changing accounts,
+share discovery, nested navigation, manual fallback, and interrupted UI setup.
+The Windows release runner additionally creates an encrypted temporary SMB share
 and synthetic account, compares bytes through the actual native library, checks
 collisions/bad credentials, independent IPC$ authentication, and missing shares and
-folders, then removes the test share/account. The script refuses
+folders, encrypted share discovery, and directory-only nested listings, then
+removes the test share/account. The script refuses
 to run outside GitHub Actions. Physical iPhone acceptance remains a
 device test; successful packaging alone does not establish it.
 

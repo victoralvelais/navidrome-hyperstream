@@ -26,8 +26,35 @@ void main() {
       );
       final remote = RemoteFolders(store: _TransientStore());
       await remote.restore();
+      await checkRemoteLogin(
+        RemoteConnection(
+          address: destination.connection.address,
+          username: destination.user,
+          password: destination.password,
+        ),
+      );
       await remote.checkAndSaveConnection(destination.connection);
       expect(remote.connection?.host, destination.host);
+      expect(remote.destination, isNull);
+      expect(
+        await remote.browseShares(destination.connection),
+        contains(destination.share),
+      );
+      expect(await remote.browseFolders(destination), ['Albums']);
+      final albums = destination.connection.destination(
+        share: destination.share,
+        folder: 'Albums',
+      );
+      expect(await remote.browseFolders(albums), ['Nested']);
+      expect(
+        await remote.browseFolders(
+          destination.connection.destination(
+            share: destination.share,
+            folder: 'Albums/Nested',
+          ),
+        ),
+        isEmpty,
+      );
       expect(remote.destination, isNull);
       for (final stage in [RemoteCheckStage.share, RemoteCheckStage.folder]) {
         final missing = destination.connection.destination(
