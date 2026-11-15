@@ -1,16 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_smb2/dart_smb2.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/services/remote_folder.dart';
 
-class MemoryRemoteStore implements RemoteDestinationStore {
-  RemoteDestination? value;
+class MemoryRemoteStore implements RemoteFolderStore {
+  RemoteFolderConfig? value;
   bool failWrite = false;
   @override
-  Future<RemoteDestination?> read() async => value;
+  Future<RemoteFolderConfig?> read() async => value;
   @override
-  Future<void> write(RemoteDestination? destination) async {
+  Future<void> write(RemoteFolderConfig? destination) async {
     if (failWrite) {
       throw const RemoteFolderException('Secure storage unavailable.');
     }
@@ -24,11 +25,17 @@ class MemoryRemoteFs implements RemoteFileSystem {
   bool closed = false;
   bool truncateWrite = false;
   bool loseRenameReply = false;
+  Object? statError;
+  Object? writeError;
   void Function()? afterWrite;
   @override
-  Future<({bool directory, int size})> stat(String path) async => path == 'Test'
-      ? (directory: true, size: 0)
-      : (directory: false, size: files[path]?.length ?? 0);
+  Future<({bool directory, int size})> stat(String path) async {
+    if (statError != null) throw statError!;
+    return path == 'Test' || path.isEmpty
+        ? (directory: true, size: 0)
+        : (directory: false, size: files[path]?.length ?? 0);
+  }
+
   @override
   Future<void> write(
     String path,
@@ -37,6 +44,7 @@ class MemoryRemoteFs implements RemoteFileSystem {
     void Function(int) progress,
     bool Function() cancelled,
   ) async {
+    if (writeError != null) throw writeError!;
     files[path] = [];
     await for (final chunk in chunks) {
       if (cancelled()) throw const RemoteSendCancelled();
@@ -134,7 +142,7 @@ void main() {
     });
     expect(fs.renames, hasLength(1));
     expect(fs.closed, isTrue);
-    expect(store.value?.password, 'secret');
+    expect(store.value?.connection.password, 'secret');
     expect(remote.busy, isFalse);
   });
   test(
@@ -142,7 +150,9 @@ void main() {
     () async {
       final fs = MemoryRemoteFs();
       final store = MemoryRemoteStore()
-        ..value = destination(password: 'old')
+        ..value = RemoteFolderConfig.forDestination(
+          destination(password: 'old'),
+        )
         ..failWrite = true;
       final remote = RemoteFolders(store: store, connect: (_) async => fs);
       await remote.restore();
@@ -156,6 +166,217 @@ void main() {
       expect(remote.busy, isFalse);
     },
   );
+
+  group('separate server login', () {
+    test('accepts bare hosts, UNC hosts and either domain separator', () {
+      for (final address in [
+        'server',
+        'smb://server/',
+        r'\\server',
+        '192.0.2.1',
+      ]) {
+        final connection = RemoteConnection(
+          address: address,
+          username: 'COMPUTER/Listener',
+          password: 'synthetic',
+        );
+        expect(connection.domain, 'COMPUTER');
+        expect(connection.user, 'Listener');
+        expect(connection.username, r'COMPUTER\Listener');
+        expect(connection.toString(), isNot(contains('synthetic')));
+        expect(connection.destination(share: 'Music').folder, isEmpty);
+        expect(
+          connection.destination(share: 'Music', folder: r'Albums\New').folder,
+          'Albums/New',
+        );
+      }
+      for (final address in [
+        'smb://server/share',
+        'smb://user:synthetic@server',
+        'server:444',
+        'smb://server/%zz',
+        'server name',
+      ]) {
+        expect(
+          () => RemoteConnection(
+            address: address,
+            username: 'Listener',
+            password: 'synthetic',
+          ),
+          throwsFormatException,
+          reason: address,
+        );
+      }
+    });
+
+    test(
+      'restores legacy destinations and roundtrips a login without a folder',
+      () {
+        final migrated = RemoteFolderConfig.decode(destination().encode());
+        expect(migrated.connection.address, 'smb://server');
+        expect(migrated.destination?.address, destination().address);
+        expect(
+          RemoteFolderConfig.decode(migrated.encode()).destination?.password,
+          'secret',
+        );
+        final loginOnly = RemoteFolderConfig(migrated.connection);
+        final decoded = RemoteFolderConfig.decode(loginOnly.encode());
+        expect(decoded.connection.username, migrated.connection.username);
+        expect(decoded.destination, isNull);
+        expect(decoded.toString(), isNot(contains('secret')));
+      },
+    );
+
+    test(
+      'saves a checked login without opening or writing to a disk share',
+      () async {
+        final store = MemoryRemoteStore();
+        final remote = RemoteFolders(
+          store: store,
+          checkLogin: (connection) async => expect(connection.host, 'server'),
+          connect: (_) async =>
+              throw StateError('Disk share must not be opened'),
+        );
+        await remote.restore();
+        await remote.checkAndSaveConnection(destination().connection);
+        expect(store.value?.connection.password, 'secret');
+        expect(remote.destination, isNull);
+        final restored = RemoteFolders(store: store);
+        await restored.restore();
+        expect(restored.connection?.host, 'server');
+        expect(restored.destination, isNull);
+        expect(remote.busy, isFalse);
+        expect(remote.checking, isNull);
+        await remote.forget();
+        expect(store.value, isNull);
+        expect(remote.connection, isNull);
+      },
+    );
+
+    test(
+      'failed login and failed save preserve the previous secure record',
+      () async {
+        for (final failSave in [false, true]) {
+          final store = MemoryRemoteStore()
+            ..value = RemoteFolderConfig.forDestination(
+              destination(password: 'old'),
+            )
+            ..failWrite = failSave;
+          final remote = RemoteFolders(
+            store: store,
+            checkLogin: (_) async {
+              if (!failSave) {
+                throw const Smb2Exception(
+                  'private response',
+                  type: Smb2ErrorType.auth,
+                );
+              }
+            },
+          );
+          await remote.restore();
+          await expectLater(
+            remote.checkAndSaveConnection(destination().connection),
+            throwsA(
+              isA<RemoteCheckException>().having(
+                (e) => e.stage,
+                'stage',
+                failSave ? RemoteCheckStage.save : RemoteCheckStage.login,
+              ),
+            ),
+          );
+          expect(remote.connection?.password, 'old');
+          expect(remote.destination?.folder, 'Test');
+          expect(store.value?.connection.password, 'old');
+          expect(remote.busy, isFalse);
+        }
+      },
+    );
+
+    test(
+      'same-account reconnect keeps the folder, another server clears it',
+      () async {
+        final store = MemoryRemoteStore()
+          ..value = RemoteFolderConfig.forDestination(
+            destination(password: 'old'),
+          );
+        final remote = RemoteFolders(store: store, checkLogin: (_) async {});
+        await remote.restore();
+        await remote.checkAndSaveConnection(destination().connection);
+        expect(remote.destination?.password, 'secret');
+        expect(remote.destination?.folder, 'Test');
+        await remote.checkAndSaveConnection(
+          RemoteConnection(
+            address: 'other-server',
+            username: 'Listener',
+            password: 'synthetic',
+          ),
+        );
+        expect(remote.destination, isNull);
+        expect(store.value?.destination, isNull);
+      },
+    );
+
+    test('share, folder and write errors identify the failing stage', () async {
+      for (final stage in [
+        RemoteCheckStage.share,
+        RemoteCheckStage.folder,
+        RemoteCheckStage.write,
+      ]) {
+        const failure = Smb2Exception(
+          'private response',
+          type: Smb2ErrorType.accessDenied,
+        );
+        final fs = MemoryRemoteFs();
+        if (stage == RemoteCheckStage.folder) fs.statError = failure;
+        if (stage == RemoteCheckStage.write) fs.writeError = failure;
+        final remote = RemoteFolders(
+          store: MemoryRemoteStore(),
+          checkLogin: (_) async {},
+          connect: (_) async {
+            if (stage == RemoteCheckStage.share) throw failure;
+            return fs;
+          },
+        );
+        await remote.restore();
+        await remote.checkAndSaveConnection(destination().connection);
+        await expectLater(
+          remote.testAndSave(destination()),
+          throwsA(
+            isA<RemoteCheckException>()
+                .having((e) => e.stage, 'stage', stage)
+                .having(
+                  (e) => e.message,
+                  'redacted',
+                  isNot(contains('private response')),
+                ),
+          ),
+        );
+        expect(remote.connection?.host, 'server');
+        expect(remote.destination, isNull);
+        expect(fs.files, isEmpty);
+        expect(remote.busy, isFalse);
+      }
+    });
+
+    test(
+      'concurrent checks cannot report a skipped operation as successful',
+      () async {
+        final pending = Completer<void>();
+        final remote = RemoteFolders(
+          store: MemoryRemoteStore(),
+          checkLogin: (_) => pending.future,
+        );
+        final first = remote.checkAndSaveConnection(destination().connection);
+        await expectLater(
+          remote.testAndSave(destination()),
+          throwsA(isA<RemoteFolderException>()),
+        );
+        pending.complete();
+        await first;
+        expect(remote.destination, isNull);
+      },
+    );
+  });
 
   group('staged uploads', () {
     late Directory temp;

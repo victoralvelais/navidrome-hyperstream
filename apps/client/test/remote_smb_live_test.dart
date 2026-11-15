@@ -4,12 +4,12 @@ import 'package:dart_smb2/dart_smb2.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/services/remote_folder.dart';
 
-class _TransientStore implements RemoteDestinationStore {
-  RemoteDestination? value;
+class _TransientStore implements RemoteFolderStore {
+  RemoteFolderConfig? value;
   @override
-  Future<RemoteDestination?> read() async => value;
+  Future<RemoteFolderConfig?> read() async => value;
   @override
-  Future<void> write(RemoteDestination? next) async {
+  Future<void> write(RemoteFolderConfig? next) async {
     value = next;
   }
 }
@@ -26,6 +26,25 @@ void main() {
       );
       final remote = RemoteFolders(store: _TransientStore());
       await remote.restore();
+      await remote.checkAndSaveConnection(destination.connection);
+      expect(remote.connection?.host, destination.host);
+      expect(remote.destination, isNull);
+      for (final stage in [RemoteCheckStage.share, RemoteCheckStage.folder]) {
+        final missing = destination.connection.destination(
+          share: stage == RemoteCheckStage.share
+              ? 'HyperstreamMissingShare'
+              : destination.share,
+          folder: stage == RemoteCheckStage.folder ? 'MissingFolder' : '',
+        );
+        await expectLater(
+          remote.testAndSave(missing),
+          throwsA(
+            isA<RemoteCheckException>().having((e) => e.stage, 'stage', stage),
+          ),
+        );
+        expect(remote.connection?.host, destination.host);
+        expect(remote.destination, isNull);
+      }
       await remote.testAndSave(destination);
       final fs = await connectRemoteFolder(destination);
       final temp = await Directory.systemTemp.createTemp(
@@ -79,6 +98,17 @@ void main() {
           username: destination.username,
           password: '${destination.password}-wrong',
         );
+        await expectLater(
+          remote.checkAndSaveConnection(bad.connection),
+          throwsA(
+            isA<RemoteCheckException>().having(
+              (e) => e.stage,
+              'failed login stage',
+              RemoteCheckStage.login,
+            ),
+          ),
+        );
+        expect(remote.destination?.address, destination.address);
         await expectLater(
           connectRemoteFolder(bad),
           throwsA(

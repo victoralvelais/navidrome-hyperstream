@@ -8,6 +8,109 @@ import 'package:flutter/foundation.dart';
 
 import 'account_store.dart';
 
+/// The server login can be verified and saved before choosing a share.
+class RemoteConnection {
+  RemoteConnection({
+    required String address,
+    required String username,
+    required this.password,
+    String name = '',
+  }) : username = username.trim().replaceAll('/', r'\'),
+       name = name.trim() {
+    final uri = _smbAddress(address);
+    if (uri.pathSegments.any((part) => part.isNotEmpty)) {
+      throw const FormatException(
+        'Enter only the server name or IP here. Choose the share below after connecting.',
+      );
+    }
+    if (this.username.isEmpty ||
+        password.isEmpty ||
+        this.username.contains(RegExp(r'[\x00-\x1f\x7f]')) ||
+        this.username.split(r'\').any((part) => part.isEmpty) ||
+        this.username.split(r'\').length > 2) {
+      throw const FormatException(
+        r'Enter your file-sharing username and password. You can use COMPUTER\username.',
+      );
+    }
+    host = uri.host;
+    this.address = Uri(scheme: 'smb', host: host).toString();
+  }
+
+  late final String host;
+  late final String address;
+  final String username;
+  final String password;
+  final String name;
+  String get displayName => name.isEmpty ? host : name;
+  String get domain =>
+      username.contains(r'\') ? username.split(r'\').first : '';
+  String get user => username.split(r'\').last;
+
+  RemoteDestination destination({required String share, String folder = ''}) {
+    final parts = folder
+        .trim()
+        .replaceAll(r'\', '/')
+        .split('/')
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (share.trim().isEmpty ||
+        !_validComponent(share.trim()) ||
+        parts.any((part) => !_validComponent(part))) {
+      throw const FormatException(
+        'Enter the shared folder name and a valid path inside it.',
+      );
+    }
+    return RemoteDestination(
+      address: Uri(
+        scheme: 'smb',
+        host: host,
+        pathSegments: [share.trim(), ...parts],
+      ).toString(),
+      username: username,
+      password: password,
+      name: name,
+    );
+  }
+
+  bool sameAccount(RemoteConnection other) =>
+      host == other.host && username == other.username;
+
+  @override
+  String toString() => 'RemoteConnection(redacted)';
+}
+
+Uri _smbAddress(String address) {
+  var input = address.trim().replaceAll(r'\', '/');
+  if (input.startsWith('//')) input = 'smb:$input';
+  if (!input.contains('://')) input = 'smb://$input';
+  // Reject dot segments before Uri normalizes them away.
+  final pathStart = input.indexOf('/', input.indexOf('://') + 3);
+  try {
+    if (pathStart >= 0 &&
+        input.substring(pathStart).split('/').any((part) {
+          final decoded = Uri.decodeComponent(part);
+          return decoded == '.' || decoded == '..';
+        })) {
+      throw const FormatException();
+    }
+    final uri = Uri.parse(input);
+    if (uri.scheme == 'smb' &&
+        uri.host.isNotEmpty &&
+        !Uri.decodeComponent(uri.host).contains(RegExp(r'[\s\x00-\x1f\x7f]')) &&
+        uri.userInfo.isEmpty &&
+        !uri.hasQuery &&
+        !uri.hasFragment &&
+        (!uri.hasPort || uri.port == 445)) {
+      return uri;
+    }
+  } on FormatException {
+    // Keep user input and credentials out of parser errors.
+  } on ArgumentError {
+    // Malformed percent escapes can also throw ArgumentError.
+  }
+  throw const FormatException('Enter a valid SMB server name or IP address.');
+}
+
 /// A device-level destination, independent of the active Navidrome account.
 /// Credentials and address are saved together in protected storage only.
 class RemoteDestination {
@@ -16,35 +119,9 @@ class RemoteDestination {
     required String username,
     required this.password,
     String name = '',
-  }) : username = username.trim(),
+  }) : username = username.trim().replaceAll('/', r'\'),
        name = name.trim() {
-    var input = address.trim().replaceAll('\\', '/');
-    if (input.startsWith('//')) input = 'smb:$input';
-    if (!input.contains('://')) input = 'smb://$input';
-    // Uri normalizes encoded dot segments during parsing. Reject them before
-    // normalization can silently select a different share or parent directory.
-    final pathStart = input.indexOf('/', input.indexOf('://') + 3);
-    if (pathStart >= 0 &&
-        input.substring(pathStart).split('/').any((part) {
-          final decoded = Uri.decodeComponent(part);
-          return decoded == '.' || decoded == '..';
-        })) {
-      throw const FormatException(
-        'Use the complete folder path without dot segments.',
-      );
-    }
-    final uri = Uri.tryParse(input);
-    if (uri == null ||
-        uri.scheme != 'smb' ||
-        uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty ||
-        uri.hasQuery ||
-        uri.hasFragment ||
-        (uri.hasPort && uri.port != 445)) {
-      throw const FormatException(
-        'Enter an SMB address such as smb://server/share/Test.',
-      );
-    }
+    final uri = _smbAddress(address);
     final parts = uri.pathSegments.where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty || parts.any((p) => !_validComponent(p))) {
       throw const FormatException(
@@ -75,6 +152,12 @@ class RemoteDestination {
   final String username;
   final String password;
   final String name;
+  RemoteConnection get connection => RemoteConnection(
+    address: Uri(scheme: 'smb', host: host).toString(),
+    username: username,
+    password: password,
+    name: name,
+  );
   String get displayName => name.isEmpty ? host : name;
   String get domain =>
       username.contains('\\') ? username.split('\\').first : '';
@@ -107,6 +190,60 @@ class RemoteDestination {
   String toString() => 'RemoteDestination(redacted)';
 }
 
+/// One atomic secure-storage record for the login and optional destination.
+class RemoteFolderConfig {
+  const RemoteFolderConfig(this.connection, {this.share, this.folder = ''});
+  factory RemoteFolderConfig.forDestination(RemoteDestination destination) =>
+      RemoteFolderConfig(
+        destination.connection,
+        share: destination.share,
+        folder: destination.folder,
+      );
+
+  final RemoteConnection connection;
+  final String? share;
+  final String folder;
+  RemoteDestination? get destination => share == null
+      ? null
+      : connection.destination(share: share!, folder: folder);
+
+  String encode() => jsonEncode({
+    'schema': 2,
+    'server': connection.address,
+    'username': connection.username,
+    'password': connection.password,
+    'name': connection.name,
+    'share': share,
+    'folder': folder,
+  });
+
+  factory RemoteFolderConfig.decode(String value) {
+    final record = jsonDecode(value) as Map<String, dynamic>;
+    if (record['schema'] == 1) {
+      return RemoteFolderConfig.forDestination(RemoteDestination.decode(value));
+    }
+    if (record['schema'] != 2) {
+      throw const FormatException('Unknown remote connection.');
+    }
+    final config = RemoteFolderConfig(
+      RemoteConnection(
+        address: record['server'] as String,
+        username: record['username'] as String,
+        password: record['password'] as String,
+        name: record['name'] as String? ?? '',
+      ),
+      share: record['share'] as String?,
+      folder: record['folder'] as String? ?? '',
+    );
+    // Validate a saved destination before exposing it to transfer callers.
+    config.destination;
+    return config;
+  }
+
+  @override
+  String toString() => 'RemoteFolderConfig(redacted)';
+}
+
 bool _validComponent(String value) =>
     value != '.' &&
     value != '..' &&
@@ -118,21 +255,21 @@ bool _validComponent(String value) =>
       caseSensitive: false,
     ).hasMatch(value);
 
-abstract interface class RemoteDestinationStore {
-  Future<RemoteDestination?> read();
-  Future<void> write(RemoteDestination? destination);
+abstract interface class RemoteFolderStore {
+  Future<RemoteFolderConfig?> read();
+  Future<void> write(RemoteFolderConfig? config);
 }
 
-class SecureRemoteDestinationStore implements RemoteDestinationStore {
-  const SecureRemoteDestinationStore();
+class SecureRemoteFolderStore implements RemoteFolderStore {
+  const SecureRemoteFolderStore();
   static const _key = 'hyperstream.remote-folder.v1';
   @override
-  Future<RemoteDestination?> read() async {
+  Future<RemoteFolderConfig?> read() async {
     try {
       final value = await SecureAccountStore.defaultStorage
           .read(key: _key)
           .timeout(const Duration(seconds: 10));
-      return value == null ? null : RemoteDestination.decode(value);
+      return value == null ? null : RemoteFolderConfig.decode(value);
     } on Object {
       throw const RemoteFolderException(
         'Could not read your saved remote folder. Unlock your device and try again.',
@@ -141,9 +278,9 @@ class SecureRemoteDestinationStore implements RemoteDestinationStore {
   }
 
   @override
-  Future<void> write(RemoteDestination? destination) async {
+  Future<void> write(RemoteFolderConfig? config) async {
     try {
-      final value = destination?.encode();
+      final value = config?.encode();
       if (value == null) {
         await SecureAccountStore.defaultStorage.delete(key: _key);
       } else {
@@ -154,7 +291,7 @@ class SecureRemoteDestinationStore implements RemoteDestinationStore {
       }
     } on Object {
       throw const RemoteFolderException(
-        'Could not securely save the remote folder. Try again.',
+        'Could not securely save the remote connection. Unlock your device and try again.',
       );
     }
   }
@@ -187,6 +324,17 @@ abstract interface class RemoteFileSystem {
 }
 
 typedef RemoteConnector = Future<RemoteFileSystem> Function(RemoteDestination);
+typedef RemoteLoginCheck = Future<void> Function(RemoteConnection);
+
+/// IPC$ authenticates a server session independently of a disk share or folder.
+Future<void> checkRemoteLogin(RemoteConnection connection) async {
+  final fs = await connectRemoteFolder(connection.destination(share: r'IPC$'));
+  try {
+    await fs.close();
+  } on Object {
+    // Authentication already succeeded. A disconnect failure does not undo it.
+  }
+}
 
 Future<RemoteFileSystem> connectRemoteFolder(
   RemoteDestination destination,
@@ -282,15 +430,62 @@ String remoteFolderError(Object error) {
   return 'Could not complete the remote transfer. Check the connection and try again.';
 }
 
+enum RemoteCheckStage { login, share, folder, write, save }
+
+class RemoteCheckException extends RemoteFolderException {
+  const RemoteCheckException(this.stage, super.message);
+  final RemoteCheckStage stage;
+}
+
+String _checkError(Object error, RemoteCheckStage stage) {
+  if (error is RemoteFolderException || error is FormatException) {
+    return remoteFolderError(error);
+  }
+  if (stage == RemoteCheckStage.save) {
+    return 'Could not securely save these settings. Unlock your device and try again.';
+  }
+  if (error is Smb2Exception) {
+    switch (error.type) {
+      case Smb2ErrorType.auth:
+        return 'The server rejected this login. Use your file-sharing account password. A Windows PIN cannot sign in to a share.';
+      case Smb2ErrorType.accessDenied:
+        return switch (stage) {
+          RemoteCheckStage.login => 'The server denied the login check. Check the account’s network access and access to the server’s IPC\$ service.',
+          RemoteCheckStage.share => 'Login was verified, but this account cannot open that share. Check its sharing permissions.',
+          RemoteCheckStage.folder => 'The share opened, but this account cannot read that folder. Check its folder permissions.',
+          _ => 'The folder opened, but creating, renaming, or removing the test file was denied. Check its write permissions.',
+        };
+      case Smb2ErrorType.notFound:
+      case Smb2ErrorType.notADirectory:
+        return switch (stage) {
+          RemoteCheckStage.login => 'The server’s login-check service (IPC\$) is unavailable. Check that SMB file sharing is enabled.',
+          RemoteCheckStage.share => 'That share name was not found on the server. Use the name shown in the folder’s Windows Sharing properties.',
+          _ => 'The share opened, but that folder was not found. Enter an existing path inside the share or leave it empty for the share root.',
+        };
+      case Smb2ErrorType.connection:
+      case Smb2ErrorType.timeout:
+        return 'Could not reach the SMB server. Check the address, Wi-Fi or Tailscale, file sharing, and Hyperstream’s local-network permission.';
+      default:
+        return remoteFolderError(error);
+    }
+  }
+  return 'This check could not finish. Try again and check the server connection.';
+}
+
 class RemoteFolders extends ChangeNotifier {
   RemoteFolders({
-    this.store = const SecureRemoteDestinationStore(),
+    this.store = const SecureRemoteFolderStore(),
     this.connect = connectRemoteFolder,
+    this.checkLogin = checkRemoteLogin,
   });
   static final instance = RemoteFolders();
-  final RemoteDestinationStore store;
+  final RemoteFolderStore store;
   final RemoteConnector connect;
-  RemoteDestination? destination;
+  final RemoteLoginCheck checkLogin;
+  RemoteFolderConfig? _config;
+  RemoteConnection? get connection => _config?.connection;
+  RemoteDestination? get destination => _config?.destination;
+  RemoteCheckStage? checking;
   String? error;
   bool loaded = false;
   bool busy = false;
@@ -299,7 +494,7 @@ class RemoteFolders extends ChangeNotifier {
   Future<void> restore() => _restoring ??= _restore();
   Future<void> _restore() async {
     try {
-      destination = await store.read();
+      _config = await store.read();
       error = null;
     } on Object catch (e) {
       error = remoteFolderError(e);
@@ -324,22 +519,68 @@ class RemoteFolders extends ChangeNotifier {
 
   void end() {
     busy = false;
+    checking = null;
     notifyListeners();
+  }
+
+  void _checking(RemoteCheckStage stage) {
+    checking = stage;
+    notifyListeners();
+  }
+
+  Future<void> checkAndSaveConnection(RemoteConnection next) async {
+    if (!begin()) {
+      throw const RemoteFolderException(
+        'Wait for the current transfer or check to finish.',
+      );
+    }
+    var stage = RemoteCheckStage.login;
+    try {
+      _checking(stage);
+      await checkLogin(next);
+      // Keep the selected folder when reconnecting to the same account.
+      final previous = _config;
+      final keepFolder = previous?.connection.sameAccount(next) ?? false;
+      final config = RemoteFolderConfig(
+        next,
+        share: keepFolder ? previous?.share : null,
+        folder: keepFolder ? previous!.folder : '',
+      );
+      stage = RemoteCheckStage.save;
+      _checking(stage);
+      await store.write(config);
+      _config = config;
+      error = null;
+    } on Object catch (e) {
+      throw RemoteCheckException(stage, _checkError(e, stage));
+    } finally {
+      end();
+    }
   }
 
   /// Test the actual write/rename/delete permissions with tiny unique files.
   /// Never reads or modifies existing files in the destination.
   Future<void> testAndSave(RemoteDestination next) async {
-    if (!begin()) return;
+    if (!begin()) {
+      throw const RemoteFolderException(
+        'Wait for the current transfer or check to finish.',
+      );
+    }
     RemoteFileSystem? fs;
+    var stage = RemoteCheckStage.share;
     final probe = next.path('.hyperstream-test-${_token()}.part');
     final renamed = '$probe.checked';
     String? cleanup;
     try {
+      _checking(stage);
       fs = await connect(next);
+      stage = RemoteCheckStage.folder;
+      _checking(stage);
       if (!(await fs.stat(next.folder)).directory) {
-        throw const RemoteFolderException('Choose a folder, not a file.');
+        throw const RemoteFolderException('Choose an existing folder.');
       }
+      stage = RemoteCheckStage.write;
+      _checking(stage);
       final data = utf8.encode('Hyperstream connection test\n');
       cleanup = probe;
       await fs.write(
@@ -358,11 +599,14 @@ class RemoteFolders extends ChangeNotifier {
       cleanup = renamed;
       await fs.delete(renamed);
       cleanup = null;
-      await store.write(next);
-      destination = next;
+      stage = RemoteCheckStage.save;
+      _checking(stage);
+      final config = RemoteFolderConfig.forDestination(next);
+      await store.write(config);
+      _config = config;
       error = null;
     } on Object catch (e) {
-      throw RemoteFolderException(remoteFolderError(e));
+      throw RemoteCheckException(stage, _checkError(e, stage));
     } finally {
       if (cleanup != null && fs != null) {
         try {
@@ -384,7 +628,7 @@ class RemoteFolders extends ChangeNotifier {
     if (!begin()) return;
     try {
       await store.write(null);
-      destination = null;
+      _config = null;
       error = null;
     } finally {
       end();
