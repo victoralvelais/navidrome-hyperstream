@@ -15,6 +15,7 @@ final class CameraBridge {
     private var phase = "idle"
     private var active = false
     private var ready = false
+    private var expectsFrames = false
     private var front = false
     private var aspect = 9.0 / 16.0
     private var originalTempo = false
@@ -33,7 +34,7 @@ final class CameraBridge {
             self.handle(call, result: result)
         }
         capture.onFrame = { [weak self] ratio, front in
-            guard let self, self.active else { return }
+            guard let self, self.active, self.expectsFrames else { return }
             if !self.ready || self.aspect != ratio || self.front != front {
                 self.ready = true
                 self.aspect = ratio
@@ -49,11 +50,27 @@ final class CameraBridge {
             self.message = message
             self.publish()
         }
+        capture.onInterruption = { [weak self] in
+            guard let self, self.active else { return }
+            self.expectsFrames = false
+            self.ready = false
+            self.message = self.phase == "recording" || self.phase == "starting"
+                ? "Camera interrupted. Saving your take."
+                : "Camera interrupted. Reopen Camera to try again."
+            self.stop()
+            self.capture.close()
+            self.publish()
+        }
+        capture.onResumed = { [weak self] in
+            guard let self, self.active, !self.ready else { return }
+            self.configure()
+        }
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.stop()
+                self.expectsFrames = false
                 self.capture.close()
                 self.ready = false
                 self.publish()
@@ -89,6 +106,7 @@ final class CameraBridge {
             configure()
         case "close":
             active = false
+            expectsFrames = false
             generation += 1
             stop()
             capture.close()
@@ -98,6 +116,7 @@ final class CameraBridge {
         case "switchCamera":
             guard phase == "idle", active else { result(nil); return }
             ready = false
+            expectsFrames = false
             configure(front: !front)
             result(nil)
         case "start":
@@ -134,9 +153,13 @@ final class CameraBridge {
                 publish()
                 return
             }
+            expectsFrames = true
             capture.configure(front: position) { [weak self] error in
                 guard let self, self.active, self.generation == request else { return }
-                if let error { self.message = error.localizedDescription }
+                if let error {
+                    self.expectsFrames = false
+                    self.message = error.localizedDescription
+                }
                 self.publish()
             }
         }

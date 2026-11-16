@@ -29,14 +29,24 @@ final class CameraCapture: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
     private var wantsFrames = false
     private var front = false
     private var start: ((Error?) -> Void)?
+    private var notifications: [NSObjectProtocol] = []
     private(set) var textureID: Int64 = -1
     var onFrame: ((Double, Bool) -> Void)?
     var onFailure: ((String) -> Void)?
+    var onInterruption: (() -> Void)?
+    var onResumed: (() -> Void)?
 
     init(textures: FlutterTextureRegistry) {
         self.textures = textures
         super.init()
         textureID = textures.register(self)
+        for name in [AVCaptureSession.wasInterruptedNotification, AVCaptureSession.runtimeErrorNotification] {
+            notifications.append(NotificationCenter.default.addObserver(forName: name, object: session, queue: .main) { [weak self] _ in
+                self?.onInterruption?()
+            })
+        }
+        notifications.append(NotificationCenter.default.addObserver(forName: AVCaptureSession.interruptionEndedNotification,
+            object: session, queue: .main) { [weak self] _ in self?.onResumed?() })
     }
 
     func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
@@ -89,6 +99,7 @@ final class CameraCapture: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
                 self.front = front
                 self.wantsFrames = true
                 if !self.session.isRunning { self.session.startRunning() }
+                guard self.session.isRunning else { throw CameraFailure("The camera is unavailable. Reopen Camera to try again.") }
                 DispatchQueue.main.async { completion(nil) }
             } catch { DispatchQueue.main.async { completion(error) } }
         }

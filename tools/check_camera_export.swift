@@ -5,6 +5,7 @@ import Foundation
 @main
 struct CameraExportCheck {
     static func main() async throws {
+        progress("Checking native clock")
         try await playbackClock()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("hyperstream-camera-check-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -12,6 +13,7 @@ struct CameraExportCheck {
         let raw = root.appendingPathComponent("camera.mov")
         let songA = root.appendingPathComponent("a.caf")
         let songB = root.appendingPathComponent("b.caf")
+        progress("Writing synthetic source audio and portrait video")
         try tone(to: songA, base: 220, step: 110)
         try tone(to: songB, base: 300, step: 100)
         try await video(to: raw)
@@ -32,6 +34,7 @@ struct CameraExportCheck {
         try timelineFailures()
 
         for original in [false, true] {
+            progress(original ? "Exporting original-tempo fixture" : "Exporting performance-tempo fixture")
             let target = root.appendingPathComponent(original ? "original.mp4" : "performance.mp4")
             let result = try await CameraExport.save(video: raw, segments: segments, sources: ["a": songA, "b": songB],
                                                      videoStart: 100, restoreTempo: original, to: target)
@@ -53,6 +56,7 @@ struct CameraExportCheck {
             precondition(rms(samples, at: original ? 5.9 : 5.65) < 0.002, "Trailing pause must stay silent")
         }
         let silent = root.appendingPathComponent("paused.mp4")
+        progress("Exporting all-paused fixture")
         _ = try await CameraExport.save(video: raw, segments: [], sources: [:], videoStart: 100,
                                         restoreTempo: true, to: silent)
         let silentSamples = try await decode(silent)
@@ -60,6 +64,7 @@ struct CameraExportCheck {
         let tailSegments = [CameraAudioSegment(hostStart: 100, hostEnd: 102.73,
                                               sourceKey: "a", sourceStart: 8, rate: 0.75)]
         for original in [false, true] {
+            progress(original ? "Exporting original-tempo rounded tail" : "Exporting performance-tempo rounded tail")
             let target = root.appendingPathComponent(original ? "tail-original.mp4" : "tail-performance.mp4")
             let result = try await CameraExport.save(video: raw, segments: tailSegments, sources: ["a": songA],
                                                      videoStart: 100, restoreTempo: original, to: target)
@@ -71,12 +76,14 @@ struct CameraExportCheck {
                          "A rounded source tail must stay silent without stretching music")
         }
         do {
+            progress("Checking material source-overrun rejection")
             let tooLong = [CameraAudioSegment(hostStart: 100, hostEnd: 103, sourceKey: "a", sourceStart: 8, rate: 0.75)]
             _ = try await CameraExport.save(video: raw, segments: tooLong, sources: ["a": songA], videoStart: 100,
                                             restoreTempo: false, to: root.appendingPathComponent("overrun.mp4"))
             preconditionFailure("A material source mismatch must remain a recoverable failure")
         } catch is CameraExportError {}
         do {
+            progress("Checking missing-source recovery")
             _ = try await CameraExport.save(video: raw, segments: segments, sources: [:], videoStart: 100,
                                             restoreTempo: false, to: root.appendingPathComponent("missing.mp4"))
             preconditionFailure("An unavailable source must remain a recoverable export failure")
@@ -142,7 +149,9 @@ struct CameraExportCheck {
 
     private static func tone(to url: URL, base: Double, step: Double) throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
-        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        var settings = format.settings
+        settings[AVLinearPCMIsNonInterleaved] = false
+        let file = try AVAudioFile(forWriting: url, settings: settings)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480_000)!
         buffer.frameLength = 480_000
         for frame in 0..<480_000 {
@@ -239,5 +248,9 @@ struct CameraExportCheck {
         for index in (start + 1)..<(start + count) where samples[index - 1] <= 0 && samples[index] > 0 { crossings += 1 }
         let measured = Double(crossings) * 10
         precondition(abs(measured - frequency) <= 20, "Source offset or pitch mismatch, measured \(measured), expected \(frequency)")
+    }
+
+    private static func progress(_ message: String) {
+        FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 }
