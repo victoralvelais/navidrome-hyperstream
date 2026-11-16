@@ -361,6 +361,13 @@ class PlaybackService extends BaseAudioHandler {
     _publishState();
   });
 
+  Future<void> adjustSpeed(double delta) => _changeSetting(() async {
+    if (!delta.isFinite) return;
+    final speed = ((_player.speed + delta).clamp(.5, 2) * 100).round() / 100;
+    await _player.setSpeed(speed);
+    _publishState();
+  });
+
   Stream<Duration> get positionStream => _player.positionStream;
   Duration get position => _player.position;
 

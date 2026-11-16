@@ -5,10 +5,12 @@ class CameraPage extends StatefulWidget {
     super.key,
     required this.playback,
     required this.client,
+    this.collections,
     this.camera,
   });
   final PlaybackService playback;
   final NavidromeClient client;
+  final LibraryCollections? collections;
   final CameraService? camera;
 
   @override
@@ -24,6 +26,7 @@ class _CameraPageState extends State<CameraPage> {
   bool _song = true;
   bool _originalTempo = false;
   bool _leaving = false;
+  bool _playbackExpanded = false;
   Timer? _hideControls;
 
   @override
@@ -66,6 +69,23 @@ class _CameraPageState extends State<CameraPage> {
     _showControls();
   }
 
+  void _playbackOverlayChanged(bool open) {
+    _hideControls?.cancel();
+    if (!open && mounted && _fullscreen) _showControls();
+  }
+
+  Future<void> _openPlayer() async {
+    _hideControls?.cancel();
+    await _showNowPlaying(
+      context,
+      playback: widget.playback,
+      client: widget.client,
+      collections: widget.collections,
+      showCamera: false,
+    );
+    if (mounted && _fullscreen) _showControls();
+  }
+
   Future<void> _details() => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -85,37 +105,6 @@ class _CameraPageState extends State<CameraPage> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 20),
-                StreamBuilder<PlaybackState>(
-                  stream: widget.playback.playbackState,
-                  initialData: widget.playback.playbackState.value,
-                  builder: (context, snapshot) {
-                    final speed = snapshot.data?.speed ?? 1;
-                    return Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Playback speed'),
-                            TextButton(
-                              onPressed: () => widget.playback.setSpeed(1),
-                              child: Text('${speed.toStringAsFixed(2)}×'),
-                            ),
-                          ],
-                        ),
-                        Slider(
-                          value: speed.clamp(.5, 2),
-                          min: .5,
-                          max: 2,
-                          divisions: 150,
-                          label: '${speed.toStringAsFixed(2)}×',
-                          onChanged: widget.playback.mediaItem.value == null
-                              ? null
-                              : widget.playback.setSpeed,
-                        ),
-                      ],
-                    );
-                  },
-                ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Finish at original song tempo'),
@@ -270,31 +259,85 @@ class _CameraPageState extends State<CameraPage> {
     ),
   );
 
-  Widget _transport({bool labels = true}) => _PlaybackView(
+  Widget _transport() => _PlaybackView(
     playback: widget.playback,
-    builder: (context, item, state) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          if (labels) ...[
-            SizedBox(
-              width: 44,
-              height: 44,
-              child: CoverArt(
-                client: widget.client,
-                id: item?.extras?['coverArtId'] as String?,
-                radius: 8,
-              ),
+    builder: (context, item, state) => GlassSurface(
+      radius: 28,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: IconButtonTheme(
+          data: IconButtonThemeData(
+            style: IconButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              maximumSize: const Size(44, 44),
+              padding: EdgeInsets.zero,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: _TrackLabels(item: item)),
-          ] else
-            const Spacer(),
-          _Previous(playback: widget.playback, state: state),
-          _PlayButton(playback: widget.playback, item: item, state: state),
-          _Next(playback: widget.playback, state: state),
-          if (!labels) const Spacer(),
-        ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      label: 'Open now playing',
+                      button: true,
+                      child: InkWell(
+                        onTap: _openPlayer,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CoverArt(
+                                client: widget.client,
+                                id: item?.extras?['coverArtId'] as String?,
+                                radius: 8,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: _TrackLabels(item: item)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  _Previous(playback: widget.playback, state: state),
+                  _PlayButton(
+                    playback: widget.playback,
+                    item: item,
+                    state: state,
+                  ),
+                  _Next(playback: widget.playback, state: state),
+                  IconButton(
+                    tooltip: _playbackExpanded
+                        ? 'Hide playback controls'
+                        : 'Show playback controls',
+                    onPressed: () {
+                      setState(() => _playbackExpanded = !_playbackExpanded);
+                      if (_fullscreen) _showControls();
+                    },
+                    icon: Icon(
+                      _playbackExpanded ? Icons.expand_more : Icons.expand_less,
+                    ),
+                  ),
+                ],
+              ),
+              if (_playbackExpanded)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: PlaybackSettingsGroup(
+                      playback: widget.playback,
+                      onExpandedChanged: _playbackOverlayChanged,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -377,8 +420,33 @@ class _CameraPageState extends State<CameraPage> {
           child: _header(),
         ),
         _message(),
-        Expanded(child: _preview()),
-        _transport(),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, bounds) => Stack(
+              fit: StackFit.expand,
+              children: [
+                _preview(),
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 8,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: 560,
+                        maxHeight: (bounds.maxHeight - 16).clamp(
+                          0,
+                          double.infinity,
+                        ),
+                      ),
+                      child: SingleChildScrollView(child: _transport()),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
           child: _stream
@@ -487,7 +555,7 @@ class _CameraPageState extends State<CameraPage> {
       fit: StackFit.expand,
       children: [
         _preview(),
-        if (_song)
+        if (_song && !_controls)
           Positioned(
             left: 20,
             right: 20,
@@ -543,9 +611,21 @@ class _CameraPageState extends State<CameraPage> {
                           ),
                         ],
                       ),
-                      _transport(labels: false),
                     ],
                   ),
+                ),
+              ),
+            ),
+          ),
+        if (_controls)
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: _transport(),
                 ),
               ),
             ),

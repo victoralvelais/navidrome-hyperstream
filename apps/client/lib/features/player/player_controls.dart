@@ -14,7 +14,7 @@ import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
 import '../library/cover_art.dart';
 import 'volume_button.dart';
-import 'output_button.dart';
+import 'playback_settings_group.dart';
 import 'player_actions.dart';
 import '../../widgets/glass_overlays.dart';
 import '../../widgets/edge_back_gesture.dart';
@@ -25,6 +25,37 @@ part 'camera_page.dart';
 
 String _time(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+
+Future<void> _showNowPlaying(
+  BuildContext context, {
+  required PlaybackService playback,
+  required NavidromeClient client,
+  LibraryCollections? collections,
+  ValueChanged<Album>? onAlbum,
+  ValueChanged<Artist>? onArtist,
+  bool showCamera = true,
+}) {
+  final media = MediaQuery.of(context);
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: false,
+    backgroundColor: Colors.transparent,
+    showDragHandle: false,
+    constraints: const BoxConstraints(maxWidth: 560),
+    builder: (_) => MediaQuery(
+      data: media,
+      child: _NowPlaying(
+        playback: playback,
+        client: client,
+        collections: collections,
+        onAlbum: onAlbum,
+        onArtist: onArtist,
+        showCamera: showCamera,
+      ),
+    ),
+  );
+}
 
 class PlayerControls extends StatelessWidget {
   const PlayerControls({
@@ -58,26 +89,15 @@ class PlayerControls extends StatelessWidget {
               )
             : const SizedBox.shrink();
       }
-      final media = MediaQuery.of(context);
       final labels = InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: false,
-          backgroundColor: Colors.transparent,
-          showDragHandle: false,
-          constraints: const BoxConstraints(maxWidth: 560),
-          builder: (_) => MediaQuery(
-            data: media,
-            child: _NowPlaying(
-              playback: playback,
-              client: client,
-              collections: collections,
-              onAlbum: onAlbum,
-              onArtist: onArtist,
-            ),
-          ),
+        onTap: () => _showNowPlaying(
+          context,
+          playback: playback,
+          client: client,
+          collections: collections,
+          onAlbum: onAlbum,
+          onArtist: onArtist,
         ),
         child: Semantics(
           button: true,

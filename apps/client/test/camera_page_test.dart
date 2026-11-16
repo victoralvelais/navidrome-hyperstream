@@ -124,6 +124,17 @@ void main() {
         await tester.tap(find.text('Full Screen'));
         await tester.pumpAndSettle();
         expect(find.byTooltip('Previous track'), findsOneWidget);
+        await tester.tap(find.byTooltip('Show playback controls'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Playback tempo'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 6));
+        expect(find.byType(ChoiceChip), findsNWidgets(6));
+        expect(find.text('Exit'), findsOneWidget);
+        await tester.tapAt(const Offset(2, 2));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Hide playback controls'));
+        await tester.pumpAndSettle();
         await tester.pump(const Duration(seconds: 6));
         expect(find.text('Exit'), findsNothing);
         await tester.tapAt(const Offset(300, 300));
@@ -138,6 +149,31 @@ void main() {
         expect(camera.starts, 1);
         expect(camera.restoredTempo, false);
         expect(player.playing, !paused);
+        await tester.tap(find.byTooltip('Show playback controls'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Music volume'), findsOneWidget);
+        await tester.tap(find.byTooltip('Playback tempo'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, '1.25×'));
+        await tester.pumpAndSettle();
+        expect(player.speed, 1.25);
+        expect(camera.recording, isTrue);
+        expect(player.position, const Duration(seconds: 45));
+        expect(player.playCalls, calls);
+        await tester.tapAt(const Offset(2, 2));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('First song'));
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byTooltip('Playback tempo'),
+          ),
+          findsOneWidget,
+        );
+        expect(camera.recording, isTrue);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Camera details'));
         await tester.pumpAndSettle();
         expect(
@@ -206,6 +242,9 @@ void main() {
           home: CameraPage(playback: playback, client: client, camera: camera),
         ),
       );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Show playback controls'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Stream'));

@@ -84,6 +84,8 @@ class GlassPopupMenuButton<T> extends StatelessWidget {
     this.tooltip,
     this.enabled = true,
     this.child,
+    this.onOpened,
+    this.onCanceled,
   });
   final PopupMenuItemBuilder<T> itemBuilder;
   final PopupMenuItemSelected<T>? onSelected;
@@ -91,6 +93,8 @@ class GlassPopupMenuButton<T> extends StatelessWidget {
   final Widget? child;
   final String? tooltip;
   final bool enabled;
+  final VoidCallback? onOpened;
+  final VoidCallback? onCanceled;
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<T>(
@@ -98,6 +102,8 @@ class GlassPopupMenuButton<T> extends StatelessWidget {
     enabled: enabled,
     icon: icon,
     onSelected: onSelected,
+    onOpened: onOpened,
+    onCanceled: onCanceled,
     elevation: 0,
     color: Colors.transparent,
     surfaceTintColor: Colors.transparent,
@@ -106,7 +112,7 @@ class GlassPopupMenuButton<T> extends StatelessWidget {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
     constraints: const BoxConstraints(minWidth: 224, maxWidth: 340),
     itemBuilder: (_) => [
-      _GlassMenuEntry<T>(
+      GlassMenuContent<T>(
         child: _inheritGlass(
           context,
           GlassSurface(
@@ -127,18 +133,18 @@ class GlassPopupMenuButton<T> extends StatelessWidget {
   );
 }
 
-class _GlassMenuEntry<T> extends PopupMenuEntry<T> {
-  const _GlassMenuEntry({required this.child});
+class GlassMenuContent<T> extends PopupMenuEntry<T> {
+  const GlassMenuContent({super.key, required this.child});
   final Widget child;
   @override
   double get height => 0;
   @override
   bool represents(T? value) => false;
   @override
-  State<_GlassMenuEntry<T>> createState() => _GlassMenuEntryState<T>();
+  State<GlassMenuContent<T>> createState() => _GlassMenuEntryState<T>();
 }
 
-class _GlassMenuEntryState<T> extends State<_GlassMenuEntry<T>> {
+class _GlassMenuEntryState<T> extends State<GlassMenuContent<T>> {
   @override
   Widget build(BuildContext context) => widget.child;
 }

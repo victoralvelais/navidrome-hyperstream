@@ -7,12 +7,14 @@ class _NowPlaying extends StatefulWidget {
     this.collections,
     this.onAlbum,
     this.onArtist,
+    this.showCamera = true,
   });
   final PlaybackService playback;
   final NavidromeClient client;
   final LibraryCollections? collections;
   final ValueChanged<Album>? onAlbum;
   final ValueChanged<Artist>? onArtist;
+  final bool showCamera;
   @override
   State<_NowPlaying> createState() => _NowPlayingState();
 }
@@ -174,71 +176,75 @@ class _NowPlayingState extends State<_NowPlaying> {
                             ),
                           ),
                           const SizedBox(height: 28),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              GlassSurface(
-                                child: IconButton(
-                                  tooltip: 'Show queue',
-                                  icon: const Icon(Icons.queue_music_rounded),
-                                  onPressed: () => showGlassSheet<void>(
-                                    context: context,
-                                    pullFromList: true,
-                                    padBottomSafeArea: false,
-                                    builder: (_) => _QueuePage(
-                                      playback: playback,
-                                      client: widget.client,
-                                      collections: widget.collections,
-                                      trackActions: _actions,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              ValueListenableBuilder<SleepTimerState?>(
-                                valueListenable: playback.sleepTimer,
-                                builder: (context, timer, _) => IconButton(
-                                  tooltip: timer == null
-                                      ? 'Sleep timer'
-                                      : 'Sleep timer active',
-                                  isSelected: timer != null,
-                                  color: timer == null ? null : scheme.primary,
-                                  icon: const Icon(Icons.bedtime_outlined),
-                                  onPressed: item == null
-                                      ? null
-                                      : () => showSleepTimer(context, playback),
-                                ),
-                              ),
-                              if (CameraService.supported)
+                          SizedBox(
+                            width: double.infinity,
+                            child: Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 4,
+                              runSpacing: 8,
+                              children: [
                                 GlassSurface(
                                   child: IconButton(
-                                    tooltip: 'Camera',
-                                    icon: const Icon(
-                                      Icons.photo_camera_outlined,
-                                    ),
-                                    onPressed: () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => CameraPage(
-                                          playback: playback,
-                                          client: widget.client,
-                                        ),
+                                    tooltip: 'Show queue',
+                                    icon: const Icon(Icons.queue_music_rounded),
+                                    onPressed: () => showGlassSheet<void>(
+                                      context: context,
+                                      pullFromList: true,
+                                      padBottomSafeArea: false,
+                                      builder: (_) => _QueuePage(
+                                        playback: playback,
+                                        client: widget.client,
+                                        collections: widget.collections,
+                                        trackActions: _actions,
                                       ),
                                     ),
                                   ),
                                 ),
-                              GlassSurface(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    OutputButton(obscured: _volumeOpen),
-                                    VolumeButton(
-                                      playback: playback,
-                                      onExpandedChanged: (open) =>
-                                          setState(() => _volumeOpen = open),
-                                    ),
-                                  ],
+                                ValueListenableBuilder<SleepTimerState?>(
+                                  valueListenable: playback.sleepTimer,
+                                  builder: (context, timer, _) => IconButton(
+                                    tooltip: timer == null
+                                        ? 'Sleep timer'
+                                        : 'Sleep timer active',
+                                    isSelected: timer != null,
+                                    color: timer == null
+                                        ? null
+                                        : scheme.primary,
+                                    icon: const Icon(Icons.bedtime_outlined),
+                                    onPressed: item == null
+                                        ? null
+                                        : () =>
+                                              showSleepTimer(context, playback),
+                                  ),
                                 ),
-                              ),
-                            ],
+                                if (widget.showCamera &&
+                                    CameraService.supported)
+                                  GlassSurface(
+                                    child: IconButton(
+                                      tooltip: 'Camera',
+                                      icon: const Icon(
+                                        Icons.photo_camera_outlined,
+                                      ),
+                                      onPressed: () =>
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) => CameraPage(
+                                                playback: playback,
+                                                client: widget.client,
+                                                collections: widget.collections,
+                                              ),
+                                            ),
+                                          ),
+                                    ),
+                                  ),
+                                PlaybackSettingsGroup(
+                                  playback: playback,
+                                  onVolumeExpandedChanged: (open) =>
+                                      setState(() => _volumeOpen = open),
+                                ),
+                              ],
+                            ),
                           ),
                           _SleepStatus(playback: playback),
                           _PlayerErrors(playback: playback, state: state),
