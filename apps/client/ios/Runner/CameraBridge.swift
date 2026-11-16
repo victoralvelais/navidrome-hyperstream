@@ -129,8 +129,7 @@ final class CameraBridge {
             retry()
             result(nil)
         case "recoverVideo":
-            guard let url = takes.rawRecovery() else { result(nil); return }
-            share(url)
+            recoverVideo()
             result(nil)
         case "dismissMessage":
             message = ""
@@ -256,12 +255,36 @@ final class CameraBridge {
         backgroundTask = .invalid
     }
 
+    private func recoverVideo() {
+        guard phase == "idle" else { return }
+        let videos = takes.rawRecovery()
+        guard let first = videos.first else { return }
+        if videos.count == 1 { share(first); return }
+        let chooser = UIAlertController(title: "Recover camera video", message: "Choose a take to share.", preferredStyle: .actionSheet)
+        let dates = DateFormatter()
+        dates.dateStyle = .medium
+        dates.timeStyle = .medium
+        for (index, url) in videos.enumerated() {
+            let date = try? url.deletingLastPathComponent().resourceValues(forKeys: [.creationDateKey]).creationDate
+            let title = "Take \(videos.count - index)" + (date.map { " · " + dates.string(from: $0) } ?? "")
+            chooser.addAction(UIAlertAction(title: title, style: .default) { [weak self, weak chooser] _ in
+                chooser?.dismiss(animated: true) { self?.share(url) }
+            })
+        }
+        chooser.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(chooser)
+    }
+
     private func share(_ url: URL) {
+        guard phase == "idle", FileManager.default.fileExists(atPath: url.path) else { return }
+        present(UIActivityViewController(activityItems: [url], applicationActivities: nil))
+    }
+
+    private func present(_ controller: UIViewController) {
         guard var presenter = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
             .filter({ $0.activationState == .foregroundActive }).flatMap({ $0.windows })
             .first(where: { $0.isKeyWindow })?.rootViewController else { return }
         while let presented = presenter.presentedViewController { presenter = presented }
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         if let popover = controller.popoverPresentationController {
             popover.sourceView = presenter.view
             popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
@@ -282,7 +305,7 @@ final class HyperstreamBroadcastView: NSObject, FlutterPlatformView {
     init(frame: CGRect) {
         picker = RPSystemBroadcastPickerView(frame: frame)
         picker.showsMicrophoneButton = true
-        picker.tintColor = .white
+        picker.tintColor = .label
         super.init()
     }
     func view() -> UIView { picker }

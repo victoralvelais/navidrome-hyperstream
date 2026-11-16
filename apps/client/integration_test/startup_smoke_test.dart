@@ -39,5 +39,7 @@ void main() {
     // Leave sign-in visible for the host's screenshot. The host terminates the
     // simulator app; widget tests separately cover disposal during startup.
     binding.reportData = {'startupReachedSignIn': true};
-  });
+    // iOS can echo a framework semantics request back as a platform-owned handle.
+    // This startup check needs no forced semantics tree. Widget tests cover it.
+  }, semanticsEnabled: false);
 }

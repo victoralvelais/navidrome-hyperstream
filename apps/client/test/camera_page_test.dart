@@ -132,11 +132,35 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Record'));
         await tester.pumpAndSettle();
+        camera.pending = 2;
         await tester.tap(find.byTooltip('Start recording'));
         await tester.pump();
         expect(camera.starts, 1);
         expect(camera.restoredTempo, false);
         expect(player.playing, !paused);
+        await tester.tap(find.byTooltip('Camera details'));
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Retry saving (2)'),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<TextButton>(
+                find.widgetWithText(
+                  TextButton,
+                  'Recover original camera video',
+                ),
+              )
+              .onPressed,
+          isNull,
+        );
+        Navigator.of(tester.element(find.text('Camera details').last)).pop();
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Stop and save take'));
         await tester.pumpAndSettle();
         expect(camera.stops, 1);

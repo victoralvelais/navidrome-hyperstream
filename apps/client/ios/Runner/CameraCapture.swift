@@ -182,12 +182,6 @@ final class CameraCapture: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
         let pts = CMSampleBufferGetPresentationTimeStamp(sample)
         do {
             if writer == nil {
-                let sessionClock: CMClock?
-                if #available(iOS 15.4, *) { sessionClock = session.synchronizationClock }
-                else { sessionClock = session.masterClock }
-                guard let clock = sessionClock else { throw CameraFailure("Camera timing is unavailable.") }
-                let host = CMSyncConvertTime(pts, from: clock, to: CMClockGetHostTimeClock()).seconds
-                guard host.isFinite else { throw CameraFailure("Camera timing is invalid.") }
                 let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
                 let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
                     AVVideoCodecKey: AVVideoCodecType.h264,
@@ -199,15 +193,27 @@ final class CameraCapture: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
                 guard writer.canAdd(input) else { throw CameraFailure("Video encoding is unavailable.") }
                 writer.add(input)
                 guard writer.startWriting() else { throw CameraFailure("Could not create the video. Check available storage.") }
-                writer.startSession(atSourceTime: pts)
                 self.writer = writer
                 self.input = input
-                firstHost = host
             }
             guard let writer, let input else { return }
             if writer.status == .failed { throw CameraFailure("Video recording stopped. Check available storage.") }
             if input.isReadyForMoreMediaData {
+                var initialHost: Double?
+                if firstHost == nil {
+                    let sessionClock: CMClock?
+                    if #available(iOS 15.4, *) { sessionClock = session.synchronizationClock }
+                    else { sessionClock = session.masterClock }
+                    guard let clock = sessionClock else { throw CameraFailure("Camera timing is unavailable.") }
+                    let host = CMSyncConvertTime(pts, from: clock, to: CMClockGetHostTimeClock()).seconds
+                    guard host.isFinite else { throw CameraFailure("Camera timing is invalid.") }
+                    // Encoder startup can drop frames. Anchor both clocks to the
+                    // first accepted frame so export starts with its picture.
+                    writer.startSession(atSourceTime: pts)
+                    initialHost = host
+                }
                 guard input.append(sample) else { throw CameraFailure("The camera could not write the video frame.") }
+                if let initialHost { firstHost = initialHost }
                 if let start {
                     self.start = nil
                     DispatchQueue.main.async { start(nil) }

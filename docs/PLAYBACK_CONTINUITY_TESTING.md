@@ -172,7 +172,7 @@ remains with the user.
 
 ## Camera integration in 0.53.0
 
-- Enter Camera from Now Playing with a queued song halfway through at 0.75×.
+- Enter Camera from Now Playing with a queued song halfway through at 0.75Ã—.
   Confirm position, queue occurrence, pause state, rate and audio route survive
   Record/Stream navigation and returning to Music. Previous remains available.
 - Record across a track transition, pause/resume, seek and a tempo change. Check
@@ -188,6 +188,8 @@ remains with the user.
   and relaunch before retry to exercise the persistent manifest and cached MP4.
 - Interrupt the source download. Retry while the connection is available. After
   a process restart with a missing source, use Recover original camera video.
+  With several pending takes, choose each older recording from the recovery list.
+  Recovery and retry controls are disabled during recording and saving.
   Reports and manifests contain no server URLs or authentication material.
 - In Stream, open Full Screen and check Fill/Fit, optional song text, auto-hiding
   controls and the permanently mounted iOS broadcast picker inside its sheet.

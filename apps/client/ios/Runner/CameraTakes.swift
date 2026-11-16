@@ -55,9 +55,9 @@ final class CameraTakes {
         }
     }
 
-    func rawRecovery() -> URL? {
+    func rawRecovery() -> [URL] {
         pendingFolders().reversed().map { $0.appendingPathComponent("raw.mov") }
-            .first { FileManager.default.fileExists(atPath: $0.path) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     func save(_ folder: URL, sources: [String: URL]? = nil) async throws {

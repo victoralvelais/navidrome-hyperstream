@@ -28,7 +28,15 @@ def main() -> int:
     logs.mkdir(parents=True, exist_ok=True)
     console_path = logs / 'ios-startup-console.log'
     subprocess.run(['xcrun', 'simctl', 'install', device, str(app)], check=True, timeout=90)
-    with console_path.open('wb') as console:
+    stream_path = logs / 'ios-startup-stream.log'
+    with console_path.open('wb') as console, stream_path.open('wb') as stream:
+        # Recent simulator runtimes send Flutter output to unified logging even
+        # when simctl launch --console is attached. Start both readers first.
+        log_process = subprocess.Popen(
+            ['xcrun', 'simctl', 'spawn', device, 'log', 'stream', '--level', 'debug',
+             '--predicate', 'process == "Runner"', '--style', 'compact'],
+            stdout=stream, stderr=subprocess.STDOUT,
+        )
         process = subprocess.Popen(
             ['xcrun', 'simctl', 'launch', '--console', device, bundle_id,
              '--enable-dart-profiling', '--enable-checked-mode',
@@ -40,6 +48,7 @@ def main() -> int:
             service_uri = None
             while time.monotonic() < deadline:
                 output = console_path.read_text(encoding='utf-8', errors='replace')
+                output += stream_path.read_text(encoding='utf-8', errors='replace')
                 match = re.search(r'(?:Dart VM service|Dart VM Service).*?(http://127\.0\.0\.1:\d+/[^\s]*)', output)
                 if match:
                     service_uri = match.group(1)
@@ -62,6 +71,12 @@ def main() -> int:
             print('Startup driver timed out. See captured simulator diagnostics.', flush=True)
             return 1
         finally:
+            log_process.terminate()
+            try:
+                log_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                log_process.kill()
+                log_process.wait()
             # Capture before terminating, including when launch/attach fails.
             diagnostic(
                 ['xcrun', 'simctl', 'io', device, 'screenshot', str(logs / 'ios-startup.png')],

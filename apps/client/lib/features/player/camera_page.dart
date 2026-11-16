@@ -138,12 +138,16 @@ class _CameraPageState extends State<CameraPage> {
                 ),
                 if (camera.pending > 0) ...[
                   FilledButton.tonalIcon(
-                    onPressed: camera.saving ? null : camera.retry,
+                    onPressed: camera.recording || camera.saving
+                        ? null
+                        : camera.retry,
                     icon: const Icon(Icons.photo_library_outlined),
                     label: Text('Retry saving (${camera.pending})'),
                   ),
                   TextButton(
-                    onPressed: camera.recoverVideo,
+                    onPressed: camera.recording || camera.saving
+                        ? null
+                        : camera.recoverVideo,
                     child: const Text('Recover original camera video'),
                   ),
                 ],
