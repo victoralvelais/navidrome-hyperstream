@@ -19,6 +19,13 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		9912C74BCA8FCEDC88E322E3 /* CameraCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2AF2A7773E77299A0DB26D /* CameraCapture.swift */; };
+		05950AA3FDC9D466E92A6187 /* CameraPlayback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82895F14C2650F0571B1BA21 /* CameraPlayback.swift */; };
+		16F231427680E370169E41AD /* CameraBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C2E7BB2B50531024041827 /* CameraBridge.swift */; };
+		08D8E8A7D4906649C10D0ED7 /* CameraTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79615DE0A0AA696B964AD6C1 /* CameraTimeline.swift */; };
+		1FE948C76F9F2486BD698F29 /* CameraExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E16CC6F9047B20B0A9193 /* CameraExport.swift */; };
+		B2573AA3555BBC27F405BEA4 /* CameraTakes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F3DE0B5F4CFB7B13F2834B0 /* CameraTakes.swift */; };
+		7CEF43206845831BC84AA6CC /* CameraPlaybackClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F2E84496DAD84346E6B069 /* CameraPlaybackClock.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,6 +72,13 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DA2AF2A7773E77299A0DB26D /* CameraCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCapture.swift; sourceTree = "<group>"; };
+		82895F14C2650F0571B1BA21 /* CameraPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPlayback.swift; sourceTree = "<group>"; };
+		D2C2E7BB2B50531024041827 /* CameraBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraBridge.swift; sourceTree = "<group>"; };
+		79615DE0A0AA696B964AD6C1 /* CameraTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTimeline.swift; sourceTree = "<group>"; };
+		2F2E16CC6F9047B20B0A9193 /* CameraExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraExport.swift; sourceTree = "<group>"; };
+		5F3DE0B5F4CFB7B13F2834B0 /* CameraTakes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTakes.swift; sourceTree = "<group>"; };
+		07F2E84496DAD84346E6B069 /* CameraPlaybackClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPlaybackClock.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,6 +142,13 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				07F2E84496DAD84346E6B069 /* CameraPlaybackClock.swift */,
+				5F3DE0B5F4CFB7B13F2834B0 /* CameraTakes.swift */,
+				2F2E16CC6F9047B20B0A9193 /* CameraExport.swift */,
+				79615DE0A0AA696B964AD6C1 /* CameraTimeline.swift */,
+				D2C2E7BB2B50531024041827 /* CameraBridge.swift */,
+				82895F14C2650F0571B1BA21 /* CameraPlayback.swift */,
+				DA2AF2A7773E77299A0DB26D /* CameraCapture.swift */,
 				B630D0A00F12115200000002 /* RemoteTransferBackground.swift */,
 				B630D0A00F12113300000002 /* SystemArtwork.swift */,
 				B630D0A00F12113600000002 /* AudioShareProvider.swift */,
@@ -294,6 +315,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				7CEF43206845831BC84AA6CC /* CameraPlaybackClock.swift in Sources */,
+				B2573AA3555BBC27F405BEA4 /* CameraTakes.swift in Sources */,
+				1FE948C76F9F2486BD698F29 /* CameraExport.swift in Sources */,
+				08D8E8A7D4906649C10D0ED7 /* CameraTimeline.swift in Sources */,
+				16F231427680E370169E41AD /* CameraBridge.swift in Sources */,
+				05950AA3FDC9D466E92A6187 /* CameraPlayback.swift in Sources */,
+				9912C74BCA8FCEDC88E322E3 /* CameraCapture.swift in Sources */,
 				B630D0A00F12115200000001 /* RemoteTransferBackground.swift in Sources */,
 				B630D0A00F12113300000001 /* SystemArtwork.swift in Sources */,
 				B630D0A00F12113600000001 /* AudioShareProvider.swift in Sources */,

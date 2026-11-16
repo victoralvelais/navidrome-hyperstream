@@ -37,6 +37,10 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to your Navidrome server and send songs to shared folders on your local network.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Record dance videos and share your camera while music plays in Hyperstream.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save your recorded dance videos with their music to Photos.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -14,6 +14,47 @@ For subsequent implementations and the November 12 playlist/UI follow-up, read
 [device checks](SMART_PLAYLISTS_TESTING.md). `releases/latest.json` identifies the
 latest collected pair. The release and proposals below remain a historical snapshot.
 
+## Import Dance Camera into Now Playing
+
+The user liked the two-screen preview and wants the iPhone camera to feel like part of Hyperstream. Dance Camera **0.15.0** is the working reference. Hyperstream has its own Flutter player and the port is pending. The source checkout on this PC is `D:\Users\Eisen Uchiha\Engineering\CodexXP\projects\dance-camera`. See `agent-references/HANDOFF.md` in that checkout for the source-side import notes. [Two-screen design preview](../design/concepts/2026-11-15/now-playing-camera.png) · [Pinned Swift source](https://github.com/victoralvelais/danze/tree/09f20968b9a5b907903f7b369ed6c413d169b584/DanceCamera)
+
+### What the person holding the phone sees
+
+- Add one outlined **Camera** button between the sleep timer and the AirPlay/volume group. Tapping it opens a framing preview with **Record** selected. The red circle starts the take on the second tap, then becomes a stop square. **Music** returns to Now Playing at the current position. Keep the track and playback control visible in the camera and tuck speed, original-tempo export, and audio reports into details. [Now Playing control row](../apps/client/lib/features/player/now_playing_part.dart)
+- **Record** supports front/rear switching between takes, keeps the display awake while framing or recording, and saves stopped takes to Photos. The default soundtrack is the music at the tempo heard during the performance, with the mic off. **Finish at original song tempo** retimes both video and audio. Keep the pending take and retry action if Photos delivery fails.
+- **Stream** offers **Full Screen** for the camera and music. A tap reveals auto-hiding controls for Fill/Fit, optional current song, playback and the iPhone broadcast mic controls. Start an audience session inside **TikTok → LIVE → Mobile gaming → Go LIVE**, confirm **Start Broadcast** in iOS, and return to the clean camera. The user saw successful iOS screen sharing without a viewer-facing LIVE when starting from the picker alone. Report screen capture as such. TikTok owns the audience session and may own mic mute.
+
+### Where to start the port
+
+1. Keep Hyperstream's existing `PlaybackService` and queue alive across camera navigation. Route play/pause, next, tempo, and current-track changes through it. The source `DanceRecorder` creates a separate `StreamingSoundtrack`. Adapt that dependency before bringing the recorder into Hyperstream. Opening the preview must preserve the current queue occurrence, position, rate, play/pause state and audio route. The existing Flutter-to-iOS bridge is in `Runner/AppDelegate.swift`. [Playback service](../apps/client/lib/services/playback_service.dart) · [iOS bridge](../apps/client/ios/Runner/AppDelegate.swift)
+2. First prove that the active iOS player can supply performed PCM **after tempo processing**, with timestamps that can be aligned to the camera's host clock. Hyperstream's Dart position stream is useful for the UI. Sample-accurate audio capture remains the main integration work. Use `PerformedAudioFeed.swift`, `AudioTiming.swift`, and `DanceRecorder.swift` as the reference. Keep song changes and tempo changes in one continuous take. `TakeExport.swift`, `SourceSoundtrack.swift`, and `SoundtrackAlignment.swift` implement the original-tempo path, including when a verified source track can be used. `PhotoDelivery.swift` owns Photos delivery and retry.
+3. `DanceCameraApp.swift` contains the studio, native shutter and camera lifecycle. `CleanCameraSurface.swift` temporarily swaps the recording output for composited frames that iOS can share. Restore the movie output before enabling the shutter or lens switch. `TikTokLiveSetup.swift` keeps the iPhone broadcast picker mounted across capture changes. Hyperstream's project targets iOS 15.0 and the reference targets 18.2. Gate newer APIs or supply compatible equivalents. Add the camera and Photos-add usage descriptions to the iOS target. [Hyperstream iOS project](../apps/client/ios/Runner.xcodeproj/project.pbxproj)
+
+### How to know it worked
+
+Start a queued song at **0.75×**, open Camera mid-song, switch to Stream and back, then record and save. Verify the same player advances throughout, the queue survives, and entering with a paused song leaves it paused. Cross a track boundary in a take and listen for pops or gaps. On a physical iPhone, check both tempo exports in Photos, front/rear framing and AirPods sync. For streaming, confirm the picture, music and mic toggle from a second device after TikTok shows the host is live. The standalone CI passed playback continuity, audio/export and fullscreen tests. The Hyperstream port and an audience-side LIVE need their own checks. [Source tests](https://github.com/victoralvelais/danze/tree/09f20968b9a5b907903f7b369ed6c413d169b584/Checks) · [Verified 0.15.0 run](https://github.com/victoralvelais/danze/actions/runs/43803360672) · [Hyperstream playback continuity checks](PLAYBACK_CONTINUITY_TESTING.md)
+
+### Hyperstream adaptation in 0.53.0
+
+The camera entry and studio are Flutter widgets sharing `PlaybackService`.
+The iOS bridge records 1080p portrait camera frames into a movie while publishing
+the same frames as a Flutter texture for previews and screen sharing. It observes
+the current AVQueuePlayer item clock, playback rate, pauses and seeks. The local
+just_audio 0.10.6 package exposes that player and its in-memory source requests.
+
+Exports reconstruct the soundtrack from downloaded original audio and the native
+transport timeline. This adapts the standalone source-audio approach. The export
+does not capture post-render PCM. Both performance-speed and original-tempo
+exports preserve pauses and queue transitions. Pending videos, cached audio and
+credential-free timing manifests survive a Photos error or process restart.
+Requests stay in memory. If a source download failed before termination, recovery
+can still share the raw camera video. Photos retries use the completed export.
+
+The original standalone engine and SwiftUI navigation are reference material.
+Native clock-to-picture alignment, AirPods and audience-side streaming need the
+physical-device checks in `PLAYBACK_CONTINUITY_TESTING.md`. The Apple CI checks
+generate synthetic movies and audio to verify both export modes.
+
 ## Start here
 
 - Workspace: `D:\Users\Eisen Uchiha\Engineering\Personal\navidrome-hyperstream`

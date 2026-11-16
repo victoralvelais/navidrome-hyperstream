@@ -168,3 +168,30 @@ checksum and archive CRC checks passed, and the IPA bundle reports `0.1.0+41`.
 Windows native restoration checks passed; audible playback was skipped because
 the host again reported zero audio outputs. Physical outage/recovery acceptance
 remains with the user.
+
+
+## Camera integration in 0.53.0
+
+- Enter Camera from Now Playing with a queued song halfway through at 0.75×.
+  Confirm position, queue occurrence, pause state, rate and audio route survive
+  Record/Stream navigation and returning to Music. Previous remains available.
+- Record across a track transition, pause/resume, seek and a tempo change. Check
+  the Photos movie for picture/music alignment on speakers and AirPods. Repeat
+  with Finish at original song tempo enabled. The soundtrack is reconstructed
+  from original audio using the native player timeline. Device latency remains
+  a physical check beyond the synthetic export fixtures.
+- Check both lenses, portrait and landscape layouts, larger text, denied camera
+  permission, background interruption and storage failures. Recording saves
+  1080p portrait video where supported. Returning to Music finishes a live take.
+- Deny Photos additions, reopen Camera details, enable permission in Settings and
+  retry. Confirm the saved take is removed from pending and delivered once. Close
+  and relaunch before retry to exercise the persistent manifest and cached MP4.
+- Interrupt the source download. Retry while the connection is available. After
+  a process restart with a missing source, use Recover original camera video.
+  Reports and manifests contain no server URLs or authentication material.
+- In Stream, open Full Screen and check Fill/Fit, optional song text, auto-hiding
+  controls and the permanently mounted iOS broadcast picker inside its sheet.
+  Start TikTok LIVE through Mobile gaming and verify camera picture, music and
+  microphone from a second device. The UI reports screen sharing separately
+  from TikTok audience status. Confirm AVPlayer music reaches the broadcaster on
+  the actual device. The native file-export tests do not verify ReplayKit audio.

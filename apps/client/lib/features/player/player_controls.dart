@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import '../../models/library.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
+import '../../services/camera_service.dart';
 import '../../widgets/glass_surface.dart';
 import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
@@ -18,6 +21,7 @@ import '../../widgets/edge_back_gesture.dart';
 import '../playlists/playlist_dialogs.dart';
 
 part 'now_playing_part.dart';
+part 'camera_page.dart';
 
 String _time(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';

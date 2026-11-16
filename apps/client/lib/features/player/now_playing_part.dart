@@ -208,6 +208,23 @@ class _NowPlayingState extends State<_NowPlaying> {
                                       : () => showSleepTimer(context, playback),
                                 ),
                               ),
+                              if (CameraService.supported)
+                                GlassSurface(
+                                  child: IconButton(
+                                    tooltip: 'Camera',
+                                    icon: const Icon(
+                                      Icons.photo_camera_outlined,
+                                    ),
+                                    onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => CameraPage(
+                                          playback: playback,
+                                          client: widget.client,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               GlassSurface(
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,

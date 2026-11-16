@@ -9,6 +9,7 @@ import AVKit
   private var shareChannel: FlutterMethodChannel?
   private var remoteTransferChannel: FlutterMethodChannel?
   private let remoteTransfer = RemoteTransferBackground()
+  private var cameraBridge: CameraBridge?
   private var sharing = false
   private var transparencyObserver: NSObjectProtocol?
   override func application(
@@ -22,6 +23,11 @@ import AVKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HyperstreamAppearance") else { return }
     registrar.register(HyperstreamRouteFactory(), withId: "dev.hyperstream/audio_route_picker")
+    registrar.register(HyperstreamBroadcastFactory(), withId: "dev.hyperstream/broadcast_picker")
+    let audioPlugin = engineBridge.pluginRegistry.valuePublished(byPlugin: "JustAudioPlugin") as? JustAudioPlugin
+    cameraBridge = CameraBridge(messenger: registrar.messenger(), textures: registrar.textures()) { [weak audioPlugin] in
+      audioPlugin?.hyperstreamPlayer()
+    }
     let remote = FlutterMethodChannel(name: "dev.hyperstream/remote_transfer", binaryMessenger: registrar.messenger())
     remoteTransferChannel = remote
     remoteTransfer.onExpired = { [weak self] token in

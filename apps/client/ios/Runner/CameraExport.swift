@@ -1,0 +1,234 @@
+import AVFoundation
+
+/// Builds the soundtrack from the verified native transport timeline and source
+/// assets. Output is reconstructed source audio, with every transport gap retained.
+enum CameraExport {
+    struct Result {
+        let duration: Double
+        let size: CGSize
+        let audioSegments: Int
+    }
+
+    static func save(video: URL, segments: [CameraAudioSegment], sources: [String: URL],
+                     videoStart: Double, restoreTempo: Bool, to destination: URL) async throws -> Result {
+        let movie = AVURLAsset(url: video)
+        guard let original = try await movie.loadTracks(withMediaType: .video).first else {
+            throw CameraExportError("The camera file has no video track. Your original file is kept.")
+        }
+        let range = try await original.load(.timeRange)
+        let clipped = try CameraTimeline.clip(segments, videoStart: videoStart, duration: range.duration.seconds)
+        let duration = CameraTimeline.duration(clipped, restoreTempo: restoreTempo)
+        let composition = AVMutableComposition()
+        guard let picture = composition.addMutableTrack(withMediaType: .video,
+                                                        preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw CameraExportError("The video exporter is unavailable.")
+        }
+        try picture.insertTimeRange(range, of: original, at: .zero)
+        picture.preferredTransform = try await original.load(.preferredTransform)
+        let size = try await original.load(.naturalSize)
+        if restoreTempo {
+            for segment in clipped.reversed() where segment.sourceKey != nil && abs(segment.rate - 1) > 0.000001 {
+                let wall = segment.hostEnd - segment.hostStart
+                picture.scaleTimeRange(CMTimeRange(start: time(segment.hostStart - videoStart), duration: time(wall)),
+                                       toDuration: time(wall * segment.rate))
+            }
+        }
+
+        let working = FileManager.default.temporaryDirectory.appendingPathComponent("hyperstream-export-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: working, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: working) }
+        let sound = working.appendingPathComponent("soundtrack.m4a")
+        try await soundtrack(clipped, sources: sources, restoreTempo: restoreTempo,
+                             duration: duration, working: working, to: sound)
+        let encoded = AVURLAsset(url: sound)
+        guard let audio = try await encoded.loadTracks(withMediaType: .audio).first,
+              let output = composition.addMutableTrack(withMediaType: .audio,
+                                                       preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw CameraExportError("The soundtrack could not be added to the video.")
+        }
+        let audioRange = try await audio.load(.timeRange)
+        let length = CMTimeMinimum(time(duration), audioRange.duration)
+        try output.insertTimeRange(CMTimeRange(start: audioRange.start, duration: length), of: audio, at: .zero)
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality),
+              export.supportedFileTypes.contains(.mp4) else {
+            throw CameraExportError("The video export format is unavailable.")
+        }
+        export.audioTimePitchAlgorithm = .timeDomain
+        let note = AVMutableMetadataItem()
+        note.identifier = .identifier3GPUserDataDescription
+        note.extendedLanguageTag = "en"
+        note.value = (restoreTempo ? "Hyperstream. Source soundtrack at original tempo." :
+                        "Hyperstream. Source soundtrack following recorded playback timing.") as NSString
+        note.dataType = kCMMetadataBaseDataType_UTF8 as String
+        export.metadata = [note]
+        let ready = working.appendingPathComponent("ready.mp4")
+        try await finish(export, to: ready, type: .mp4)
+        // A completed movie is published atomically. An existing destination is never replaced.
+        try FileManager.default.moveItem(at: ready, to: destination)
+        return Result(duration: duration, size: size,
+                      audioSegments: clipped.filter { $0.sourceKey != nil }.count)
+    }
+
+    private static func soundtrack(_ segments: [CameraAudioSegment], sources: [String: URL], restoreTempo: Bool,
+                                   duration: Double, working: URL, to destination: URL) async throws {
+        let composition = AVMutableComposition()
+        guard let baseline = composition.addMutableTrack(withMediaType: .audio,
+                                                         preferredTrackID: kCMPersistentTrackID_Invalid),
+              let music = composition.addMutableTrack(withMediaType: .audio,
+                                                      preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw CameraExportError("The soundtrack exporter is unavailable.")
+        }
+        // An explicit baseline preserves leading, trailing and all-paused takes.
+        let silence = working.appendingPathComponent("silence.caf")
+        try writeSilence(duration: duration, to: silence)
+        let silenceAsset = AVURLAsset(url: silence)
+        guard let silentTrack = try await silenceAsset.loadTracks(withMediaType: .audio).first else {
+            throw CameraExportError("The silent portions of the take could not be prepared.")
+        }
+        try baseline.insertTimeRange(CMTimeRange(start: .zero, duration: time(duration)), of: silentTrack, at: .zero)
+        var cursor = 0.0
+        var tracks: [String: AVAssetTrack] = [:]
+        for segment in segments {
+            let wall = segment.hostEnd - segment.hostStart
+            let length = wall * (restoreTempo && segment.sourceKey != nil ? segment.rate : 1)
+            defer { cursor += length }
+            guard let key = segment.sourceKey else { continue }
+            if tracks[key] == nil {
+                guard let url = sources[key], url.isFileURL,
+                      let track = try await AVURLAsset(url: url).loadTracks(withMediaType: .audio).first else {
+                    throw CameraExportError("A song needed for this take is unavailable. Keep the take and retry.")
+                }
+                tracks[key] = track
+            }
+            guard let track = tracks[key] else { continue }
+            let available = try await track.load(.timeRange)
+            let start = segment.sourceStart
+            let end = start + wall * segment.rate
+            guard start >= available.start.seconds - 0.001,
+                  end <= available.end.seconds + 0.075 else {
+                throw CameraExportError("A song does not cover its recorded interval. Your original video is kept.")
+            }
+            let clippedStart = max(start, available.start.seconds)
+            let clippedEnd = min(end, available.end.seconds)
+            // Native MP3 duration can differ from the downloaded track by a
+            // codec frame. Preserve the requested rate and the video timeline,
+            // leaving that short unavailable tail on the silent baseline.
+            guard clippedEnd > clippedStart else { continue }
+            let sourceRange = CMTimeRange(start: time(clippedStart), duration: time(clippedEnd - clippedStart))
+            let playbackRate = restoreTempo ? 1 : segment.rate
+            let audibleStart = cursor + (clippedStart - start) / playbackRate
+            let audibleDuration = (clippedEnd - clippedStart) / playbackRate
+            try music.insertTimeRange(sourceRange, of: track, at: time(audibleStart))
+            music.scaleTimeRange(CMTimeRange(start: time(audibleStart), duration: sourceRange.duration),
+                                 toDuration: time(audibleDuration))
+        }
+        let parameters = AVMutableAudioMixInputParameters(track: music)
+        parameters.audioTimePitchAlgorithm = .timeDomain
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = [parameters]
+        try await encodeAudio(composition, mix: mix, duration: duration, to: destination)
+    }
+
+    private static func writeSilence(duration: Double, to url: URL) throws {
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096),
+              let channels = buffer.floatChannelData else {
+            throw CameraExportError("The soundtrack buffer is unavailable.")
+        }
+        for channel in 0..<2 { memset(channels[channel], 0, 4096 * MemoryLayout<Float>.size) }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        var remaining = Int64((duration * 48_000).rounded(.up))
+        while remaining > 0 {
+            buffer.frameLength = UInt32(min(4096, remaining))
+            try file.write(from: buffer)
+            remaining -= Int64(buffer.frameLength)
+        }
+    }
+
+    private static func encodeAudio(_ asset: AVComposition, mix: AVAudioMix, duration: Double,
+                                    to url: URL) async throws {
+        let reader = try AVAssetReader(asset: asset)
+        let tracks = try await asset.loadTracks(withMediaType: .audio)
+        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 48_000,
+            AVNumberOfChannelsKey: 2,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsNonInterleaved: false,
+        ])
+        output.audioMix = mix
+        let writer = try AVAssetWriter(outputURL: url, fileType: .m4a)
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 48_000,
+            AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 256_000,
+        ])
+        input.expectsMediaDataInRealTime = false
+        guard reader.canAdd(output), writer.canAdd(input) else {
+            throw CameraExportError("The AAC soundtrack encoder is unavailable.")
+        }
+        reader.add(output)
+        reader.timeRange = CMTimeRange(start: .zero, duration: time(duration))
+        writer.add(input)
+        guard writer.startWriting() else { throw writer.error ?? CameraExportError("Could not start soundtrack encoding.") }
+        writer.startSession(atSourceTime: .zero)
+        guard reader.startReading() else {
+            writer.cancelWriting()
+            throw reader.error ?? CameraExportError("Could not read the soundtrack.")
+        }
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+            let queue = DispatchQueue(label: "hyperstream.camera.audio-export")
+            var finished = false
+            input.requestMediaDataWhenReady(on: queue) {
+                guard !finished else { return }
+                if writer.status == .failed || writer.status == .cancelled {
+                    finished = true
+                    reader.cancelReading()
+                    done.resume(throwing: writer.error ?? CameraExportError("The soundtrack encoder stopped."))
+                    return
+                }
+                while input.isReadyForMoreMediaData {
+                    guard let sample = output.copyNextSampleBuffer() else {
+                        finished = true
+                        input.markAsFinished()
+                        if reader.status == .failed || reader.status == .cancelled {
+                            writer.cancelWriting()
+                            done.resume(throwing: reader.error ?? CameraExportError("The soundtrack could not be decoded."))
+                        } else {
+                            writer.endSession(atSourceTime: time(duration))
+                            writer.finishWriting {
+                                if writer.status == .completed { done.resume() }
+                                else { done.resume(throwing: writer.error ?? CameraExportError("Could not finish the soundtrack.")) }
+                            }
+                        }
+                        return
+                    }
+                    guard input.append(sample) else {
+                        finished = true
+                        reader.cancelReading()
+                        writer.cancelWriting()
+                        done.resume(throwing: writer.error ?? CameraExportError("The soundtrack encoder stopped."))
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    private static func finish(_ export: AVAssetExportSession, to url: URL, type: AVFileType) async throws {
+        export.outputURL = url
+        export.outputFileType = type
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+            export.exportAsynchronously {
+                if export.status == .completed { done.resume() }
+                else { done.resume(throwing: export.error ?? CameraExportError("The video export could not finish.")) }
+            }
+        }
+    }
+
+    private static func time(_ seconds: Double) -> CMTime {
+        CMTime(seconds: seconds, preferredTimescale: 48_000)
+    }
+}

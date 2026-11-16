@@ -84,6 +84,15 @@ jobs:
             -o build/ci/check-audio-share
           build/ci/check-audio-share
 
+      - name: Verify camera timing and both tempo exports
+        timeout-minutes: 5
+        run: |
+          xcrun --sdk macosx swiftc -parse-as-library \
+            -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+            ios/Runner/CameraTimeline.swift ios/Runner/CameraPlaybackClock.swift ios/Runner/CameraExport.swift \
+            ../../tools/check_camera_export.swift -o build/ci/check-camera-export
+          build/ci/check-camera-export
+
       - name: Verify Windows queue traversal helper
         run: |
           c++ -std=c++17 ../../tools/check_playback_queue.cpp -o build/ci/check-playback-queue
