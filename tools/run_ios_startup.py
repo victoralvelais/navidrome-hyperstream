@@ -19,6 +19,26 @@ def diagnostic(command: list[str], **kwargs) -> None:
         print('Could not collect one simulator diagnostic.', flush=True)
 
 
+def find_vm_service(device: str, output: str) -> str | None:
+    pattern = r'(?:Dart VM service|Dart VM Service).*?(http://127\.0\.0\.1:\d+/[^\s]*)'
+    match = re.search(pattern, output)
+    if match:
+        return match.group(1)
+    # log stream can attach after the VM announcement even when started before
+    # simctl launch. The simulator's retained log covers that startup race.
+    try:
+        history = subprocess.run(
+            ['xcrun', 'simctl', 'spawn', device, 'log', 'show', '--last', '2m',
+             '--predicate', 'process == "Runner" AND eventMessage CONTAINS "Dart VM"',
+             '--style', 'compact'],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(pattern, history.stdout)
+    return match.group(1) if match else None
+
+
 def main() -> int:
     device = sys.argv[1]
     app = Path('build/ios/iphonesimulator/Runner.app')
@@ -49,13 +69,12 @@ def main() -> int:
             while time.monotonic() < deadline:
                 output = console_path.read_text(encoding='utf-8', errors='replace')
                 output += stream_path.read_text(encoding='utf-8', errors='replace')
-                match = re.search(r'(?:Dart VM service|Dart VM Service).*?(http://127\.0\.0\.1:\d+/[^\s]*)', output)
-                if match:
-                    service_uri = match.group(1)
+                service_uri = find_vm_service(device, output)
+                if service_uri:
                     break
                 if process.poll() is not None:
                     break
-                time.sleep(1)
+                time.sleep(2)
             if service_uri is None:
                 print('No Dart VM service announced. See console and simulator screenshot.', flush=True)
                 return 1
