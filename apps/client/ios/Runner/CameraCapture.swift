@@ -182,7 +182,10 @@ final class CameraCapture: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
         let pts = CMSampleBufferGetPresentationTimeStamp(sample)
         do {
             if writer == nil {
-                guard let clock = session.synchronizationClock else { throw CameraFailure("Camera timing is unavailable.") }
+                let sessionClock: CMClock?
+                if #available(iOS 15.4, *) { sessionClock = session.synchronizationClock }
+                else { sessionClock = session.masterClock }
+                guard let clock = sessionClock else { throw CameraFailure("Camera timing is unavailable.") }
                 let host = CMSyncConvertTime(pts, from: clock, to: CMClockGetHostTimeClock()).seconds
                 guard host.isFinite else { throw CameraFailure("Camera timing is invalid.") }
                 let writer = try AVAssetWriter(outputURL: url, fileType: .mov)

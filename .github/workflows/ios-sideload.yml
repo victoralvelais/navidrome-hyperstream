@@ -100,8 +100,10 @@ jobs:
             --build-number="$GITHUB_RUN_NUMBER" 2>&1 | tee build/ci/ios-build.log
 
       - name: Verify camera timing and both tempo exports
+        if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: |
+          mkdir -p build/ci
           xcrun --sdk macosx swiftc -parse-as-library \
             -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
             ios/Runner/CameraTimeline.swift ios/Runner/CameraPlaybackClock.swift ios/Runner/CameraExport.swift \
