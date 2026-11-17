@@ -8,6 +8,7 @@ import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 import 'package:mornye_host/mornye_host.dart';
@@ -16,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'account_store.dart';
 import 'music_provider.dart';
 import 'remote_transfer_background.dart';
+import 'source_verification.dart';
 
 class MornyeExtension {
   MornyeExtension(Map<String, dynamic> value)
@@ -33,9 +35,9 @@ class MornyeExtension {
 }
 
 class ProviderVerificationRequired extends SourceException {
-  ProviderVerificationRequired(this.providerId)
+  ProviderVerificationRequired(this.providerId, {String? name})
     : super(
-        'This source needs verification. Open Music sources and choose Verify.',
+        '${name ?? 'This source'} needs verification. Open Music sources and choose Verify.',
       );
   final String providerId;
 }
@@ -48,8 +50,16 @@ class MornyeSources extends ChangeNotifier {
     Future<Directory> Function()? directory,
     Future<String?> Function(String)? read,
     Future<void> Function(String, String)? write,
+    Future<String> Function(Uri, String)? authenticate,
   }) : _native = native ?? callMornye,
        _directory = directory ?? getApplicationSupportDirectory,
+       _authenticate =
+           authenticate ??
+           ((url, scheme) => FlutterWebAuth2.authenticate(
+             url: url.toString(),
+             callbackUrlScheme: scheme,
+             options: const FlutterWebAuth2Options(httpsHost: 'session-grant'),
+           )),
        _read =
            read ?? ((key) => SecureAccountStore.defaultStorage.read(key: key)),
        _write =
@@ -61,6 +71,7 @@ class MornyeSources extends ChangeNotifier {
   final Future<Directory> Function() _directory;
   final Future<String?> Function(String) _read;
   final Future<void> Function(String, String) _write;
+  final Future<String> Function(Uri, String) _authenticate;
   static const _masterKey = 'hyperstream.mornye.master.v1';
   static const _choicesKey = 'hyperstream.mornye.choices.v1';
   List<MornyeExtension> extensions = [];
@@ -285,11 +296,11 @@ class MornyeSources extends ChangeNotifier {
     final pending = await _native({'op': 'pending', 'id': id});
     if (pending != null) {
       verification.value = id;
-      throw ProviderVerificationRequired(id);
+      throw ProviderVerificationRequired(id, name: name(id));
     }
   }
 
-  Future<void> verify(String id) async {
+  Future<bool> verify(String id) async {
     try {
       await execute({'op': 'verify', 'id': id});
     } on ProviderVerificationRequired {
@@ -297,40 +308,72 @@ class MornyeSources extends ChangeNotifier {
     }
     final pending = await _native({'op': 'pending', 'id': id});
     if (pending == null) {
-      verification.value = null;
-      return;
+      _verificationCompleted(id);
+      return true;
     }
-    final auth = Uri.parse(pending['auth_url'] as String);
-    if (auth.scheme != 'https' || auth.userInfo.isNotEmpty) {
+    verification.value = id;
+    final challenge = SourceVerification(pending as Map);
+    final String response;
+    try {
+      response = await _authenticate(challenge.auth, challenge.callback.scheme);
+    } on PlatformException catch (error) {
+      if (error.code == 'CANCELED') return false;
       throw const SourceException(
-        'This provider returned an invalid verification page.',
+        'The verification browser could not open. Try Verify again, or paste a code from your current verification page.',
       );
     }
-    final callback = Uri.parse(
-      await FlutterWebAuth2.authenticate(
-        url: auth.toString(),
-        callbackUrlScheme: 'hyperstream',
-        options: const FlutterWebAuth2Options(httpsHost: 'session-grant'),
-      ),
+    await _completeVerification(id, challenge, response, manual: false);
+    return true;
+  }
+
+  Future<void> pasteVerification(String id, String response) async {
+    // Do not bootstrap here: it could replace the challenge the user completed.
+    await restore();
+    if (!_ready) throw SourceException(error!);
+    final pending = await _native({'op': 'pending', 'id': id});
+    if (pending == null) {
+      throw const SourceException(
+        'This verification attempt has expired. Choose Verify to get a fresh code, then paste it here.',
+      );
+    }
+    await _completeVerification(
+      id,
+      SourceVerification(pending as Map),
+      response,
+      manual: true,
     );
-    final grant =
-        callback.queryParameters['grant'] ?? callback.queryParameters['code'];
-    if (callback.scheme != 'hyperstream' ||
-        callback.host != 'session-grant' ||
-        callback.queryParameters['state']?.isNotEmpty != true ||
-        grant?.isNotEmpty != true) {
+  }
+
+  Future<void> _completeVerification(
+    String id,
+    SourceVerification challenge,
+    String response, {
+    required bool manual,
+  }) async {
+    final grant = challenge.grant(response, manual: manual);
+    try {
+      await execute({
+        'op': 'grant',
+        'id': id,
+        'state': challenge.state,
+        'grant': grant,
+      });
+      if (await _native({'op': 'pending', 'id': id}) != null) {
+        throw ProviderVerificationRequired(id);
+      }
+    } on SourceException {
       throw const SourceException(
-        'Verification did not return a valid session. Please try again.',
+        'The source could not accept this verification. Check your connection, or choose Verify for a fresh code.',
       );
     }
-    await execute({
-      'op': 'grant',
-      'id': id,
-      'state': callback.queryParameters['state'],
-      'grant': grant,
-    });
-    verification.value = null;
+    _verificationCompleted(id);
+  }
+
+  void _verificationCompleted(String id) {
+    if (verification.value == id) verification.value = null;
     issue.value = null;
+    revision++;
+    notifyListeners();
   }
 
   Future<void> _pumpCommands() async {

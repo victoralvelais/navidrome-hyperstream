@@ -247,12 +247,11 @@ impl Host {
         if !self.enabled(id)? {
             return Err("Enable this provider in Music sources".into());
         }
-        let mut manifest: Value =
+        let manifest: Value =
             serde_json::from_str(&fs::read_to_string(dir.join("manifest.json")).map_err(err)?)
                 .map_err(err)?;
-        if manifest["signedSession"].is_object() {
-            manifest["signedSession"]["callbackUrl"] = json!("hyperstream://session-grant");
-        }
+        // Preserve the provider's callback protocol. The scoped authentication
+        // browser captures it without registering that scheme globally.
         let source = fs::read_to_string(dir.join("index.js")).map_err(err)?;
         let source = format!("{}\n{}", include_str!("adapter.js"), source);
         let runtime = self
@@ -446,6 +445,18 @@ impl Host {
                         .contains(&method)
                         {
                             return Err("Unsupported provider operation".into());
+                        }
+                        if [
+                            "checkAvailability",
+                            "hyperstreamResolve",
+                            "hyperstreamDownload",
+                        ]
+                        .contains(&method)
+                            && runtime
+                                .preflight_signed_session(Some(lease.clone()), 60_000)
+                                .map_err(err)?
+                        {
+                            return Ok(json!({"needs_verification":true}));
                         }
                         let args = r["args"].to_string();
                         let value = if op == "download" {

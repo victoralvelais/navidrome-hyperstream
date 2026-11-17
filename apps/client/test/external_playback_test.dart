@@ -9,6 +9,7 @@ import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/playback_store.dart';
+import 'package:hyperstream_client/services/music_sources.dart';
 
 import 'support/fake_player.dart';
 
@@ -23,6 +24,46 @@ const externalSong = Track(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets(
+    'verification survives failure before the native queue loads and Play recovers',
+    (tester) async {
+      final sources = MusicSources.instance.extensions!;
+      final client = NavidromeClient(
+        serverUrl: 'https://library.example',
+        username: 'user',
+        password: 'private',
+      );
+      final player = FakePlayer()..failNextLoad = true;
+      final playback = PlaybackService(
+        player: player,
+        sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+      );
+      addTearDown(() async {
+        sources.issue.value = null;
+        sources.verification.value = null;
+        client.close();
+        final disposing = playback.dispose();
+        await tester.pump();
+        await disposing;
+      });
+      sources.issue.value =
+          'Tidal needs verification. Open Music sources and choose Verify.';
+      sources.verification.value = 'tidal-web';
+      await playback.playAlbum(client, [externalSong], 0);
+      expect(player.currentIndex, isNull);
+      expect(playback.trackAt(0), isNull);
+      expect(playback.error.value, contains('Tidal needs verification'));
+      expect(playback.reconnecting, false);
+      await tester.pump(const Duration(minutes: 1));
+      expect(player.loaded, hasLength(1));
+      sources.issue.value = null;
+      sources.verification.value = null;
+      await playback.play();
+      await tester.pump();
+      expect(player.playing, true);
+      expect(playback.error.value, isNull);
+    },
+  );
   testWidgets(
     'external playback uses the shared player and never scrobbles to Navidrome',
     (tester) async {

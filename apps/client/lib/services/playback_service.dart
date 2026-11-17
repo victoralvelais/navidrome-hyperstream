@@ -779,10 +779,16 @@ class PlaybackService extends BaseAudioHandler {
 
   void _reportFailure() {
     if (_disposed) return;
-    final sourceIssue = trackAt(_player.currentIndex ?? -1)?.source != null
+    _retrySnapshot ??= _snapshot();
+    // A failed initial load has no listening tracks or native current index.
+    // The intended queue still identifies the source whose resolver failed.
+    final snapshot = _retrySnapshot;
+    final failedTrack = snapshot == null
+        ? trackAt(_player.currentIndex ?? -1)
+        : snapshot.tracks[snapshot.index];
+    final sourceIssue = failedTrack?.source != null
         ? MusicSources.instance.extensions?.issue.value
         : null;
-    _retrySnapshot ??= _snapshot();
     final now = _timerClock();
     if (_lastPlaybackFailure == null ||
         now.difference(_lastPlaybackFailure!) > const Duration(minutes: 1)) {
@@ -890,7 +896,9 @@ class PlaybackService extends BaseAudioHandler {
     // unsupported file. Do not endlessly reload the queue in that case.
     if (_healthyReloads >= 2) {
       _cancelReconnect();
-      error.value = 'The server is reachable, but this song could not play. Press Play to retry or select another track.';
+      error.value = snapshot.tracks[snapshot.index].source != null
+          ? 'This music source could not play the song. Check Music sources for verification, or select another audio source.'
+          : 'The server is reachable, but this song could not play. Press Play to retry or select another track.';
       _publishState();
       return;
     }

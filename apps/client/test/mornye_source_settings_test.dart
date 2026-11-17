@@ -4,6 +4,52 @@ import 'package:hyperstream_client/features/settings/mornye_source_settings.dart
 import 'package:hyperstream_client/services/mornye_sources.dart';
 
 void main() {
+  testWidgets(
+    'closing verification offers a masked paste field for the same source',
+    (tester) async {
+      final sources = _VerificationSources();
+      sources.extensions = [
+        MornyeExtension({
+          'id': 'qobuz-web',
+          'display_name': 'Qobuz',
+          'version': '1.0.0',
+          'download_url': 'https://example.test/package',
+          'sha256': 'test',
+          'audio': true,
+          'installed': true,
+          'enabled': true,
+        }),
+      ];
+      sources.audioProvider = 'qobuz-web';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: MornyeSourceSettings(sources: sources),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Verify'));
+      await tester.pumpAndSettle();
+      expect(find.text('Verify Qobuz'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).obscureText,
+        true,
+      );
+      await tester.enterText(find.byType(TextField), 'grant=gr_synthetic');
+      await tester.tap(find.text('Complete verification'));
+      await tester.pumpAndSettle();
+      expect(sources.submission, ('qobuz-web', 'grant=gr_synthetic'));
+      expect(
+        find.textContaining('Qobuz verification completed'),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      sources.dispose();
+    },
+  );
   for (final brightness in Brightness.values) {
     testWidgets(
       'extension settings fit a narrow phone with large text in $brightness',
@@ -60,5 +106,15 @@ void main() {
         sources.dispose();
       },
     );
+  }
+}
+
+class _VerificationSources extends MornyeSources {
+  (String, String)? submission;
+  @override
+  Future<bool> verify(String id) async => false;
+  @override
+  Future<void> pasteVerification(String id, String text) async {
+    submission = (id, text);
   }
 }

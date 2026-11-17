@@ -16,9 +16,13 @@ The host uses Mornye's network permissions, QuickJS limits, encrypted storage,
 signed sessions, file grants, cancellation and FFmpeg command registry. File
 grants cover a single private staging directory, never an SMB share. Hyperstream
 provides the FFmpegKit command pump, native player and final MP3/SMB delivery.
-The only manifest adjustment is a `hyperstream://session-grant` callback; signed
-provider scope, app-version identifiers and other authentication fields stay
-unchanged. A pending callback state must belong to the requesting provider.
+Provider manifests and their callback protocol stay unchanged. Hyperstream's
+scoped authentication browser captures the pending callback scheme without
+registering Mornye's scheme globally. Playback and acquisition preflight signed
+sessions before invoking the JavaScript adapter. A pending callback state must
+belong to the requesting provider. Manual paste accepts the gateway's bare
+`grant=...` fallback only against that provider's unexpired native challenge;
+an explicit callback state must match. Verification values are never logged.
 
 The runtime's Cargo workspace patches concern Android and Windows UNC paths.
 This adapter currently targets iOS/Windows and gives the runtime only local app

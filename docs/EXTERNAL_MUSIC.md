@@ -1,4 +1,4 @@
-# External music in 0.56.0
+# External music in 0.56.2
 
 ## Use
 
@@ -7,6 +7,11 @@
    downloaded from pinned Mornye registry locations and checksum-verified.
 2. Choose the audio source for Spotify. If a provider requests verification,
    choose Verify, complete its browser page, then retry your search or playback.
+   If the browser does not return automatically, copy the verification link/code,
+   close the browser and use the paste dialog (also available as Paste
+   verification on the provider card). A bare `grant=...` is supported. Codes
+   expire quickly; an expired attempt requires a fresh Verify. Pasting does not
+   start a new challenge or change the chosen provider.
    Configure exposes the package's settings, including optional HTTPS endpoints.
 3. Open Search > Online and choose a catalog. Search for songs/albums/playlists,
    or paste a public Spotify, Tidal or Qobuz song, album or playlist link with its
@@ -59,6 +64,10 @@ The Dart adapter runs native calls in worker isolates. Its FFmpegKit command
 pump supports extension media preparation. Spotify recordings are matched by the
 chosen audio extension using ISRC, title, artist and duration. Failure to find a
 match stops that request; this version does not silently switch audio providers.
+The host preflights signed sessions before matching, streaming or downloading.
+Verification failures retain the audio provider's identity even when the queue
+fails before its first song loads, and stop automatic playback retries until
+the user completes verification and presses Play.
 
 Playback queue entries contain stable source identities. A per-launch loopback
 listener resolves audio when the native player requests it, forwards range
