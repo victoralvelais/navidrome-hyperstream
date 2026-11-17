@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +109,81 @@ void main() {
     sources.dispose();
     await directory.delete(recursive: true);
   });
+
+  test(
+    'concurrent requests share a browser and other providers wait their turn',
+    () async {
+      final first = Completer<bool>();
+      final second = Completer<bool>();
+      final shown = <String>[];
+      sources.presentVerification = (id) {
+        shown.add(id);
+        return id == 'tidal-web' ? first.future : second.future;
+      };
+      final a = sources.requestVerification('tidal-web');
+      final b = sources.requestVerification('tidal-web');
+      final c = sources.requestVerification('qobuz-web');
+      await Future<void>.delayed(Duration.zero);
+      expect(shown, ['tidal-web']);
+      first.complete(true);
+      expect(await a, true);
+      expect(await b, true);
+      await Future<void>.delayed(Duration.zero);
+      expect(shown, ['tidal-web', 'qobuz-web']);
+      second.complete(false);
+      expect(await c, false);
+      sources.presentVerification = (_) async => true;
+      expect(await sources.requestVerification('qobuz-web'), true);
+    },
+  );
+
+  test(
+    'catalog recovery retries once and cancellation never reopens the browser',
+    () async {
+      var prompts = 0, attempts = 0;
+      sources.presentVerification = (_) async {
+        prompts++;
+        return true;
+      };
+      expect(
+        await sources.withVerification(() async {
+          if (++attempts == 1) throw ProviderVerificationRequired('tidal-web');
+          return 'song';
+        }),
+        'song',
+      );
+      expect(attempts, 2);
+      expect(prompts, 1);
+      await expectLater(
+        sources.withVerification(
+          () async => throw ProviderVerificationRequired('tidal-web'),
+        ),
+        throwsA(isA<ProviderVerificationRequired>()),
+      );
+      expect(
+        prompts,
+        2,
+        reason: 'A second challenge in the same action must not loop.',
+      );
+      sources.presentVerification = (_) async {
+        prompts++;
+        return false;
+      };
+      await expectLater(
+        sources.withVerification(
+          () async => throw ProviderVerificationRequired('tidal-web'),
+        ),
+        throwsA(
+          isA<SourceException>().having(
+            (e) => e.message,
+            'message',
+            contains('not completed'),
+          ),
+        ),
+      );
+      expect(prompts, 3);
+    },
+  );
 
   for (final id in ['qobuz-web', 'tidal-web', 'amazon']) {
     test(

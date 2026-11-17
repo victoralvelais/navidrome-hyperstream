@@ -1,16 +1,18 @@
-# External music in 0.56.2
+# External music in 0.56.3
 
 ## Use
 
 1. Open Home > Music sources. Install Spotify Web for catalog search and either
    Tidal or Qobuz for audio, or use Tidal/Qobuz directly for both. Packages are
    downloaded from pinned Mornye registry locations and checksum-verified.
-2. Choose the audio source for Spotify. If a provider requests verification,
-   choose Verify, complete its browser page, then retry your search or playback.
+2. Choose the audio source for Spotify. When search, playback or an import needs
+   verification, its browser opens directly over the current screen. Complete
+   verification to resume the action automatically. Concurrent requests share
+   one browser; a cancelled or repeatedly rejected attempt does not reopen it.
    If the browser does not return automatically, copy the verification link/code,
    close the browser and use the paste dialog (also available as Paste
    verification on the provider card). A bare `grant=...` is supported. Codes
-   expire quickly; an expired attempt requires a fresh Verify. Pasting does not
+   expire quickly; close an expired attempt and retry the action. Pasting does not
    start a new challenge or change the chosen provider.
    Configure exposes the package's settings, including optional HTTPS endpoints.
 3. Open Search > Online and choose a catalog. Search for songs/albums/playlists,
@@ -66,8 +68,11 @@ chosen audio extension using ISRC, title, artist and duration. Failure to find a
 match stops that request; this version does not silently switch audio providers.
 The host preflights signed sessions before matching, streaming or downloading.
 Verification failures retain the audio provider's identity even when the queue
-fails before its first song loads, and stop automatic playback retries until
-the user completes verification and presses Play.
+fails before its first song loads. Successful verification resumes that song;
+pause, queue changes and account changes prevent an old callback from restarting
+playback. Imports release transfer resources before verification and retry only
+the unconfirmed song, with a fresh background grant. A screen-off request waits
+until the app is foregrounded before presenting its browser.
 
 Playback queue entries contain stable source identities. A per-launch loopback
 listener resolves audio when the native player requests it, forwards range

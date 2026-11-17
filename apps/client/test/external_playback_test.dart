@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -25,7 +26,7 @@ const externalSong = Track(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'verification survives failure before the native queue loads and Play recovers',
+    'initial stream failure starts verification and resumes playback automatically',
     (tester) async {
       final sources = MusicSources.instance.extensions!;
       final client = NavidromeClient(
@@ -34,9 +35,15 @@ void main() {
         password: 'private',
       );
       final player = FakePlayer()..failNextLoad = true;
+      final verification = Completer<bool>();
+      var prompts = 0;
       final playback = PlaybackService(
         player: player,
         sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+        verifySource: (_) {
+          prompts++;
+          return verification.future;
+        },
       );
       addTearDown(() async {
         sources.issue.value = null;
@@ -54,16 +61,80 @@ void main() {
       expect(playback.trackAt(0), isNull);
       expect(playback.error.value, contains('Tidal needs verification'));
       expect(playback.reconnecting, false);
+      expect(prompts, 1);
+      player.errors.add(PlayerException(1, 'private', 0));
       await tester.pump(const Duration(minutes: 1));
       expect(player.loaded, hasLength(1));
       sources.issue.value = null;
       sources.verification.value = null;
-      await playback.play();
-      await tester.pump();
+      verification.complete(true);
+      await tester.pumpAndSettle();
+      expect(prompts, 1);
       expect(player.playing, true);
       expect(playback.error.value, isNull);
     },
   );
+
+  for (final action in ['pause', 'new queue', 'cancel', 'challenge again']) {
+    testWidgets('$action prevents unwanted verification playback retries', (
+      tester,
+    ) async {
+      final sources = MusicSources.instance.extensions!;
+      final client = NavidromeClient(
+        serverUrl: 'https://library.example',
+        username: 'user',
+        password: 'private',
+      );
+      final player = FakePlayer()..failNextLoad = true;
+      final verification = Completer<bool>();
+      var prompts = 0;
+      final playback = PlaybackService(
+        player: player,
+        sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+        verifySource: (_) {
+          prompts++;
+          return verification.future;
+        },
+      );
+      addTearDown(() async {
+        sources.issue.value = null;
+        sources.verification.value = null;
+        client.close();
+        final disposing = playback.dispose();
+        await tester.pump();
+        await disposing;
+      });
+      sources.issue.value = 'Tidal needs verification to continue.';
+      sources.verification.value = 'tidal-web';
+      await playback.playAlbum(client, [externalSong], 0);
+      if (action == 'pause') await playback.pause();
+      if (action == 'new queue') {
+        await playback.playAlbum(client, const [
+          Track(
+            id: 'library',
+            title: 'Library',
+            artist: 'Artist',
+            album: 'Album',
+            duration: Duration(minutes: 3),
+          ),
+        ], 0);
+      }
+      if (action == 'challenge again') player.failNextLoad = true;
+      verification.complete(action != 'cancel');
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(minutes: 1));
+      expect(prompts, 1);
+      expect(player.playing, action == 'new queue');
+      expect(
+        player.loaded,
+        hasLength(action == 'new queue' || action == 'challenge again' ? 2 : 1),
+      );
+      if (action == 'new queue') {
+        expect(playback.mediaItem.value!.id, 'library');
+      }
+      await playback.pause();
+    });
+  }
   testWidgets(
     'external playback uses the shared player and never scrobbles to Navidrome',
     (tester) async {

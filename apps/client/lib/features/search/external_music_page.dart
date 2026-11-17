@@ -93,9 +93,15 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
     });
     try {
       final album = widget.album;
-      final result = album == null
+      Future<SourceSearch> load() async => album == null
           ? await source.search(text)
           : SourceSearch(tracks: await source.album(album), albums: const []);
+      final result = sources.extensions == null
+          ? await load()
+          : await sources.extensions!.withVerification(
+              load,
+              isCurrent: () => mounted && current == revision,
+            );
       if (!mounted || current != revision) return;
       setState(() {
         tracks = result.tracks;

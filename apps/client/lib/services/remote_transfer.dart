@@ -4,6 +4,7 @@ import '../models/library.dart';
 import 'audio_file_share.dart';
 import 'navidrome_client.dart';
 import 'music_provider.dart';
+import 'mornye_sources.dart';
 import 'remote_folder.dart';
 import 'remote_transfer_background.dart';
 
@@ -14,12 +15,14 @@ class RemoteTransferResult {
     this.notified = false,
     this.retryWithActivity = false,
     this.uncertain = false,
+    this.verificationProviderId,
   });
   final bool success;
   final String message;
   final bool notified;
   final bool retryWithActivity;
   final bool uncertain;
+  final String? verificationProviderId;
 }
 
 /// A user-started transfer whose lifetime is independent of the initiating page.
@@ -107,6 +110,7 @@ class RemoteTransfer with WidgetsBindingObserver {
     var success = false;
     var notified = false;
     var uncertain = false;
+    String? verificationProviderId;
     var message = 'The transfer could not finish.';
     try {
       _mode = await background.begin(_backgroundEnded, continued: useActivity);
@@ -147,6 +151,9 @@ class RemoteTransfer with WidgetsBindingObserver {
       message = 'Sent $name to your remote folder.';
       success = true;
     } on Object catch (error) {
+      if (error is ProviderVerificationRequired) {
+        verificationProviderId = error.providerId;
+      }
       uncertain = error is RemotePublicationUncertain;
       if (error is AudioShareCancelled || error is RemoteSendCancelled) {
         message = _expired
@@ -172,7 +179,7 @@ class RemoteTransfer with WidgetsBindingObserver {
         export.cancel();
         await export.finishPreparing();
         await export.cleanup();
-        if (!success || notifySuccess) {
+        if (verificationProviderId == null && (!success || notifySuccess)) {
           notified = await background.notifyResult(success: success);
         }
       } finally {
@@ -194,6 +201,7 @@ class RemoteTransfer with WidgetsBindingObserver {
       notified: notified,
       retryWithActivity: retryWithActivity,
       uncertain: uncertain,
+      verificationProviderId: verificationProviderId,
     );
   }
 }

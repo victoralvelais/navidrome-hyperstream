@@ -99,7 +99,8 @@ class SourceImports extends ChangeNotifier {
     issue = null;
     notifyListeners();
     MusicProvider? provider;
-    final background = AlbumTransferBackground();
+    var background = AlbumTransferBackground();
+    final verificationRetried = <String>{};
     var notified = false;
     final destination = remote.destination;
     final connection = remote.connection;
@@ -133,10 +134,24 @@ class SourceImports extends ChangeNotifier {
                 background,
               );
         if (!result.success) {
+          if (result.verificationProviderId case final String providerId) {
+            if (!result.uncertain &&
+                verificationRetried.add(track.id) &&
+                sources.extensions != null) {
+              // The failed download has been cleaned up before any SMB publish.
+              // Release its execution grant while the user is in the browser.
+              await background.finishAlbum(success: false);
+              background = AlbumTransferBackground();
+              final verified = await sources.extensions!.requestVerification(
+                providerId,
+              );
+              if (verified) continue;
+            }
+          }
           issue = RemoteTransferResult(
             success: false,
             message:
-                '$completed sent. ${remaining.length} remaining. ${result.message}',
+                '$completed sent. ${remaining.length} remaining. ${result.verificationProviderId != null ? 'Verification was not completed. Tap Retry to continue.' : result.message}',
             retryWithActivity: result.retryWithActivity,
             uncertain: result.uncertain,
             notified: result.notified,

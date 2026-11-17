@@ -36,9 +36,7 @@ class MornyeExtension {
 
 class ProviderVerificationRequired extends SourceException {
   ProviderVerificationRequired(this.providerId, {String? name})
-    : super(
-        '${name ?? 'This source'} needs verification. Open Music sources and choose Verify.',
-      );
+    : super('${name ?? 'This source'} needs verification to continue.');
   final String providerId;
 }
 
@@ -81,6 +79,8 @@ class MornyeSources extends ChangeNotifier {
   String? busy;
   final issue = ValueNotifier<String?>(null);
   final verification = ValueNotifier<String?>(null);
+  Future<bool> Function(String)? presentVerification;
+  ({String id, Future<bool> result})? _verificationRequest;
   Directory? root;
   Future<void>? _initializing;
   bool _ready = false;
@@ -300,6 +300,52 @@ class MornyeSources extends ChangeNotifier {
     }
   }
 
+  /// Share one browser across playback, imports and catalog requests. A later
+  /// user action can try again after cancellation; this request retries once.
+  Future<bool> requestVerification(
+    String id, {
+    Future<bool> Function(String)? fallback,
+  }) async {
+    while (true) {
+      final active = _verificationRequest;
+      if (active == null) break;
+      if (active.id == id) return active.result;
+      try {
+        await active.result;
+      } on Object {
+        // Another provider's failure does not cancel this provider's request.
+      }
+    }
+    final present = presentVerification ?? fallback;
+    if (present == null) return false;
+    late final Future<bool> result;
+    result = Future<bool>.microtask(() => present(id)).whenComplete(() {
+      if (identical(_verificationRequest?.result, result)) {
+        _verificationRequest = null;
+      }
+    });
+    _verificationRequest = (id: id, result: result);
+    return result;
+  }
+
+  Future<T> withVerification<T>(
+    Future<T> Function() action, {
+    bool Function()? isCurrent,
+  }) async {
+    try {
+      return await action();
+    } on ProviderVerificationRequired catch (needed) {
+      if (isCurrent?.call() == false) rethrow;
+      final complete = await requestVerification(needed.providerId);
+      if (!complete || isCurrent?.call() == false) {
+        throw const SourceException(
+          'Verification was not completed. Try again to continue.',
+        );
+      }
+      return action();
+    }
+  }
+
   Future<bool> verify(String id) async {
     try {
       await execute({'op': 'verify', 'id': id});
@@ -333,7 +379,7 @@ class MornyeSources extends ChangeNotifier {
     final pending = await _native({'op': 'pending', 'id': id});
     if (pending == null) {
       throw const SourceException(
-        'This verification attempt has expired. Choose Verify to get a fresh code, then paste it here.',
+        'This verification attempt has expired. Close this dialog and retry the action for a fresh code.',
       );
     }
     await _completeVerification(
@@ -363,7 +409,7 @@ class MornyeSources extends ChangeNotifier {
       }
     } on SourceException {
       throw const SourceException(
-        'The source could not accept this verification. Check your connection, or choose Verify for a fresh code.',
+        'The source could not accept this verification. Check your connection and retry the action for fresh verification.',
       );
     }
     _verificationCompleted(id);

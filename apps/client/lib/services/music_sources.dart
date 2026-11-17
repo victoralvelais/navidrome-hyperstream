@@ -166,4 +166,16 @@ class MusicSources extends ChangeNotifier {
       source.close();
     }
   }
+
+  Future<bool> verifyPlayback(SourceReference track) async {
+    if (!track.sourceId.startsWith('mornye:') || extensions == null) {
+      return false;
+    }
+    final catalog = track.sourceId.substring(7);
+    final audio = catalog == 'spotify-web'
+        ? extensions!.audioProvider
+        : catalog;
+    if (audio == null || extensions!.verification.value != audio) return false;
+    return extensions!.requestVerification(audio);
+  }
 }

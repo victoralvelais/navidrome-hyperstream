@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/mornye_sources.dart';
 import '../../services/music_provider.dart';
 import '../../widgets/glass_surface.dart';
+import '../sources/source_verification_flow.dart';
 
 class MornyeSourceSettings extends StatefulWidget {
   const MornyeSourceSettings({super.key, required this.sources});
@@ -68,8 +69,10 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
   Future<void> _pasteVerification(MornyeExtension extension) async {
     final complete = await showDialog<bool>(
       context: context,
-      builder: (_) =>
-          _VerificationDialog(sources: widget.sources, extension: extension),
+      builder: (_) => SourceVerificationDialog(
+        sources: widget.sources,
+        providerId: extension.id,
+      ),
     );
     if (complete == true) _verified(extension);
   }
@@ -138,14 +141,19 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                               onPressed: disabled
                                   ? null
                                   : () => _run(extension.id, () async {
-                                      final complete = await sources.verify(
-                                        extension.id,
-                                      );
+                                      final complete = await sources
+                                          .requestVerification(
+                                            extension.id,
+                                            fallback: (id) =>
+                                                showSourceVerification(
+                                                  context,
+                                                  sources,
+                                                  id,
+                                                ),
+                                          );
                                       if (!mounted) return;
                                       if (complete) {
                                         _verified(extension);
-                                      } else {
-                                        await _pasteVerification(extension);
                                       }
                                     }),
                               icon: Icon(
@@ -220,99 +228,6 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
         ],
       );
     },
-  );
-}
-
-class _VerificationDialog extends StatefulWidget {
-  const _VerificationDialog({required this.sources, required this.extension});
-  final MornyeSources sources;
-  final MornyeExtension extension;
-  @override
-  State<_VerificationDialog> createState() => _VerificationDialogState();
-}
-
-class _VerificationDialogState extends State<_VerificationDialog> {
-  final controller = TextEditingController();
-  bool saving = false;
-  String? error;
-
-  Future<void> _submit() async {
-    if (saving) return;
-    setState(() {
-      saving = true;
-      error = null;
-    });
-    try {
-      await widget.sources.pasteVerification(
-        widget.extension.id,
-        controller.text,
-      );
-      controller.clear();
-      if (mounted) Navigator.pop(context, true);
-    } on Object catch (failure) {
-      if (mounted) {
-        setState(() {
-          saving = false;
-          error = failure is SourceException
-              ? failure.message
-              : 'Verification could not finish. Try again.';
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !saving,
-    child: AlertDialog(
-      scrollable: true,
-      title: Text('Verify ${widget.extension.name}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'If verification did not return to Hyperstream, copy the link or code from the completed browser page and paste it here. Use it promptly; verification codes expire.',
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: controller,
-            enabled: !saving,
-            obscureText: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            enableIMEPersonalizedLearning: false,
-            keyboardType: TextInputType.visiblePassword,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Verification link or code',
-            ),
-            onSubmitted: (_) => _submit(),
-          ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(error!),
-            ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: saving ? null : _submit,
-          child: Text(saving ? 'Verifying…' : 'Complete verification'),
-        ),
-      ],
-    ),
   );
 }
 

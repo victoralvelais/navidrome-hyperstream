@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/music_sources.dart';
+import 'package:hyperstream_client/services/mornye_sources.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/remote_folder.dart';
 import 'package:hyperstream_client/services/remote_transfer.dart';
@@ -67,6 +68,67 @@ void main() {
     sources.dispose();
     remote.dispose();
   });
+
+  for (final outcome in [
+    'verified',
+    'cancelled',
+    'account closed',
+    'challenge again',
+  ]) {
+    test(
+      'import $outcome resumes only unconfirmed songs and never loops verification',
+      () async {
+        sources.dispose();
+        final extensions = MornyeSources();
+        sources = MusicSources(extensions: extensions)..enabled = true;
+        final gate = Completer<bool>();
+        var prompts = 0, failed = false;
+        final sent = <String>[];
+        extensions.presentVerification = (_) {
+          prompts++;
+          return gate.future;
+        };
+        final imports = SourceImports(
+          sources: sources,
+          remote: remote,
+          transfer: (_, track, _, _) async {
+            sent.add(track.id);
+            if (track == tracks[1] &&
+                (!failed || outcome == 'challenge again')) {
+              failed = true;
+              return const RemoteTransferResult(
+                success: false,
+                message: 'Verification needed',
+                verificationProviderId: 'tidal-web',
+              );
+            }
+            return success;
+          },
+        );
+        final pending = imports.send(client, tracks);
+        await Future<void>.delayed(Duration.zero);
+        expect(prompts, 1);
+        expect(imports.active, true);
+        expect(imports.completed, 1);
+        expect(imports.remaining, tracks.skip(1));
+        if (outcome == 'account closed') client.close();
+        gate.complete(outcome != 'cancelled');
+        final result = await pending;
+        expect(result.success, outcome == 'verified');
+        expect(prompts, 1);
+        expect(
+          sent,
+          outcome == 'verified'
+              ? [tracks[0].id, tracks[1].id, tracks[1].id, tracks[2].id]
+              : outcome == 'challenge again'
+              ? [tracks[0].id, tracks[1].id, tracks[1].id]
+              : [tracks[0].id, tracks[1].id],
+        );
+        imports.dispose();
+        extensions.dispose();
+      },
+    );
+  }
   test(
     'partial album retry retains confirmed progress and opts into activity',
     () async {

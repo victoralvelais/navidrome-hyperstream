@@ -11,6 +11,8 @@ import 'package:hyperstream_client/services/audio_file_share.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/remote_folder.dart';
 import 'package:hyperstream_client/services/remote_transfer_background.dart';
+import 'package:hyperstream_client/services/remote_transfer.dart';
+import 'package:hyperstream_client/services/mornye_sources.dart';
 
 import 'remote_folder_test.dart'
     show MemoryRemoteFs, MemoryRemoteStore, destination;
@@ -117,6 +119,47 @@ class FakeBackground extends RemoteTransferBackground {
 }
 
 void main() {
+  testWidgets(
+    'verification cleans up the transfer before presentation and suppresses failure notifications',
+    (tester) async {
+      final client = NavidromeClient(
+        serverUrl: 'https://music.example',
+        username: 'user',
+        password: 'synthetic',
+      );
+      final fs = MemoryRemoteFs();
+      final remote = RemoteFolders(
+        store: MemoryRemoteStore()
+          ..value = RemoteFolderConfig.forDestination(destination()),
+        connect: (_) async => fs,
+      );
+      await remote.restore();
+      final export = PendingExport(client);
+      final background = _VerificationBackground();
+      final running = RemoteTransfer(
+        remote: remote,
+        client: client,
+        track: song,
+        export: export,
+        background: background,
+      ).run();
+      await tester.pump();
+      expect(export.started, true);
+      export.prepared.completeError(ProviderVerificationRequired('tidal-web'));
+      await tester.pump();
+      final result = await running;
+      expect(result.verificationProviderId, 'tidal-web');
+      expect(result.success, false);
+      expect(result.uncertain, false);
+      expect(fs.files, isEmpty);
+      expect(fs.closed, true);
+      expect(export.cleaned, true);
+      expect(remote.busy, false);
+      expect(background.notices, 0);
+      remote.dispose();
+      client.close();
+    },
+  );
   for (final scenario in [
     'quiet',
     'continued',
@@ -316,5 +359,15 @@ void main() {
       }
       expect(tester.takeException(), isNull);
     });
+  }
+}
+
+class _VerificationBackground extends FakeBackground {
+  _VerificationBackground() : super(RemoteBackgroundMode.quiet);
+  int notices = 0;
+  @override
+  Future<bool> notifyResult({required bool success}) async {
+    notices++;
+    return false;
   }
 }

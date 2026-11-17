@@ -38,6 +38,7 @@ class PlaybackService extends BaseAudioHandler {
     Random? random,
     PlaybackStore Function(NavidromeClient)? playbackStore,
     Uri Function(SourceReference)? sourceStreamUri,
+    Future<bool> Function(SourceReference)? verifySource,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession,
@@ -45,6 +46,7 @@ class PlaybackService extends BaseAudioHandler {
        _timerClock = timerClock ?? DateTime.now,
        _random = random ?? Random() {
     _sourceStreamUri = sourceStreamUri ?? MusicSources.instance.streamUri;
+    _verifySource = verifySource ?? MusicSources.instance.verifyPlayback;
     _storeFactory = playbackStore;
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
@@ -93,6 +95,9 @@ class PlaybackService extends BaseAudioHandler {
 
   final AudioPlayer _player;
   late final Uri Function(SourceReference) _sourceStreamUri;
+  late final Future<bool> Function(SourceReference) _verifySource;
+  int? _sourceVerificationEpoch;
+  int? _verificationRecoveryRevision;
   final _sourceArtwork = SystemArtwork();
   final AppPreferences preferences;
   final Future<void> Function(AudioSessionConfiguration) _configureSession;
@@ -451,6 +456,7 @@ class PlaybackService extends BaseAudioHandler {
     bool autoplay = true,
     bool preserveSleepTimer = false,
     bool automaticRecovery = false,
+    bool verificationRecovery = false,
   }) {
     if (tracks.isEmpty || index < 0 || index >= tracks.length) {
       return Future.value();
@@ -458,6 +464,7 @@ class PlaybackService extends BaseAudioHandler {
     if (shuffle) index = _random.nextInt(tracks.length);
     _cancelReconnect(resetBudget: !automaticRecovery);
     final revision = ++_revision;
+    _verificationRecoveryRevision = verificationRecovery ? revision : null;
     _queueClient = client;
     _retrySnapshot =
         restored ??
@@ -789,6 +796,10 @@ class PlaybackService extends BaseAudioHandler {
     final sourceIssue = failedTrack?.source != null
         ? MusicSources.instance.extensions?.issue.value
         : null;
+    final needsVerification =
+        sourceIssue != null &&
+        MusicSources.instance.extensions?.verification.value != null;
+    final wantedPlayback = _playWhenReady || _reconnectWanted;
     final now = _timerClock();
     if (_lastPlaybackFailure == null ||
         now.difference(_lastPlaybackFailure!) > const Duration(minutes: 1)) {
@@ -798,8 +809,7 @@ class PlaybackService extends BaseAudioHandler {
     _reconnectWanted =
         (_reconnectWanted || _playWhenReady) &&
         canRetryPlayback &&
-        !(sourceIssue != null &&
-            MusicSources.instance.extensions?.verification.value != null);
+        !needsVerification;
     _playWhenReady = false;
     error.value =
         sourceIssue ??
@@ -810,6 +820,50 @@ class PlaybackService extends BaseAudioHandler {
             : 'Playback failed. Select a track to start a new queue.');
     _scheduleReconnect();
     _publishState();
+    if (needsVerification &&
+        wantedPlayback &&
+        snapshot != null &&
+        _verificationRecoveryRevision != _revision) {
+      unawaited(_verifyAndResume(snapshot, _reconnectEpoch));
+    }
+  }
+
+  Future<void> _verifyAndResume(PlaybackSnapshot snapshot, int epoch) async {
+    if (_sourceVerificationEpoch == epoch) return;
+    _sourceVerificationEpoch = epoch;
+    try {
+      final verified = await _verifySource(
+        snapshot.tracks[snapshot.index].source!,
+      );
+      // Pause, a different queue, an account change and disposal win over a
+      // browser callback. Verification must never restart abandoned playback.
+      if (_disposed || epoch != _reconnectEpoch) return;
+      if (!verified) {
+        error.value =
+            'Verification was not completed. Press Play to try again.';
+        _publishState();
+        return;
+      }
+      final client = _queueClient;
+      if (client == null || client.isClosed) return;
+      await _loadQueue(
+        client,
+        snapshot.tracks,
+        snapshot.index,
+        restored: snapshot,
+        preserveSleepTimer: true,
+        verificationRecovery: true,
+      );
+    } on Object catch (failure) {
+      if (!_disposed && epoch == _reconnectEpoch) {
+        error.value = failure is SourceException
+            ? failure.message
+            : 'Verification could not finish. Press Play to try again.';
+        _publishState();
+      }
+    } finally {
+      if (_sourceVerificationEpoch == epoch) _sourceVerificationEpoch = null;
+    }
   }
 
   void _cancelReconnect({bool resetBudget = true}) {
@@ -897,7 +951,7 @@ class PlaybackService extends BaseAudioHandler {
     if (_healthyReloads >= 2) {
       _cancelReconnect();
       error.value = snapshot.tracks[snapshot.index].source != null
-          ? 'This music source could not play the song. Check Music sources for verification, or select another audio source.'
+          ? 'This music source could not play the song. Press Play to retry or select another audio source.'
           : 'The server is reachable, but this song could not play. Press Play to retry or select another track.';
       _publishState();
       return;

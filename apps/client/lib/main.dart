@@ -7,6 +7,7 @@ import 'app_theme.dart';
 import 'features/connect/connection_screen.dart';
 import 'features/library/library_screen.dart';
 import 'features/startup/startup_screen.dart';
+import 'features/sources/source_verification_flow.dart';
 import 'services/account_session.dart';
 import 'services/app_preferences.dart';
 import 'services/playback_service.dart';
@@ -59,6 +60,7 @@ class _HyperstreamAppState extends State<HyperstreamApp>
   StartupStage _stage = StartupStage.opening;
   Timer? _startupTimer;
   bool _takingLonger = false;
+  final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -158,13 +160,20 @@ class _HyperstreamAppState extends State<HyperstreamApp>
         if (_playback != null) _playback!.preferences,
       ]),
       builder: (context, _) => MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'Hyperstream',
         debugShowCheckedModeBanner: false,
         themeMode: _playback?.preferences.themeMode ?? ThemeMode.system,
         theme: hyperstreamTheme(Brightness.light),
         darkTheme: hyperstreamTheme(Brightness.dark),
-        builder: (context, child) =>
-            GlassSettings(preferences: _playback?.preferences, child: child!),
+        builder: (context, child) => SourceVerificationHost(
+          sources: MusicSources.instance.extensions!,
+          navigatorKey: _navigatorKey,
+          child: GlassSettings(
+            preferences: _playback?.preferences,
+            child: child!,
+          ),
+        ),
         home: FutureBuilder<PlaybackService>(
           future: _initialization,
           builder: (context, snapshot) {
