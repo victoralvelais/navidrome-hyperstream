@@ -299,6 +299,13 @@ secure-storage check before packaging the release. After changing local compiler
 versions, run `flutter clean` and `flutter pub get` before rebuilding so CMake
 does not reuse the old toolchain cache.
 
+Install Rust 1.99.0 with `rustup toolchain install 1.99.0 --profile minimal` and
+keep Cargo on PATH. The local `mornye_host` package builds its pinned native
+runtime automatically for Flutter builds and tests. Its first compilation takes
+several minutes; later builds reuse the Cargo target directory. See the
+[runtime build notes](packages/mornye_host/UPSTREAM.md) and
+[external music guide](../../docs/EXTERNAL_MUSIC.md).
+
 This workspace uses Flutter **3.47.9 / Dart 3.13.7**, installed at
 `D:\Tools\flutter`. Its directory has not been added to your system PATH.
 From the repository root:

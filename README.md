@@ -1,9 +1,9 @@
 # Navidrome Hyperstream
 
-An iPhone-first music app project with iPad and Windows planned next. Navidrome
-serves the permanent library. A server companion will use the Mornye acquisition
-ecosystem, convert imports to MP3 at 320 kbps, and discard staged FLAC sources
-after successful validation and publication.
+An iPhone-first music app with iPad and Windows support. Navidrome serves the
+permanent library. The app embeds Mornye's extension runtime for external music,
+converts downloads to MP3 at 320 kbps, and sends them to a saved remote folder.
+Temporary source files are removed after each import attempt.
 
 See [ROADMAP.md](ROADMAP.md) for the product plan. The first client prototype uses
 Flutter to share application code across iPhone, iPad, and Windows. Reliability
@@ -53,8 +53,14 @@ filters, track preview and playback; definitions save on this device
 for each server/account. See the [smart-playlist test guide](docs/SMART_PLAYLISTS_TESTING.md).
 Reshuffle updates the saved selection without replacing the playing queue.
 The saved playlist menu can explicitly publish an ordered server copy, with conflict
-review and interrupted-write recovery. Addon/streaming/import architecture is the
-next collaboration milestone; no addon implementation is included.
+review and interrupted-write recovery.
+
+Version 0.56.0 adds reviewed Mornye extensions for Spotify catalog search and
+Tidal/Qobuz audio. Search > Online accepts queries and public song, album and
+playlist links. Playback uses the shared player; individual or collection
+downloads use the saved remote folder. Install and verify providers in Home >
+Music sources. See [external music setup and limitations](docs/EXTERNAL_MUSIC.md).
+The in-app workflow does not require the separate server prototype below.
 
 The server prototype provides a SQLite import journal, a CLI, a Mornye completion
 hook adapter, and a real FFmpeg conversion pipeline. It validates output codec,
@@ -76,6 +82,12 @@ are committed alongside the native iOS and Windows projects. The
 [TypeScript/npm comparison](apps/client/README.md#coming-from-typescript-and-npm)
 explains the files and everyday commands.
 
+Local builds and Flutter tests also require Rust 1.99.0, installed with
+`rustup toolchain install 1.99.0 --profile minimal`. Keep Cargo on PATH. Flutter's
+build hook compiles the extension runtime automatically; the first build takes
+longer. GitHub Actions installs these prerequisites. See the
+[native host build notes](apps/client/packages/mornye_host/UPSTREAM.md).
+
 Flutter is installed at `D:\Tools\flutter` on this PC. From the repository root:
 
 ```powershell
@@ -84,8 +96,7 @@ cd apps/client
 ```
 
 Enter credentials in the app. See the [client guide](apps/client/README.md) for
-build/test commands, the file map, and iOS requirements. The client does not yet
-connect to the acquisition worker.
+build/test commands, the file map, and iOS requirements.
 
 ## Build and collect iPhone, iPad, and Windows releases
 
