@@ -192,8 +192,9 @@ class SourceStreamProxy {
       final response = await outgoing.close().timeout(
         const Duration(seconds: 30),
       );
-      if (![301, 302, 303, 307, 308].contains(response.statusCode))
+      if (![301, 302, 303, 307, 308].contains(response.statusCode)) {
         return response;
+      }
       final location = response.headers.value(HttpHeaders.locationHeader);
       await response.drain<void>().timeout(const Duration(seconds: 10));
       final target = location == null ? null : uri.resolve(location);
