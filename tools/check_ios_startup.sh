@@ -21,7 +21,7 @@ print(choices[0]["udid"])
 trap 'xcrun simctl shutdown "$simulator_id" >/dev/null 2>&1 || true' EXIT
 xcrun simctl boot "$simulator_id"
 xcrun simctl bootstatus "$simulator_id" -b
-flutter build ios --simulator --debug --no-pub \
+flutter build ios --simulator --debug --no-pub --verbose -d "$simulator_id" \
   --target integration_test/startup_smoke_test.dart \
   2>&1 | tee build/ci/ios-startup-build.log
 # Capture console output before launch; Flutter 3.47.9 can miss the VM-service

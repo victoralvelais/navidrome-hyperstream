@@ -58,7 +58,7 @@ jobs:
       - name: Set up the pinned extension runtime compiler
         run: |
           rustup toolchain install 1.99.0 --profile minimal
-          rustup target add --toolchain 1.99.0 aarch64-apple-ios aarch64-apple-ios-sim
+          rustup target add --toolchain 1.99.0 aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
           cargo +1.99.0 test --locked --manifest-path packages/mornye_host/rust/Cargo.toml
 
       - name: Restore locked dependencies

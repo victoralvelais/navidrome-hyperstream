@@ -29,7 +29,7 @@ client. All resolved Cargo dependencies are pinned in `rust/Cargo.lock`.
 
 Install Rust 1.99.0 (`rustup toolchain install 1.99.0 --profile minimal`). On macOS,
 also run `rustup target add --toolchain 1.99.0 aarch64-apple-ios
-aarch64-apple-ios-sim`. Flutter's native asset hook builds the dynamic library
+aarch64-apple-ios-sim x86_64-apple-ios`. Flutter's native asset hook builds the dynamic library
 with `cargo +1.99.0 build --release --locked --target <target>` and bundles it into
 the Windows distribution or iOS app framework. Native tests use `cargo +1.99.0
 test --locked` inside `rust/`. Windows requires the Visual Studio C++ toolchain;
