@@ -7,12 +7,16 @@ import 'package:http/http.dart' as http;
 import '../models/source_reference.dart';
 import 'account_store.dart';
 import 'music_provider.dart';
+import 'mornye_sources.dart';
+import 'mornye_provider.dart';
+import 'source_stream_proxy.dart';
 
 class MusicSources extends ChangeNotifier {
   MusicSources({
     Future<String?> Function()? read,
     Future<void> Function(String)? write,
     this.httpClient,
+    this.extensions,
   }) : _read =
            read ?? (() => SecureAccountStore.defaultStorage.read(key: _key)),
        _write =
@@ -20,14 +24,23 @@ class MusicSources extends ChangeNotifier {
            ((value) => SecureAccountStore.defaultStorage.write(
              key: _key,
              value: value,
-           ));
+           )) {
+    extensions?.addListener(notifyListeners);
+    if (extensions != null) _proxy = SourceStreamProxy(extensions!);
+  }
 
-  static final instance = MusicSources();
+  static final instance = MusicSources(extensions: MornyeSources.instance);
   static const defaultEndpoint = 'https://tracks.monochrome.st';
   static const _key = 'hyperstream.music-sources.v1';
   final Future<String?> Function() _read;
   final Future<void> Function(String) _write;
   final http.Client Function()? httpClient;
+  final MornyeSources? extensions;
+  SourceStreamProxy? _proxy;
+  bool get hasProviders => enabled || extensions?.enabled.isNotEmpty == true;
+  String? get selectedProvider =>
+      extensions?.selected ??
+      (enabled ? sourceId : extensions?.enabled.firstOrNull?.id);
   Future<void>? _restoring;
   bool _loaded = false;
   bool busy = false;
@@ -59,6 +72,10 @@ class MusicSources extends ChangeNotifier {
   }
 
   Future<void> _restore() async {
+    if (extensions != null) {
+      await extensions!.restore();
+      await _proxy!.start();
+    }
     try {
       final raw = await _read().timeout(const Duration(seconds: 10));
       if (raw != null) {
@@ -104,8 +121,25 @@ class MusicSources extends ChangeNotifier {
     }
   }
 
-  MusicProvider provider([SourceReference? track]) {
-    if (!enabled || (track != null && track.sourceId != sourceId)) {
+  MusicProvider provider([SourceReference? track]) =>
+      providerById(track?.sourceId);
+
+  MusicProvider providerById([String? requested]) {
+    final externalId = requested?.startsWith('mornye:') == true
+        ? requested!.substring(7)
+        : requested == null
+        ? extensions?.selected ??
+              (enabled ? null : extensions?.enabled.firstOrNull?.id)
+        : null;
+    if (externalId != null && extensions != null) {
+      if (!extensions!.has(externalId)) {
+        throw const SourceException(
+          'Enable this provider in Home > Music sources.',
+        );
+      }
+      return MornyeProvider(extensions!, externalId, _proxy!);
+    }
+    if (!enabled || (requested != null && requested != sourceId)) {
       throw const SourceException(
         'Enable this recording’s music source in Home > Music sources.',
       );
@@ -115,6 +149,13 @@ class MusicSources extends ChangeNotifier {
       baseUri: parseEndpoint(endpoint),
       client: httpClient?.call(),
     );
+  }
+
+  @override
+  void dispose() {
+    extensions?.removeListener(notifyListeners);
+    _proxy?.close();
+    super.dispose();
   }
 
   Uri streamUri(SourceReference track) {

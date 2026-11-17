@@ -779,6 +779,9 @@ class PlaybackService extends BaseAudioHandler {
 
   void _reportFailure() {
     if (_disposed) return;
+    final sourceIssue = trackAt(_player.currentIndex ?? -1)?.source != null
+        ? MusicSources.instance.extensions?.issue.value
+        : null;
     _retrySnapshot ??= _snapshot();
     final now = _timerClock();
     if (_lastPlaybackFailure == null ||
@@ -786,13 +789,19 @@ class PlaybackService extends BaseAudioHandler {
       _healthyReloads = 0;
     }
     _lastPlaybackFailure = now;
-    _reconnectWanted = (_reconnectWanted || _playWhenReady) && canRetryPlayback;
+    _reconnectWanted =
+        (_reconnectWanted || _playWhenReady) &&
+        canRetryPlayback &&
+        !(sourceIssue != null &&
+            MusicSources.instance.extensions?.verification.value != null);
     _playWhenReady = false;
-    error.value = _reconnectWanted
-        ? 'Playback interrupted. Reconnecting automatically. Press Play to retry now.'
-        : canRetryPlayback
-        ? 'Playback failed. Press Play to retry or select another track.'
-        : 'Playback failed. Select a track to start a new queue.';
+    error.value =
+        sourceIssue ??
+        (_reconnectWanted
+            ? 'Playback interrupted. Reconnecting automatically. Press Play to retry now.'
+            : canRetryPlayback
+            ? 'Playback failed. Press Play to retry or select another track.'
+            : 'Playback failed. Select a track to start a new queue.');
     _scheduleReconnect();
     _publishState();
   }

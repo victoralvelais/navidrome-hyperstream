@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 
 import 'app_theme.dart';
 import 'features/connect/connection_screen.dart';
@@ -28,8 +29,9 @@ Future<PlaybackService> initializeHyperstream(
   return PlaybackService.initialize(preferences: preferences, onStage: onStage);
 }
 
-void main() {
+void main(List<String> arguments) {
   WidgetsFlutterBinding.ensureInitialized();
+  if (runWebViewTitleBarWidget(arguments)) return;
   registerNativeLicenses();
   unawaited(RemoteFolders.instance.restore());
   runApp(const HyperstreamApp());

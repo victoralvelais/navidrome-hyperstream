@@ -13,3 +13,6 @@ releases/
 *.p12
 *.p8
 *.mobileprovision
+
+# Native extension adapter build output (Cargo.lock is tracked).
+**/mornye_host/rust/target/

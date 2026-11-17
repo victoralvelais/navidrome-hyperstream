@@ -69,7 +69,10 @@ class SourceImports extends ChangeNotifier {
             'Choose a destination in Home > Remote folder before importing.',
       );
     }
-    remaining = List.unmodifiable(tracks);
+    // Playback retains repeats; importing a playlist needs one file per song.
+    remaining = List.unmodifiable(
+      {for (final track in tracks) track.id: track}.values,
+    );
     completed = 0;
     _client = client;
     return _run();

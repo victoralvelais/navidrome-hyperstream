@@ -100,6 +100,24 @@ void main() {
       imports.dispose();
     },
   );
+  test('playlist imports send repeated songs only once', () async {
+    final sent = <String>[];
+    final imports = SourceImports(
+      sources: sources,
+      remote: remote,
+      transfer: (_, track, _, _) async {
+        sent.add(track.id);
+        return success;
+      },
+    );
+    expect(
+      (await imports.send(client, [tracks[0], tracks[1], tracks[0]])).success,
+      true,
+    );
+    expect(sent, [tracks[0].id, tracks[1].id]);
+    expect(imports.completed, 2);
+    imports.dispose();
+  });
   test('uncertain publication stops the batch and disables retry', () async {
     var calls = 0;
     final imports = SourceImports(

@@ -53,7 +53,13 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
     ++revision;
     debounce?.cancel();
     provider?.close();
-    provider = sources.enabled ? sources.provider() : null;
+    try {
+      provider = sources.hasProviders
+          ? sources.providerById(widget.album?.sourceId)
+          : null;
+    } on SourceException {
+      provider = null;
+    }
     setState(() {
       tracks = [];
       albums = [];
@@ -177,7 +183,45 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
               icon: const Icon(Icons.tune_rounded),
             ),
           ),
-          if (widget.album == null && sources.enabled)
+          if (widget.album == null &&
+              sources.extensions?.enabled.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey(sources.selectedProvider),
+                initialValue: sources.selectedProvider,
+                decoration: const InputDecoration(
+                  labelText: 'Browse source',
+                  isDense: true,
+                ),
+                items: [
+                  for (final e in sources.extensions!.enabled)
+                    DropdownMenuItem(value: e.id, child: Text(e.name)),
+                  if (sources.enabled)
+                    DropdownMenuItem(
+                      value: sources.sourceId,
+                      child: const Text('Monochrome'),
+                    ),
+                ],
+                onChanged: (id) async {
+                  if (id == null) return;
+                  try {
+                    await sources.extensions!.choose(
+                      catalog: id,
+                      legacy: id == sources.sourceId,
+                    );
+                  } on Object {
+                    if (mounted) {
+                      setState(
+                        () => error =
+                            'Could not change the music source. Try again.',
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+          if (widget.album == null && sources.hasProviders)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: GlassSurface(
@@ -191,9 +235,11 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                   },
                   autocorrect: false,
                   textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                    hintText: 'Search Monochrome',
-                    prefixIcon: Icon(Icons.search_rounded),
+                  decoration: InputDecoration(
+                    hintText: sources.extensions?.selected != null
+                        ? 'Search or paste a playlist link'
+                        : 'Search Monochrome',
+                    prefixIcon: const Icon(Icons.search_rounded),
                     filled: false,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -211,7 +257,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.only(bottom: 20),
                 children: [
-                  if (!sources.enabled) ...[
+                  if (!sources.hasProviders) ...[
                     const Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
@@ -226,7 +272,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                     const Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Search songs and albums. Use the download button to send MP3 copies to your remote folder.',
+                        'Search songs and albums, or paste a public music link. Download the songs you like to your remote folder.',
                       ),
                     ),
                   if (error != null)
@@ -235,6 +281,10 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                       child: Column(
                         children: [
                           Text(error!),
+                          TextButton(
+                            onPressed: _settings,
+                            child: const Text('Music sources'),
+                          ),
                           TextButton(
                             onPressed: busy ? null : _load,
                             child: const Text('Retry'),
@@ -356,7 +406,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                     ),
                   if (!busy &&
                       error == null &&
-                      sources.enabled &&
+                      sources.hasProviders &&
                       query.text.trim().isNotEmpty &&
                       tracks.isEmpty &&
                       albums.isEmpty)

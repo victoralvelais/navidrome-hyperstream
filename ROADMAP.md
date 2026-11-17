@@ -1,5 +1,27 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 17: Mornye provider trial, 0.56.0
+
+- Embed Mornye's pinned Rust/QuickJS runtime with reviewed Spotify Web, Tidal and
+  Qobuz JavaScript packages. Install and enable them in Home > Music sources;
+  configuration and signed sessions remain device-only.
+- Separate catalog choice from the audio source used for Spotify matching.
+  Verification uses a browser callback and Mornye's signed-session exchange.
+- Search songs/albums/playlists or paste public music links. Playlist playback
+  retains ordering and repeats. Downloads send one copy per recording through
+  the existing MP3 320 and saved SMB destination flow.
+- Keep stream resolution lazy through a loopback adapter, preserve byte-range
+  seeking, refresh expired URLs once, and prepare segmented audio privately.
+- Live Spotify/Tidal metadata returned successfully; Qobuz requested browser
+  verification. Full provider audio access and phone/background acceptance need
+  user testing after verification. The host does not guarantee gateway uptime.
+- More extensions, automatic provider fallback, durable import recovery and
+  library-index confirmation remain open. The initial registry is pinned and
+  curated; arbitrary package installation is not supported in this release.
+
+Current instructions: [external music](docs/EXTERNAL_MUSIC.md). The November 16
+notes below describe the preceding Monochrome implementation and research.
+
 ## November 16 milestone update
 
 The user authorized external search, streaming and remote-folder imports after
@@ -15,9 +37,14 @@ describe completed work. Current implementation targets **0.55.0**.
   IDs in playback queues and isolate provider requests from Navidrome credentials.
 - Keep confirmed album progress during the running app session. A durable import
   journal and recovery after process termination remain future work.
-- Next provider milestone covers additional adapters and a versioned extension
-  host informed by Mornye/SpotiFLAC. Downloadable `.sflx` packages require that host.
-  Library indexing confirmation and cross-source metadata matching remain open.
+- The user's follow-up establishes Mornye as the primary acquisition reference.
+  The next provider milestone prioritizes its JavaScript extension registry,
+  package compatibility and host APIs. Start compatibility work with Spotify
+  metadata and the Tidal/Qobuz download providers, including signed-session
+  verification and explicit streaming support. Amazon is another acquisition
+  candidate. Provider order and verified cross-source matching are part of this
+  milestone. See the source review in the external-music guide.
+- Durable import recovery and library indexing confirmation remain open.
 
 Setup and acceptance checks are in [external music](docs/EXTERNAL_MUSIC.md).
 Direct app-side conversion and SMB delivery are the current import architecture.

@@ -1,0 +1,10 @@
+name: mornye_host
+description: Hyperstream's native adapter for the pinned Mornye extension runtime.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.13.7
+dependencies:
+  code_assets: ^1.2.1
+  hooks: ^2.0.2
+  ffi: ^2.1.3

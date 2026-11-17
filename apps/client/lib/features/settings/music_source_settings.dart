@@ -4,6 +4,7 @@ import '../../services/music_sources.dart';
 import '../../services/source_imports.dart';
 import '../../widgets/glass_surface.dart';
 import '../search/source_import_action.dart';
+import 'mornye_source_settings.dart';
 
 class MusicSourceSettings extends StatefulWidget {
   const MusicSourceSettings({super.key, this.sources});
@@ -51,6 +52,10 @@ class _MusicSourceSettingsState extends State<MusicSourceSettings> {
     builder: (context, _) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (sources.extensions case final extensions?) ...[
+          MornyeSourceSettings(sources: extensions),
+          const SizedBox(height: 24),
+        ],
         GlassSurface(
           radius: 24,
           child: Padding(

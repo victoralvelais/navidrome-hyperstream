@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 void registerNativeLicenses() {
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
+      'Mornye extension runtime',
+      'QuickJS and native extension dependencies',
+    ], await rootBundle.loadString('assets/licenses/MORNYE-NOTICES.txt'));
+    yield LicenseEntryWithLineBreaks([
       'FFmpegKit audio',
       'FFmpeg',
       'LAME and bundled audio libraries',
