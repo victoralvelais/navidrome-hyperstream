@@ -226,6 +226,7 @@ String _encodeQueue((String, PlaybackSnapshot) value) => jsonEncode({
           for (final name in track.genres) {'name': name},
         ],
         'year': track.year,
+        'source': track.source?.toJson(),
       },
   ],
 });
@@ -239,7 +240,9 @@ String _encodeQueue((String, PlaybackSnapshot) value) => jsonEncode({
   if (entries.length > 100000) throw const FormatException();
   final snapshot = PlaybackSnapshot(
     tracks: List.unmodifiable(
-      entries.map((e) => Track.fromJson(e as Map<String, dynamic>)),
+      entries.map(
+        (e) => Track.fromJson(e as Map<String, dynamic>, saved: true),
+      ),
     ),
     coverArtIds: List<String?>.unmodifiable(data['coverArtIds'] as List),
     shuffleOrder: List<int>.unmodifiable(data['shuffleOrder'] as List),

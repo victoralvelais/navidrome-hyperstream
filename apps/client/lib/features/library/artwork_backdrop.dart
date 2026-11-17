@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../services/navidrome_client.dart';
+import '../../services/source_artwork.dart';
 import '../../widgets/glass_surface.dart';
 
 /// Samples actual cover pixels; no artwork URLs or credentials enter widgets.
@@ -14,11 +15,13 @@ class ArtworkBackdrop extends StatefulWidget {
     required this.coverArt,
     required this.child,
     this.immersive = true,
+    this.externalUri,
   });
   final NavidromeClient client;
   final String? coverArt;
   final Widget child;
   final bool immersive;
+  final Uri? externalUri;
   @override
   State<ArtworkBackdrop> createState() => _ArtworkBackdropState();
 }
@@ -33,13 +36,17 @@ class _ArtworkIdentity extends InheritedWidget {
   const _ArtworkIdentity({
     required this.client,
     required this.coverArt,
+    required this.externalUri,
     required super.child,
   });
   final NavidromeClient client;
   final String? coverArt;
+  final Uri? externalUri;
   @override
   bool updateShouldNotify(_ArtworkIdentity oldWidget) =>
-      oldWidget.client != client || oldWidget.coverArt != coverArt;
+      oldWidget.client != client ||
+      oldWidget.coverArt != coverArt ||
+      oldWidget.externalUri != externalUri;
 }
 
 class _ArtworkBackdropState extends State<ArtworkBackdrop> {
@@ -55,13 +62,14 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
   void didUpdateWidget(ArtworkBackdrop oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.coverArt != widget.coverArt ||
-        oldWidget.client != widget.client) {
+        oldWidget.client != widget.client ||
+        oldWidget.externalUri != widget.externalUri) {
       _load();
     }
   }
 
   void _load() {
-    final id = widget.coverArt;
+    final id = widget.externalUri?.toString() ?? widget.coverArt;
     if (id == null) {
       _artwork = null;
       return;
@@ -69,7 +77,7 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
     // Bounded, account-scoped memory cache shared by nested detail/player views.
     final cache = _cache[widget.client] ??= {};
     final existing = cache.remove(id);
-    final future = existing ?? _read(widget.client, id);
+    final future = existing ?? _read(widget.client, id, widget.externalUri);
     cache[id] = future;
     while (cache.length > 12) {
       cache.remove(cache.keys.first);
@@ -77,9 +85,15 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
     _artwork = future;
   }
 
-  static Future<_ArtworkData?> _read(NavidromeClient client, String id) async {
+  static Future<_ArtworkData?> _read(
+    NavidromeClient client,
+    String id,
+    Uri? externalUri,
+  ) async {
     try {
-      final bytes = await client.coverArt(id);
+      final bytes = externalUri == null
+          ? await client.coverArt(id)
+          : await SourceArtwork.load(externalUri);
       final codec = await ui.instantiateImageCodec(
         bytes,
         targetWidth: 32,
@@ -117,7 +131,8 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
     final parent = context
         .dependOnInheritedWidgetOfExactType<_ArtworkIdentity>();
     if (parent?.client == widget.client &&
-        parent?.coverArt == widget.coverArt) {
+        parent?.coverArt == widget.coverArt &&
+        parent?.externalUri == widget.externalUri) {
       return widget.child;
     }
     final scheme = Theme.of(context).colorScheme;
@@ -136,6 +151,7 @@ class _ArtworkBackdropState extends State<ArtworkBackdrop> {
         return _ArtworkIdentity(
           client: widget.client,
           coverArt: widget.coverArt,
+          externalUri: widget.externalUri,
           child: ArtworkTint(
             color: tone,
             child: ClipRect(

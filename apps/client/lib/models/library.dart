@@ -1,3 +1,5 @@
+import 'source_reference.dart';
+
 class Artist {
   const Artist({
     required this.id,
@@ -65,32 +67,37 @@ class Track {
     this.userRating = 0,
     this.genres = const [],
     this.year,
+    this.source,
   });
 
-  factory Track.fromJson(Map<String, dynamic> json) => Track(
-    id: json['id'] as String,
-    title: json['title'] as String? ?? 'Untitled track',
-    artist: json['artist'] as String? ?? 'Unknown artist',
-    album: json['album'] as String? ?? 'Unknown album',
-    duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
-    number: (json['track'] as num?)?.toInt(),
-    coverArt: json['coverArt'] as String?,
-    albumId: json['albumId'] as String?,
-    artistId: json['artistId'] as String?,
-    container: json['suffix'] as String?,
-    bitRate: (json['bitRate'] as num?)?.toInt(),
-    userRating: _boundedInteger(json['userRating'], 0, 5) ?? 0,
-    genres: _trackGenres(json),
-    year: _boundedInteger(json['year'], 1, 9999),
-    starred: json['starred'] != null,
-    addedAt: activityDate(json['created']),
-    lastPlayedAt: activityDate(json['played']),
-    playCount: (json['playCount'] as num?)?.toInt() ?? 0,
-    invalidActivityDates: [
-      'created',
-      'played',
-    ].any((key) => json[key] != null && activityDate(json[key]) == null),
-  );
+  factory Track.fromJson(Map<String, dynamic> json, {bool saved = false}) =>
+      Track(
+        id: json['id'] as String,
+        title: json['title'] as String? ?? 'Untitled track',
+        artist: json['artist'] as String? ?? 'Unknown artist',
+        album: json['album'] as String? ?? 'Unknown album',
+        duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
+        number: (json['track'] as num?)?.toInt(),
+        coverArt: json['coverArt'] as String?,
+        albumId: json['albumId'] as String?,
+        artistId: json['artistId'] as String?,
+        container: json['suffix'] as String?,
+        bitRate: (json['bitRate'] as num?)?.toInt(),
+        userRating: _boundedInteger(json['userRating'], 0, 5) ?? 0,
+        genres: _trackGenres(json),
+        year: _boundedInteger(json['year'], 1, 9999),
+        source: saved && json['source'] is Map<String, dynamic>
+            ? SourceReference.fromJson(json['source'] as Map<String, dynamic>)
+            : null,
+        starred: json['starred'] != null,
+        addedAt: activityDate(json['created']),
+        lastPlayedAt: activityDate(json['played']),
+        playCount: (json['playCount'] as num?)?.toInt() ?? 0,
+        invalidActivityDates: [
+          'created',
+          'played',
+        ].any((key) => json[key] != null && activityDate(json[key]) == null),
+      );
 
   final String id;
   final String title;
@@ -111,6 +118,7 @@ class Track {
   final int userRating;
   final List<String> genres;
   final int? year;
+  final SourceReference? source;
 
   String get audioDetails => [
     if (container?.isNotEmpty == true) container!.toUpperCase(),
@@ -145,6 +153,7 @@ class Track {
     userRating: rating ?? userRating,
     genres: genres,
     year: year,
+    source: source,
   );
 }
 

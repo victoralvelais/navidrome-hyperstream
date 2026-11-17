@@ -3,6 +3,11 @@ import 'package:flutter/services.dart';
 
 void registerNativeLicenses() {
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'FFmpegKit audio',
+      'FFmpeg',
+      'LAME and bundled audio libraries',
+    ], await rootBundle.loadString('assets/licenses/FFMPEG-NOTICES.txt'));
     final notice = await rootBundle.loadString(
       'assets/licenses/SMB-NOTICE.txt',
     );

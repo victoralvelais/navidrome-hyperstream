@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'navidrome_client.dart';
+import 'source_artwork.dart';
 
 /// Media controls receive a private local file, never an authenticated URL.
 class SystemArtwork {
@@ -47,22 +48,30 @@ class SystemArtwork {
           ),
         )
         .toString();
-    return _pending.putIfAbsent(
-      key,
-      () => _load(client, id, key).whenComplete(() {
-        _pending.remove(key);
-      }),
-    );
+    return _loadOnce(key, () => client.coverArt(id));
   }
 
-  Future<Uri?> _load(NavidromeClient client, String id, String key) async {
+  Future<Uri?> loadExternal(Uri uri) => _loadOnce(
+    sha256.convert(utf8.encode('external:$uri')).toString(),
+    () => SourceArtwork.load(uri),
+  );
+
+  Future<Uri?> _loadOnce(String key, Future<Uint8List> Function() read) =>
+      _pending.putIfAbsent(
+        key,
+        () => _load(key, read).whenComplete(() {
+          _pending.remove(key);
+        }),
+      );
+
+  Future<Uri?> _load(String key, Future<Uint8List> Function() read) async {
     try {
       final root = await _directory();
       final cache = Directory('${root.path}/hyperstream-system-artwork');
       await cache.create(recursive: true);
       final file = File('${cache.path}/$key.png');
       if (await file.exists()) return file.uri;
-      final bytes = await client.coverArt(id);
+      final bytes = await read();
       if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) return null;
       final png = await _png(bytes);
       if (png == null || png.isEmpty) return null;

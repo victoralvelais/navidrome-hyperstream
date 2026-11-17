@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'discover_page.dart';
+import 'external_music_page.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
 import '../../widgets/floating_chrome.dart';
@@ -223,6 +224,21 @@ class _LibrarySearchState extends State<LibrarySearch> {
       children: [
         FloatingTopBar(
           title: widget.onSongSelected != null ? 'Add songs' : 'Search',
+          trailing: widget.onSongSelected == null
+              ? TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => ExternalMusicPage(
+                        client: widget.client,
+                        playback: widget.playback,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.public_rounded),
+                  label: const Text('Online'),
+                )
+              : null,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),

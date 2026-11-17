@@ -6,6 +6,54 @@ import 'package:flutter/services.dart';
 
 enum RemoteBackgroundMode { desktop, quiet, continued, limited, foreground }
 
+/// Retains one execution grant across a sequential album's download/convert/send
+/// operations. Ending a song releases its SMB lock while the album keeps its grant.
+class AlbumTransferBackground extends RemoteTransferBackground {
+  AlbumTransferBackground({RemoteTransferBackground? background})
+    : _background = background ?? RemoteTransferBackground();
+  final RemoteTransferBackground _background;
+  RemoteBackgroundMode? _mode;
+  VoidCallback? _onExpired;
+  bool _expired = false;
+
+  @override
+  Future<RemoteBackgroundMode> begin(
+    VoidCallback onExpired, {
+    bool continued = false,
+  }) async {
+    _onExpired = onExpired;
+    _mode ??= await _background.begin(() {
+      _expired = true;
+      _onExpired?.call();
+    }, continued: continued);
+    if (_expired) onExpired();
+    return _mode!;
+  }
+
+  @override
+  Future<void> prepareDirectory(Directory directory) =>
+      _background.prepareDirectory(directory);
+
+  @override
+  Future<bool> notifyResult({required bool success}) =>
+      _background.notifyResult(success: success);
+
+  @override
+  void update({
+    required int completed,
+    required int total,
+    required String stage,
+  }) => _background.update(completed: completed, total: total, stage: stage);
+
+  @override
+  Future<void> finish({required bool success}) async {
+    _onExpired = null;
+  }
+
+  Future<void> finishAlbum({required bool success}) =>
+      _background.finish(success: success);
+}
+
 /// Owns the OS execution grant for one user-started remote transfer.
 class RemoteTransferBackground {
   RemoteTransferBackground({bool? isIOS})

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/library.dart';
+import '../../models/source_reference.dart';
 import '../../services/library_collections.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
@@ -19,6 +20,7 @@ import 'player_actions.dart';
 import '../../widgets/glass_overlays.dart';
 import '../../widgets/edge_back_gesture.dart';
 import '../playlists/playlist_dialogs.dart';
+import '../search/source_import_action.dart';
 
 part 'now_playing_part.dart';
 part 'camera_page.dart';
@@ -111,6 +113,7 @@ class PlayerControls extends StatelessWidget {
                   child: CoverArt(
                     client: client,
                     id: item?.extras?['coverArtId'] as String?,
+                    externalUri: publicArtwork(item?.extras?['sourceArtwork']),
                     radius: 12,
                   ),
                 ),

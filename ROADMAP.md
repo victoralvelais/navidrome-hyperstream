@@ -1,5 +1,28 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 16 milestone update
+
+The user authorized external search, streaming and remote-folder imports after
+the 0.54.0 playback/camera integration. The older pre-addon stopping points below
+describe completed work. Current implementation targets **0.55.0**.
+
+- Search songs and albums through the Monochrome tracks API and use the shared
+  player, queue, tempo, volume and output controls.
+- Download individual songs or complete albums, convert locally to MP3 320,
+  validate audio, and publish to the saved SMB destination with collision-safe
+  filenames. Quiet transfer expiration exposes an explicit activity-backed retry.
+- Save provider configuration in device-protected storage. Persist stable source
+  IDs in playback queues and isolate provider requests from Navidrome credentials.
+- Keep confirmed album progress during the running app session. A durable import
+  journal and recovery after process termination remain future work.
+- Next provider milestone covers additional adapters and a versioned extension
+  host informed by Mornye/SpotiFLAC. Downloadable `.sflx` packages require that host.
+  Library indexing confirmation and cross-source metadata matching remain open.
+
+Setup and acceptance checks are in [external music](docs/EXTERNAL_MUSIC.md).
+Direct app-side conversion and SMB delivery are the current import architecture.
+The companion-service proposals below are historical alternatives.
+
 November 13 direction update: see [the direct SMB test](docs/REMOTE_FOLDER_TEST.md).
 App-side acquisition/conversion and optional phone or remote-folder storage supersede
 mandatory-companion/server-only proposals below.

@@ -1,0 +1,128 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../models/source_reference.dart';
+import 'account_store.dart';
+import 'music_provider.dart';
+
+class MusicSources extends ChangeNotifier {
+  MusicSources({
+    Future<String?> Function()? read,
+    Future<void> Function(String)? write,
+    this.httpClient,
+  }) : _read =
+           read ?? (() => SecureAccountStore.defaultStorage.read(key: _key)),
+       _write =
+           write ??
+           ((value) => SecureAccountStore.defaultStorage.write(
+             key: _key,
+             value: value,
+           ));
+
+  static final instance = MusicSources();
+  static const defaultEndpoint = 'https://tracks.monochrome.st';
+  static const _key = 'hyperstream.music-sources.v1';
+  final Future<String?> Function() _read;
+  final Future<void> Function(String) _write;
+  final http.Client Function()? httpClient;
+  Future<void>? _restoring;
+  bool _loaded = false;
+  bool busy = false;
+  bool enabled = false;
+  String endpoint = defaultEndpoint;
+  String? error;
+
+  String get sourceId =>
+      'monochrome-${sha256.convert(utf8.encode(endpoint)).toString().substring(0, 16)}';
+
+  static Uri parseEndpoint(String input) {
+    final uri = Uri.tryParse(input.trim());
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException(
+        'Enter an HTTPS source URL without credentials, a query, or a fragment.',
+      );
+    }
+    return uri.replace(path: uri.path.replaceFirst(RegExp(r'/+$'), ''));
+  }
+
+  Future<void> restore() {
+    if (_loaded) return Future.value();
+    return _restoring ??= _restore().whenComplete(() => _restoring = null);
+  }
+
+  Future<void> _restore() async {
+    try {
+      final raw = await _read().timeout(const Duration(seconds: 10));
+      if (raw != null) {
+        final data = jsonDecode(raw) as Map<String, dynamic>;
+        if (data['schema'] != 1) throw const FormatException();
+        endpoint = parseEndpoint(data['endpoint'] as String).toString();
+        enabled = data['enabled'] as bool;
+      }
+      _loaded = true;
+      error = null;
+    } on Object {
+      error = 'Could not read your music source settings. Unlock your device and try again.';
+    }
+    notifyListeners();
+  }
+
+  Future<void> save({required String endpoint, required bool enabled}) async {
+    if (busy) {
+      throw const SourceException('Music source settings are still saving.');
+    }
+    final uri = parseEndpoint(endpoint);
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _restoring;
+      final value = jsonEncode({
+        'schema': 1,
+        'endpoint': uri.toString(),
+        'enabled': enabled,
+      });
+      await _write(value);
+      if (await _read() != value) throw const FormatException();
+      this.endpoint = uri.toString();
+      this.enabled = enabled;
+      _loaded = true;
+    } on Object {
+      error = 'Could not securely save the music source. Try again.';
+      throw SourceException(error!);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  MusicProvider provider([SourceReference? track]) {
+    if (!enabled || (track != null && track.sourceId != sourceId)) {
+      throw const SourceException(
+        'Enable this recording’s music source in Home > Music sources.',
+      );
+    }
+    return MonochromeProvider(
+      id: sourceId,
+      baseUri: parseEndpoint(endpoint),
+      client: httpClient?.call(),
+    );
+  }
+
+  Uri streamUri(SourceReference track) {
+    final source = provider(track);
+    try {
+      return source.streamUri(track);
+    } finally {
+      source.close();
+    }
+  }
+}

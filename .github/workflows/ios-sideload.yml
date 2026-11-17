@@ -225,6 +225,10 @@ jobs:
         timeout-minutes: 8
         run: flutter test integration_test/playback_smoke_test.dart -d windows --no-pub
 
+      - name: Verify native MP3 conversion and metadata
+        timeout-minutes: 8
+        run: flutter test integration_test/audio_conversion_test.dart -d windows --no-pub
+
       - name: Build Windows release
         run: |
           $releaseVersion = python ../../tools/release_artifacts.py version

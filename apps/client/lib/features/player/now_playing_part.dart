@@ -76,6 +76,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                 return ArtworkBackdrop(
                   client: widget.client,
                   coverArt: item?.extras?['coverArtId'] as String?,
+                  externalUri: publicArtwork(item?.extras?['sourceArtwork']),
                   child: Builder(
                     builder: (context) => SingleChildScrollView(
                       padding: EdgeInsets.fromLTRB(
@@ -105,6 +106,9 @@ class _NowPlayingState extends State<_NowPlaying> {
                                 child: CoverArt(
                                   client: widget.client,
                                   id: item?.extras?['coverArtId'] as String?,
+                                  externalUri: publicArtwork(
+                                    item?.extras?['sourceArtwork'],
+                                  ),
                                   radius: 20,
                                 ),
                               ),
@@ -117,6 +121,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                 child: _TrackLabels(item: item, large: true),
                               ),
                               if (track != null &&
+                                  track.source == null &&
                                   widget.collections != null) ...[
                                 const SizedBox(width: 8),
                                 FavoriteButton(
@@ -125,6 +130,11 @@ class _NowPlayingState extends State<_NowPlaying> {
                                 ),
                                 _actions(track),
                               ],
+                              if (track?.source != null)
+                                SourceDownloadButton(
+                                  client: widget.client,
+                                  tracks: [track!],
+                                ),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -471,6 +481,9 @@ class _QueuePageState extends State<_QueuePage> {
                             child: CoverArt(
                               client: widget.client,
                               id: entry.extras?['coverArtId'] as String?,
+                              externalUri: publicArtwork(
+                                entry.extras?['sourceArtwork'],
+                              ),
                               radius: 10,
                             ),
                           ),
@@ -501,12 +514,16 @@ class _QueuePageState extends State<_QueuePage> {
                               child: CoverArt(
                                 client: widget.client,
                                 id: item?.extras?['coverArtId'] as String?,
+                                externalUri: publicArtwork(
+                                  item?.extras?['sourceArtwork'],
+                                ),
                                 radius: 12,
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(child: _TrackLabels(item: item)),
                             if (track != null &&
+                                track.source == null &&
                                 widget.collections != null) ...[
                               if (MediaQuery.sizeOf(context).width >= 360)
                                 FavoriteButton(
@@ -515,6 +532,11 @@ class _QueuePageState extends State<_QueuePage> {
                                 ),
                               widget.trackActions(track),
                             ],
+                            if (track?.source != null)
+                              SourceDownloadButton(
+                                client: widget.client,
+                                tracks: [track!],
+                              ),
                             IconButton(
                               tooltip: 'Close queue',
                               onPressed: () => Navigator.pop(context),
@@ -598,13 +620,19 @@ class _QueuePageState extends State<_QueuePage> {
                                       Icons.playlist_add_rounded,
                                       enabled:
                                           widget.collections != null &&
-                                          queue.data!.isNotEmpty,
+                                          queue.data!.isNotEmpty &&
+                                          queue.data!.every(
+                                            (item) =>
+                                                item.extras?['external'] !=
+                                                true,
+                                          ),
                                     ),
                                     menuAction(
                                       'lyrics',
                                       'Show lyrics',
                                       Icons.lyrics_outlined,
-                                      enabled: track != null,
+                                      enabled:
+                                          track != null && track.source == null,
                                     ),
                                     menuAction(
                                       'speed',
@@ -656,6 +684,9 @@ class _QueuePageState extends State<_QueuePage> {
                             child: CoverArt(
                               client: widget.client,
                               id: next.extras?['coverArtId'] as String?,
+                              externalUri: publicArtwork(
+                                next.extras?['sourceArtwork'],
+                              ),
                               radius: 10,
                             ),
                           ),
@@ -679,7 +710,9 @@ class _QueuePageState extends State<_QueuePage> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (song != null && widget.collections != null)
+                              if (song != null &&
+                                  song.source == null &&
+                                  widget.collections != null)
                                 if (MediaQuery.sizeOf(context).width >= 360)
                                   FavoriteButton(
                                     collections: widget.collections!,

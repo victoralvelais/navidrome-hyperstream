@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../models/library.dart';
 import 'audio_file_share.dart';
 import 'navidrome_client.dart';
+import 'music_provider.dart';
 import 'remote_folder.dart';
 import 'remote_transfer_background.dart';
 
@@ -12,11 +13,13 @@ class RemoteTransferResult {
     required this.message,
     this.notified = false,
     this.retryWithActivity = false,
+    this.uncertain = false,
   });
   final bool success;
   final String message;
   final bool notified;
   final bool retryWithActivity;
+  final bool uncertain;
 }
 
 /// A user-started transfer whose lifetime is independent of the initiating page.
@@ -28,6 +31,7 @@ class RemoteTransfer with WidgetsBindingObserver {
     AudioFileShare? export,
     RemoteTransferBackground? background,
     this.useActivity = false,
+    this.notifySuccess = true,
   }) : background = background ?? RemoteTransferBackground() {
     this.export =
         export ??
@@ -43,6 +47,7 @@ class RemoteTransfer with WidgetsBindingObserver {
   final Track track;
   final RemoteTransferBackground background;
   final bool useActivity;
+  final bool notifySuccess;
   late final AudioFileShare export;
   RemoteBackgroundMode? _mode;
   bool _started = false;
@@ -51,6 +56,7 @@ class RemoteTransfer with WidgetsBindingObserver {
   bool _expired = false;
 
   bool get _shouldCancel => _cancelled || client.isClosed;
+  void cancel() => _cancel();
 
   void _downloadProgress() {
     final total = export.total;
@@ -100,6 +106,7 @@ class RemoteTransfer with WidgetsBindingObserver {
     RemoteFileSystem? fs;
     var success = false;
     var notified = false;
+    var uncertain = false;
     var message = 'The transfer could not finish.';
     try {
       _mode = await background.begin(_backgroundEnded, continued: useActivity);
@@ -140,12 +147,15 @@ class RemoteTransfer with WidgetsBindingObserver {
       message = 'Sent $name to your remote folder.';
       success = true;
     } on Object catch (error) {
+      uncertain = error is RemotePublicationUncertain;
       if (error is AudioShareCancelled || error is RemoteSendCancelled) {
         message = _expired
             ? 'iOS ended background time for “${track.title}”. The transfer stopped.'
             : 'Transfer cancelled for “${track.title}”.';
       } else {
-        final detail = error is NavidromeException
+        final detail = error is SourceException
+            ? error.message
+            : error is NavidromeException
             ? error.message
             : remoteFolderError(error);
         message = 'Could not send “${track.title}”. $detail';
@@ -162,7 +172,9 @@ class RemoteTransfer with WidgetsBindingObserver {
         export.cancel();
         await export.finishPreparing();
         await export.cleanup();
-        notified = await background.notifyResult(success: success);
+        if (!success || notifySuccess) {
+          notified = await background.notifyResult(success: success);
+        }
       } finally {
         export.dispose();
         await background.finish(success: success);
@@ -181,6 +193,7 @@ class RemoteTransfer with WidgetsBindingObserver {
           : message,
       notified: notified,
       retryWithActivity: retryWithActivity,
+      uncertain: uncertain,
     );
   }
 }

@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../models/library.dart';
+import '../models/source_reference.dart';
+import 'music_sources.dart';
+import 'music_provider.dart';
 import 'app_preferences.dart';
 import 'navidrome_client.dart';
 import 'listen_tracker.dart';
@@ -34,12 +37,14 @@ class PlaybackService extends BaseAudioHandler {
     DateTime Function()? timerClock,
     Random? random,
     PlaybackStore Function(NavidromeClient)? playbackStore,
+    Uri Function(SourceReference)? sourceStreamUri,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession,
        _artworkLoader = artworkLoader ?? SystemArtwork().load,
        _timerClock = timerClock ?? DateTime.now,
        _random = random ?? Random() {
+    _sourceStreamUri = sourceStreamUri ?? MusicSources.instance.streamUri;
     _storeFactory = playbackStore;
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
@@ -87,6 +92,8 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   final AudioPlayer _player;
+  late final Uri Function(SourceReference) _sourceStreamUri;
+  final _sourceArtwork = SystemArtwork();
   final AppPreferences preferences;
   final Future<void> Function(AudioSessionConfiguration) _configureSession;
   final ValueNotifier<String?> settingsError = ValueNotifier(null);
@@ -499,7 +506,11 @@ class PlaybackService extends BaseAudioHandler {
                 extras: {
                   'coverArtId': ?_queueCovers[entry.$1],
                   'starred': entry.$2.starred,
-                  'audioDetails': entry.$2.audioDetails,
+                  'audioDetails': entry.$2.source == null
+                      ? entry.$2.audioDetails
+                      : 'External source',
+                  'sourceArtwork': ?entry.$2.source?.artwork?.toString(),
+                  'external': entry.$2.source != null,
                 },
               ),
             )
@@ -510,7 +521,9 @@ class PlaybackService extends BaseAudioHandler {
           tracks.indexed
               .map(
                 (entry) => AudioSource.uri(
-                  client.streamUri(entry.$2.id),
+                  entry.$2.source == null
+                      ? client.streamUri(entry.$2.id)
+                      : _sourceStreamUri(entry.$2.source!),
                   tag: items[entry.$1],
                 ),
               )
@@ -555,10 +568,15 @@ class PlaybackService extends BaseAudioHandler {
         if (_playWhenReady) {
           unawaited(_play(automaticRecovery: automaticRecovery));
         }
-      } on Object {
+      } on Object catch (failure) {
         if (revision == _revision) {
           _loading = false;
           _reportFailure();
+          if (failure is SourceException) {
+            _cancelReconnect();
+            error.value = failure.message;
+            _publishState();
+          }
         }
       }
     });
@@ -634,8 +652,9 @@ class PlaybackService extends BaseAudioHandler {
     final client = _listeningClient;
     final item = queue.value[index];
     final id = item.extras?['coverArtId'] as String?;
+    final external = publicArtwork(item.extras?['sourceArtwork']);
     if (client == null ||
-        id == null ||
+        (id == null && external == null) ||
         item.artUri != null ||
         !_requestedArtwork.add(index)) {
       return;
@@ -644,7 +663,9 @@ class PlaybackService extends BaseAudioHandler {
     unawaited(() async {
       Uri? uri;
       try {
-        uri = await _artworkLoader(client, id);
+        uri = external == null
+            ? await _artworkLoader(client, id!)
+            : await _sourceArtwork.loadExternal(external);
       } on Object {
         return;
       }
@@ -704,6 +725,7 @@ class PlaybackService extends BaseAudioHandler {
     }
     final active =
         !_seeking &&
+        _listeningTracks[index].source == null &&
         error.value == null &&
         _player.playing &&
         _player.processingState == ProcessingState.ready;
@@ -729,6 +751,7 @@ class PlaybackService extends BaseAudioHandler {
     // The tracker can finish the previous item during a native transition.
     // Look up its ID instead of using the player's already advanced index.
     final track = _listeningTracks.firstWhere((track) => track.id == trackId);
+    if (track.source != null) return;
     client.recordLocalListen(track, startedAt);
     unawaited(() async {
       try {
@@ -818,17 +841,31 @@ class PlaybackService extends BaseAudioHandler {
     _probeEpoch = epoch;
     var reachable = false;
     var rejected = false;
+    String? sourceError;
     try {
-      await client.ping();
+      final external = snapshot.tracks[snapshot.index].source;
+      if (external == null) {
+        await client.ping();
+      } else {
+        _sourceStreamUri(external);
+      }
       reachable = true;
     } on NavidromeException catch (failure) {
       rejected = failure.authenticationRejected;
+    } on SourceException catch (failure) {
+      sourceError = failure.message;
     } on Object {
       // Native/request details can contain authenticated URLs. Never expose them.
     } finally {
       if (_probeEpoch == epoch) _probeEpoch = null;
     }
     if (_disposed || epoch != _reconnectEpoch || !_reconnectWanted) return;
+    if (sourceError != null) {
+      _cancelReconnect();
+      error.value = sourceError;
+      _publishState();
+      return;
+    }
     if (rejected) {
       _cancelReconnect();
       error.value = 'Your server sign-in was rejected. Check your account in Home > Servers, then press Play to retry.';

@@ -10,6 +10,7 @@ import 'services/account_session.dart';
 import 'services/app_preferences.dart';
 import 'services/playback_service.dart';
 import 'services/remote_folder.dart';
+import 'services/music_sources.dart';
 import 'services/startup_stage.dart';
 import 'services/third_party_licenses.dart';
 import 'widgets/glass_settings.dart';
@@ -23,6 +24,7 @@ Future<PlaybackService> initializeHyperstream(
 ) async {
   onStage(StartupStage.preferences);
   final preferences = await AppPreferences.load();
+  await MusicSources.instance.restore();
   return PlaybackService.initialize(preferences: preferences, onStage: onStage);
 }
 

@@ -182,6 +182,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     final oldScreen = tester.widget<LibraryScreen>(find.byType(LibraryScreen));
+    await tester.ensureVisible(find.text('Servers'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Servers'));
     await tester.pumpAndSettle();
     expect(find.text('Second library'), findsOneWidget);
@@ -305,6 +307,8 @@ void main() {
       expect(find.byType(LibraryScreen), findsOneWidget);
       expect(find.byType(ConnectionScreen), findsNothing);
       expect(find.text('Disconnect from server'), findsNothing);
+      await tester.ensureVisible(find.text('Servers'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Servers'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Disconnect from server'));

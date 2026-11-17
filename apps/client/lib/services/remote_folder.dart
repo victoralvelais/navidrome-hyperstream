@@ -308,6 +308,13 @@ class RemoteSendCancelled implements Exception {
   const RemoteSendCancelled();
 }
 
+class RemotePublicationUncertain extends RemoteFolderException {
+  const RemotePublicationUncertain()
+    : super(
+        'Could not confirm the final file. Check the destination before sending again; it may already have arrived.',
+      );
+}
+
 /// Narrow filesystem boundary: no recursive deletion or replacement operations.
 abstract interface class RemoteFileSystem {
   Future<({bool directory, int size})> stat(String path);
@@ -816,9 +823,7 @@ Future<String> sendRemoteFile({
     );
   } on Object {
     if (renameStarted) {
-      throw const RemoteFolderException(
-        'Could not confirm the final file. Check the destination before sending again; it may already have arrived.',
-      );
+      throw const RemotePublicationUncertain();
     }
     rethrow;
   } finally {

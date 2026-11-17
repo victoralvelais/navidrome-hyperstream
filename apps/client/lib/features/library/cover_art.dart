@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../services/navidrome_client.dart';
+import '../../services/source_artwork.dart';
 
 class CoverArt extends StatefulWidget {
   const CoverArt({
@@ -10,10 +11,12 @@ class CoverArt extends StatefulWidget {
     required this.client,
     required this.id,
     this.radius = 16,
+    this.externalUri,
   });
   final NavidromeClient client;
   final String? id;
   final double radius;
+  final Uri? externalUri;
 
   @override
   State<CoverArt> createState() => _CoverArtState();
@@ -31,11 +34,19 @@ class _CoverArtState extends State<CoverArt> {
   @override
   void didUpdateWidget(CoverArt oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.client != widget.client || oldWidget.id != widget.id) _load();
+    if (oldWidget.client != widget.client ||
+        oldWidget.id != widget.id ||
+        oldWidget.externalUri != widget.externalUri) {
+      _load();
+    }
   }
 
   void _load() {
-    _bytes = widget.id == null ? null : widget.client.coverArt(widget.id!);
+    _bytes = widget.externalUri != null
+        ? SourceArtwork.load(widget.externalUri!)
+        : widget.id == null
+        ? null
+        : widget.client.coverArt(widget.id!);
   }
 
   Widget _placeholder(BuildContext context) => ColoredBox(

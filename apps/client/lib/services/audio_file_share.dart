@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/library.dart';
 import 'navidrome_client.dart';
+import 'music_provider.dart';
 
 class AudioShareCancelled implements Exception {
   const AudioShareCancelled();
@@ -23,6 +25,9 @@ class AudioFileShare extends ChangeNotifier {
     DateTime Function()? now,
     this.prepareDirectory,
     this.idleTimeout = const Duration(seconds: 30),
+    this.download,
+    this.processFile,
+    this.cancelProcessing,
   }) : _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory,
        _now = now ?? DateTime.now;
 
@@ -32,6 +37,9 @@ class AudioFileShare extends ChangeNotifier {
   final DateTime Function() _now;
   final Duration idleTimeout;
   final Future<void> Function(Directory)? prepareDirectory;
+  final Future<http.StreamedResponse> Function(Future<void> abort)? download;
+  final Future<File> Function(File file)? processFile;
+  final VoidCallback? cancelProcessing;
   final _abort = Completer<void>();
   Directory? _directory;
   File? _file;
@@ -48,6 +56,7 @@ class AudioFileShare extends ChangeNotifier {
   void cancel() {
     _cancelled = true;
     if (!_abort.isCompleted) _abort.complete();
+    cancelProcessing?.call();
   }
 
   void _checkActive() {
@@ -96,10 +105,9 @@ class AudioFileShare extends ChangeNotifier {
       _directory = await root.createTemp('track-');
       await prepareDirectory?.call(_directory!);
       _checkActive();
-      final response = await client.downloadAudio(
-        track.id,
-        abortTrigger: _abort.future,
-      );
+      final response = download != null
+          ? await download!(_abort.future)
+          : await client.downloadAudio(track.id, abortTrigger: _abort.future);
       body = response.stream;
       _checkActive();
       final mime =
@@ -151,9 +159,13 @@ class AudioFileShare extends ChangeNotifier {
       final suffix = _suffix(track.container, mime);
       final name = _safeName('${track.artist} - ${track.title}');
       _file = await partial.rename('${_directory!.path}/$name.$suffix');
+      if (processFile != null) _file = await processFile!(_file!);
       _checkActive();
       return _file!;
     } on AudioShareCancelled {
+      rethrow;
+    } on SourceException {
+      _checkActive();
       rethrow;
     } on NavidromeException {
       _checkActive();
