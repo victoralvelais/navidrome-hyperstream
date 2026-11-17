@@ -9,7 +9,9 @@ import 'music_provider.dart';
 /// Lazy, range-preserving URLs for the native queue. Only the loopback listener
 /// knows these per-launch tokens; resolved provider URLs never enter queue JSON.
 class SourceStreamProxy {
-  SourceStreamProxy(this.sources, {this.resolve});
+  SourceStreamProxy(this.sources, {this.resolve, HttpClient Function()? client})
+    : _client = client ?? HttpClient.new;
+  final HttpClient Function() _client;
   final Future<SourceStreamMedia> Function(SourceReference)? resolve;
   final MornyeSources sources;
   HttpServer? _server;
@@ -88,8 +90,7 @@ class SourceStreamProxy {
   }
 
   Future<void> _serve(HttpRequest request) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 30);
+    final client = _client()..connectionTimeout = const Duration(seconds: 30);
     try {
       final parts = request.uri.pathSegments;
       final track = parts.length == 2 && parts[0] == _token
@@ -113,17 +114,7 @@ class SourceStreamProxy {
       } else {
         HttpClientResponse? upstream;
         for (var attempt = 0; attempt < 2; attempt++) {
-          final outgoing = await client.openUrl(request.method, media.uri!);
-          // CDN redirects are handled only over HTTPS, with no app credentials.
-          outgoing.followRedirects = false;
-          final range = request.headers.value(HttpHeaders.rangeHeader);
-          if (range != null) {
-            outgoing.headers.set(HttpHeaders.rangeHeader, range);
-          }
-          outgoing.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-          upstream = await outgoing.close().timeout(
-            const Duration(seconds: 30),
-          );
+          upstream = await _open(client, request, media.uri!);
           if (![401, 403].contains(upstream.statusCode) || attempt == 1) break;
           await upstream.drain<void>();
           media = await _resolve(id, track, refresh: true);
@@ -185,6 +176,41 @@ class SourceStreamProxy {
         }
       }
     }
+  }
+
+  static Future<HttpClientResponse> _open(
+    HttpClient client,
+    HttpRequest incoming,
+    Uri uri,
+  ) async {
+    for (var redirects = 0; redirects <= 5; redirects++) {
+      final outgoing = await client.openUrl(incoming.method, uri);
+      outgoing.followRedirects = false;
+      final range = incoming.headers.value(HttpHeaders.rangeHeader);
+      if (range != null) outgoing.headers.set(HttpHeaders.rangeHeader, range);
+      outgoing.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+      final response = await outgoing.close().timeout(
+        const Duration(seconds: 30),
+      );
+      if (![301, 302, 303, 307, 308].contains(response.statusCode))
+        return response;
+      final location = response.headers.value(HttpHeaders.locationHeader);
+      await response.drain<void>().timeout(const Duration(seconds: 10));
+      final target = location == null ? null : uri.resolve(location);
+      if (redirects == 5 ||
+          target == null ||
+          target.scheme != 'https' ||
+          target.host.isEmpty ||
+          target.userInfo.isNotEmpty ||
+          InternetAddress.tryParse(target.host) != null ||
+          target.host == 'localhost') {
+        throw const SourceException(
+          'This source returned an invalid audio redirect.',
+        );
+      }
+      uri = target;
+    }
+    throw const SourceException('This source redirected too many times.');
   }
 
   static Future<void> _serveFile(HttpRequest request, File file) async {

@@ -214,6 +214,10 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal
           cargo +1.99.0 test --locked --manifest-path packages/mornye_host/rust/Cargo.toml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Compile before the short SMB/native-test timeouts start. The build
+          # hook reuses this target directory for the packaged DLL.
+          cargo +1.99.0 build --release --locked --target x86_64-pc-windows-msvc --manifest-path packages/mornye_host/rust/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Restore locked dependencies
         run: flutter pub get --enforce-lockfile

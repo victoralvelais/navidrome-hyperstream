@@ -29,6 +29,62 @@ void main() {
     ];
   });
   tearDown(() => sources.dispose());
+  test('HTTPS CDN redirects preserve ranges and reject a downgrade', () async {
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final seen = <String>[];
+    upstream.listen((r) async {
+      seen.add(r.uri.path);
+      expect(r.headers.value('Range'), 'bytes=2-4');
+      if (r.uri.path == '/redirect' || r.uri.path == '/downgrade') {
+        r.response.statusCode = 302;
+        r.response.headers.set(
+          'Location',
+          r.uri.path == '/redirect'
+              ? 'https://cdn.example.test/audio'
+              : 'http://cdn.example.test/audio',
+        );
+      } else {
+        r.response.statusCode = 206;
+        r.response.headers.set('Content-Range', 'bytes 2-4/6');
+        r.response.add([2, 3, 4]);
+      }
+      await r.response.close();
+    });
+    final proxy = SourceStreamProxy(
+      sources,
+      client: () => _MappedClient(upstream.port),
+      resolve: (track) async => SourceStreamMedia(
+        uri: Uri.parse('https://media.example.test/${track.trackId}'),
+      ),
+    );
+    await proxy.start();
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final response = await http.get(
+      proxy.uri(
+        const SourceReference(
+          sourceId: 'mornye:tidal-web',
+          trackId: 'redirect',
+        ),
+      ),
+      headers: {'Range': 'bytes=2-4'},
+    );
+    expect(response.statusCode, 206);
+    expect(response.bodyBytes, [2, 3, 4]);
+    final rejected = await http.get(
+      proxy.uri(
+        const SourceReference(
+          sourceId: 'mornye:tidal-web',
+          trackId: 'downgrade',
+        ),
+      ),
+      headers: {'Range': 'bytes=2-4'},
+    );
+    expect(rejected.statusCode, 502);
+    expect(seen, ['/redirect', '/audio', '/downgrade']);
+  });
   test('native queue URLs resolve lazily, preserve ranges, refresh expired links', () async {
     final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final requests = <String?>[];
@@ -101,4 +157,23 @@ void main() {
     await proxy.close();
     expect(await directory.exists(), false);
   });
+}
+
+class _MappedClient extends Fake implements HttpClient {
+  _MappedClient(this.port);
+  final int port;
+  final delegate = HttpClient();
+  @override
+  Duration? connectionTimeout;
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri uri) {
+    expect(uri.scheme, 'https');
+    return delegate.openUrl(
+      method,
+      uri.replace(scheme: 'http', host: '127.0.0.1', port: port),
+    );
+  }
+
+  @override
+  void close({bool force = false}) => delegate.close(force: force);
 }
