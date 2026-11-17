@@ -6,5 +6,10 @@ Future<void> main() => integrationDriver(
     if (data?['startupReachedSignIn'] != true) {
       throw StateError('The app did not report reaching sign-in.');
     }
+    if (data?['musicSourcesAvailable'] != true) {
+      throw StateError(
+        'The app did not report an available music source catalog.',
+      );
+    }
   },
 );

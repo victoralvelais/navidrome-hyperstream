@@ -90,11 +90,14 @@ class MornyeSources extends ChangeNotifier {
       _initializing ??= _restore().whenComplete(() => _initializing = null);
   Future<void> _restore() async {
     if (_ready) return;
+    var failure = 'Music source storage could not open. Try again.';
     try {
       final support = await _directory();
       root = Directory('${support.path}/music-extensions');
       await root!.create(recursive: true);
+      failure = 'Music source storage could not be prepared for background playback. Try again.';
       await RemoteTransferBackground().prepareDirectory(root!);
+      failure = 'Saved music source access could not be read. Unlock your device and try again.';
       var key = await _read(_masterKey);
       if (key == null) {
         final data = Directory('${root!.path}/data');
@@ -106,12 +109,15 @@ class MornyeSources extends ChangeNotifier {
         key = base64Encode(
           List<int>.generate(32, (_) => Random.secure().nextInt(256)),
         );
+        failure = 'Music source access could not be saved securely. Try again.';
         await _write(_masterKey, key);
         if (await _read(_masterKey) != key) {
           throw const FormatException();
         }
       }
+      failure = 'The music extension engine could not start. Restart Hyperstream and try again.';
       await _native({'op': 'init', 'root': root!.path, 'key': key});
+      failure = 'Saved music source preferences could not be read. Try again.';
       final choices = await _read(_choicesKey);
       if (choices != null) {
         final value = jsonDecode(choices) as Map<String, dynamic>;
@@ -119,11 +125,15 @@ class MornyeSources extends ChangeNotifier {
         audioProvider = value['audio'] as String?;
       }
       _ready = true;
+      failure = 'The music extension catalog could not load. Try again.';
       await refresh();
       error = null;
+    } on SourceException catch (exception) {
+      _ready = false;
+      error = exception.message;
     } on Object {
       _ready = false;
-      error = 'Music sources could not open. Unlock your device and try again.';
+      error = failure;
     }
     notifyListeners();
   }

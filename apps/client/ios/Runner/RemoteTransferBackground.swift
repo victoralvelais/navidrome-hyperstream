@@ -174,18 +174,24 @@ final class RemoteTransferBackground {
     }
   }
 
-  /// This private staging directory remains encrypted and readable after lock.
+  /// Private transfer and extension storage remains encrypted and readable after lock.
   /// Files created inside it inherit the protection class.
   static func prepareDirectory(path: String) throws {
     let manager = FileManager.default
-    guard let cache = manager.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+    guard let cache = manager.urls(for: .cachesDirectory, in: .userDomainMask).first,
+          let support = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
       throw CocoaError(.fileNoSuchFile)
     }
-    let root = cache.appendingPathComponent("hyperstream-share", isDirectory: true)
+    let transferRoot = cache.appendingPathComponent("hyperstream-share", isDirectory: true)
+      .standardizedFileURL.resolvingSymlinksInPath()
+    let extensionRoot = support.appendingPathComponent("music-extensions", isDirectory: true)
       .standardizedFileURL.resolvingSymlinksInPath()
     let directory = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
     let values = try directory.resourceValues(forKeys: [.isDirectoryKey])
-    guard directory.path.hasPrefix(root.path + "/"), values.isDirectory == true else {
+    let isTransferDirectory = directory.path.hasPrefix(transferRoot.path + "/")
+    let isExtensionDirectory = directory.path == extensionRoot.path
+      || directory.path.hasPrefix(extensionRoot.path + "/")
+    guard (isTransferDirectory || isExtensionDirectory), values.isDirectory == true else {
       throw CocoaError(.fileWriteNoPermission)
     }
     try manager.setAttributes([
