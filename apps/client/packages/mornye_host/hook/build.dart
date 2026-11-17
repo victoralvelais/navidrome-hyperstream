@@ -39,6 +39,27 @@ void main(List<String> args) async {
     final environment = <String, String>{
       if (code.targetOS == OS.iOS) 'IPHONEOS_DEPLOYMENT_TARGET': '15.0',
     };
+    if (code.targetOS == OS.iOS) {
+      // QuickJS generates bindings with libclang. Its header parser needs the
+      // target SDK explicitly; Cargo's target alone still finds macOS headers.
+      // This mirrors Mornye's scripts/build_rust_backend.sh for Apple targets.
+      final simulator = code.iOS.targetSdk == IOSSdk.iPhoneSimulator;
+      final sdk = await Process.run('xcrun', [
+        '--sdk',
+        simulator ? 'iphonesimulator' : 'iphoneos',
+        '--show-sdk-path',
+      ]);
+      if (sdk.exitCode != 0) {
+        throw StateError('The Apple target SDK could not be located.');
+      }
+      final sdkPath = (sdk.stdout as String).trim();
+      final arch = code.targetArchitecture == Architecture.arm64
+          ? 'arm64'
+          : 'x86_64';
+      final clangTarget = '$arch-apple-ios15.0${simulator ? '-simulator' : ''}';
+      environment['BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}'] =
+          '-isysroot "$sdkPath" --target=$clangTarget';
+    }
     final result = await Process.run(
       'cargo',
       ['+1.99.0', 'build', '--release', '--locked', '--target', target],

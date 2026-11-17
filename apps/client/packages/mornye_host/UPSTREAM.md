@@ -34,6 +34,9 @@ with `cargo +1.99.0 build --release --locked --target <target>` and bundles it i
 the Windows distribution or iOS app framework. Native tests use `cargo +1.99.0
 test --locked` inside `rust/`. Windows requires the Visual Studio C++ toolchain;
 Apple builds require Xcode's SDK and libclang.
+The hook supplies target-specific SDK and Clang arguments for QuickJS binding
+generation, following Mornye's iOS build script. This keeps the header parser on
+the iPhone or simulator SDK instead of the build host's macOS SDK.
 
 To replace the runtime, change its Cargo dependency and rebuild this package and
 the open-source app. The release workflow documents the complete build process,
