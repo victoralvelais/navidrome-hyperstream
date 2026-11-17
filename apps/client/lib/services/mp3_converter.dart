@@ -41,7 +41,7 @@ class Mp3Converter {
     '-protocol_whitelist',
     'file,pipe',
     '-format_whitelist',
-    'flac,mp3,mov,ogg,wav,aiff,aac',
+    'flac,mp3,mov,ogg,matroska,webm,wav,aiff,aac',
     '-i',
     input.path,
     if (artwork != null) ...['-i', artwork.path],

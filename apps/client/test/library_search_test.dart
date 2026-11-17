@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:hyperstream_client/app_theme.dart';
 import 'package:hyperstream_client/features/search/library_search.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
+import 'package:hyperstream_client/services/music_sources.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 
 import 'support/fake_player.dart';
@@ -30,6 +31,9 @@ void main() {
     WidgetTester tester,
     Future<http.Response> Function(http.Request) handler, {
     bool discover = false,
+    MusicSources? sources,
+    Brightness brightness = Brightness.dark,
+    double textScale = 1,
   }) async {
     final client = NavidromeClient(
       serverUrl: 'https://music.example.com',
@@ -46,13 +50,19 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        theme: hyperstreamTheme(Brightness.dark),
+        theme: hyperstreamTheme(brightness),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: Scaffold(
           body: LibrarySearch(
             discover: discover,
             client: client,
             playback: playback,
             onAlbumSelected: (_) {},
+            sources: sources,
           ),
         ),
       ),
@@ -61,8 +71,104 @@ void main() {
 
   Future<void> query(WidgetTester tester, String text) async {
     await tester.enterText(find.byType(TextField), text);
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'one search field keeps its query across online/library toggle in $brightness',
+      (tester) async {
+        tester.view.physicalSize = const Size(393, 850);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final onlineQueries = <String?>[];
+        final libraryQueries = <String?>[];
+        final pending = Completer<http.Response>();
+        final sources = MusicSources(
+          httpClient: () => MockClient((request) async {
+            onlineQueries.add(request.url.queryParameters['q']);
+            if (onlineQueries.length == 2) return pending.future;
+            return http.Response(
+              jsonEncode({
+                'releases': [],
+                'tracks': [
+                  {
+                    'id': 'upload',
+                    'title': 'Online upload',
+                    'artistNames': ['Uploader'],
+                    'duration': 90000,
+                  },
+                ],
+              }),
+              200,
+            );
+          }),
+        )..enabled = true;
+        addTearDown(sources.dispose);
+        await mount(
+          tester,
+          (request) async {
+            libraryQueries.add(request.url.queryParameters['query']);
+            return results(
+              songs: [
+                {'id': 'saved', 'title': 'Library song', 'artist': 'Artist'},
+              ],
+            );
+          },
+          sources: sources,
+          brightness: brightness,
+          textScale: 1.6,
+        );
+        await query(tester, 'remix');
+        await tester.pumpAndSettle();
+        expect(find.text('Library song'), findsOneWidget);
+        expect(onlineQueries, isEmpty);
+        final field = find.byType(TextField);
+        final editor = tester.state<EditableTextState>(
+          find.byType(EditableText),
+        );
+        await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+        await tester.pumpAndSettle();
+        expect(field, findsOneWidget);
+        expect(tester.widget<TextField>(field).controller!.text, 'remix');
+        expect(
+          tester.state<EditableTextState>(find.byType(EditableText)),
+          same(editor),
+        );
+        expect(find.text('Online upload'), findsOneWidget);
+        expect(find.text('Library song'), findsNothing);
+        expect(
+          find.byTooltip('Download song to remote folder'),
+          findsOneWidget,
+        );
+        expect(libraryQueries, ['remix']);
+        expect(onlineQueries, ['remix']);
+        await query(tester, 'another');
+        await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+        pending.complete(
+          http.Response(
+            jsonEncode({
+              'releases': [],
+              'tracks': [
+                {'id': 'stale', 'title': 'Stale upload'},
+              ],
+            }),
+            200,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Stale upload'), findsNothing);
+        expect(find.text('Library song'), findsOneWidget);
+        expect(tester.widget<TextField>(field).controller!.text, 'another');
+        expect(libraryQueries, ['remix', 'another']);
+        expect(onlineQueries, ['remix', 'another']);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
   }
 
   testWidgets(

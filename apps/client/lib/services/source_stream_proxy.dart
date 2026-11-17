@@ -18,8 +18,10 @@ class SourceStreamProxy {
   final _token = MornyeSources.nonce();
   final _tracks = <String, SourceReference>{};
   final _media = <String, Future<SourceStreamMedia>>{};
+  var _closed = Completer<void>();
   Future<void> start() async {
     if (_server != null) return;
+    if (_closed.isCompleted) _closed = Completer<void>();
     _server = await HttpServer.bind(
       InternetAddress.loopbackIPv4,
       0,
@@ -63,12 +65,12 @@ class SourceStreamProxy {
       try {
         if (resolve != null) return await resolve!(track);
         final acquisition = MornyeAcquisition(sources);
-        final abort = Completer<void>();
-        final result = await acquisition.resolve(track, abort.future);
+        final abort = _closed.future;
+        Future<PreparedSourceAudio> prepare() =>
+            acquisition.download(track, abort, forPlayback: true);
+        final result = await acquisition.resolve(track, abort);
         if (result['prepare'] == true) {
-          return SourceStreamMedia(
-            file: await acquisition.download(track, abort.future),
-          );
+          return SourceStreamMedia(file: await prepare());
         }
         final uri = Uri.tryParse(result['url'] as String? ?? '');
         if (uri == null ||
@@ -81,7 +83,13 @@ class SourceStreamProxy {
             'This source did not return a valid stream.',
           );
         }
-        return SourceStreamMedia(uri: uri);
+        return SourceStreamMedia(
+          uri: uri,
+          headers: result['headers'] is Map
+              ? Map<String, dynamic>.from(result['headers'] as Map)
+              : const {},
+          prepare: result['prepareOnFailure'] == true ? prepare : null,
+        );
       } on Object {
         _media.remove(id);
         rethrow;
@@ -105,8 +113,9 @@ class SourceStreamProxy {
         throw const SourceException('Enable this provider in Music sources.');
       }
       var media = await _resolve(id, track);
-      if (DateTime.now().difference(media.created) >
-          const Duration(minutes: 5)) {
+      if (media.file == null &&
+          DateTime.now().difference(media.created) >
+              const Duration(minutes: 5)) {
         media = await _resolve(id, track, refresh: true);
       }
       if (media.file case final prepared?) {
@@ -114,7 +123,7 @@ class SourceStreamProxy {
       } else {
         HttpClientResponse? upstream;
         for (var attempt = 0; attempt < 2; attempt++) {
-          upstream = await _open(client, request, media.uri!);
+          upstream = await _open(client, request, media);
           if (![401, 403].contains(upstream.statusCode) || attempt == 1) break;
           await upstream.drain<void>();
           media = await _resolve(id, track, refresh: true);
@@ -125,6 +134,23 @@ class SourceStreamProxy {
         }
         if (upstream == null ||
             ![200, 206, 416].contains(upstream.statusCode)) {
+          if (media.prepare != null) {
+            await upstream?.drain<void>();
+            // Share preparation with concurrent HEAD/range requests.
+            final prepared = media.prepared ??= media.prepare!().then(
+              (file) => SourceStreamMedia(file: file),
+            );
+            _media[id] = prepared;
+            try {
+              media = await prepared;
+            } on Object {
+              _media.remove(id);
+              rethrow;
+            }
+            await _serveFile(request, media.file!.file);
+            sources.issue.value = null;
+            return;
+          }
           throw const SourceException(
             'The audio source is unavailable. Try another source.',
           );
@@ -181,11 +207,25 @@ class SourceStreamProxy {
   static Future<HttpClientResponse> _open(
     HttpClient client,
     HttpRequest incoming,
-    Uri uri,
+    SourceStreamMedia media,
   ) async {
+    var uri = media.uri!;
     for (var redirects = 0; redirects <= 5; redirects++) {
       final outgoing = await client.openUrl(incoming.method, uri);
       outgoing.followRedirects = false;
+      for (final header in media.headers.entries) {
+        // Only public request context from the reviewed resolver is forwarded.
+        // No cookies, authorization, host override or player-supplied secrets.
+        if ([
+              'user-agent',
+              'referer',
+              'origin',
+            ].contains(header.key.toLowerCase()) &&
+            header.value is String &&
+            !RegExp(r'[\r\n]').hasMatch(header.value as String)) {
+          outgoing.headers.set(header.key, header.value);
+        }
+      }
       final range = incoming.headers.value(HttpHeaders.rangeHeader);
       if (range != null) outgoing.headers.set(HttpHeaders.rangeHeader, range);
       outgoing.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
@@ -245,6 +285,7 @@ class SourceStreamProxy {
   }
 
   Future<void> close() async {
+    if (!_closed.isCompleted) _closed.complete();
     await _server?.close(force: true);
     _server = null;
     for (final value in _media.values) {
@@ -260,8 +301,16 @@ class SourceStreamProxy {
 }
 
 class SourceStreamMedia {
-  SourceStreamMedia({this.uri, this.file});
+  SourceStreamMedia({
+    this.uri,
+    this.file,
+    this.headers = const {},
+    this.prepare,
+  });
   final Uri? uri;
   final PreparedSourceAudio? file;
+  final Map<String, dynamic> headers;
+  final Future<PreparedSourceAudio> Function()? prepare;
+  Future<SourceStreamMedia>? prepared;
   final created = DateTime.now();
 }

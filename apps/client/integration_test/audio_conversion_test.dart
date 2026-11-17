@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,10 +9,64 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/mp3_converter.dart';
+import 'package:hyperstream_client/services/source_audio_preparation.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets(
+    'YouTube WebM/Opus prepares native playback and MP3 remote imports',
+    (tester) async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hyperstream-opus-',
+      );
+      try {
+        // Some YouTube responses keep a .opus filename around a WebM container.
+        final input = File('${directory.path}/upload.opus');
+        final generated = await FFmpegKit.executeWithArguments([
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=550:duration=4',
+          '-c:a',
+          'libopus',
+          '-f',
+          'webm',
+          input.path,
+        ]);
+        expect(ReturnCode.isSuccess(await generated.getReturnCode()), true);
+        final playback = await SourceAudioPreparation.prepare(
+          input,
+          Completer<void>().future,
+        );
+        final probe = await FFprobeKit.getMediaInformation(playback.path);
+        final data = probe.getMediaInformation()!.getAllProperties()!;
+        expect((data['streams'] as List).single['codec_name'], 'aac');
+        expect(
+          double.parse((data['format'] as Map)['duration'] as String),
+          closeTo(4, .2),
+        );
+        const track = Track(
+          id: 'synthetic-upload',
+          title: 'Upload',
+          artist: 'Uploader',
+          album: '',
+          duration: Duration(seconds: 4),
+        );
+        final imported = await Mp3Converter().convert(input, track);
+        final importedProbe = await FFprobeKit.getMediaInformation(
+          imported.path,
+        );
+        Mp3Converter.validate(
+          importedProbe.getMediaInformation()!.getAllProperties(),
+          track,
+        );
+        expect(await input.exists(), true);
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
   testWidgets(
     'native conversion validates MP3 320, metadata and attached artwork',
     (tester) async {

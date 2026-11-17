@@ -5,12 +5,21 @@ Hyperstream embeds Mornye's Rust extension runtime at
 whose compatibility version is 5.3.1. This is independent of Hyperstream's app
 version. Runtime feature and minimum-version checks remain enabled.
 
-The three supported JavaScript packages are pinned in `assets/catalog.json` to
+The four supported JavaScript packages are pinned in `assets/catalog.json` to
 Mornye-Extension revision `e9d2499688f77d8cbc224c1c1a1fe2ccfdb94555`. Installation
 checks both the archive SHA-256 and manifest identity. The source archives are
 not modified. `rust/src/adapter.js` adds explicit streaming/download entry points
 when loading these particular package versions. Updates require reviewing their
 contracts and updating the pinned registry together with adapter tests.
+
+YouTube Music 2.4.7 accepts regular YouTube video IDs as well as music searches.
+The adapter reads pasted-video metadata synchronously, preserves repeated playlist
+entries across continuation pages, and rejects interrupted pagination. Native
+playback prefers direct M4A with the resolver's public request headers. Opus or
+blocked direct streams use the extension downloader and a temporary AAC playback
+copy when needed. Imports use the original downloaded audio for MP3 conversion.
+The YouTube package does not declare the signed-session verification used by
+Tidal/Qobuz; its optional token settings remain in Configure.
 
 The host uses Mornye's network permissions, QuickJS limits, encrypted storage,
 signed sessions, file grants, cancellation and FFmpeg command registry. File

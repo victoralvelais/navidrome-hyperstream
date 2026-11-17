@@ -136,7 +136,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                       Wrap(
                         spacing: 12,
                         children: [
-                          if (extension.audio)
+                          if (extension.requiresVerification)
                             TextButton.icon(
                               onPressed: disabled
                                   ? null
@@ -165,7 +165,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                                 busy == extension.id ? 'Working…' : 'Verify',
                               ),
                             ),
-                          if (extension.audio)
+                          if (extension.requiresVerification)
                             TextButton.icon(
                               onPressed: disabled
                                   ? null

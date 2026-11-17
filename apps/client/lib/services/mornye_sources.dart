@@ -32,6 +32,7 @@ class MornyeExtension {
   final String id, name, version, checksum;
   final Uri url;
   final bool audio, installed, enabled;
+  bool get requiresVerification => ['qobuz-web', 'tidal-web'].contains(id);
 }
 
 class ProviderVerificationRequired extends SourceException {

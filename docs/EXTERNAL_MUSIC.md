@@ -1,9 +1,9 @@
-# External music in 0.56.3
+# External music in 0.57.0
 
 ## Use
 
 1. Open Home > Music sources. Install Spotify Web for catalog search and either
-   Tidal or Qobuz for audio, or use Tidal/Qobuz directly for both. Packages are
+   Tidal, Qobuz or YouTube Music for audio, or use those sources directly for both. Packages are
    downloaded from pinned Mornye registry locations and checksum-verified.
 2. Choose the audio source for Spotify. When search, playback or an import needs
    verification, its browser opens directly over the current screen. Complete
@@ -15,10 +15,15 @@
    expire quickly; close an expired attempt and retry the action. Pasting does not
    start a new challenge or change the chosen provider.
    Configure exposes the package's settings, including optional HTTPS endpoints.
-3. Open Search > Online and choose a catalog. Search for songs/albums/playlists,
-   or paste a public Spotify, Tidal or Qobuz song, album or playlist link with its
-   matching source selected. Shortened sharing links and private playlists are
-   not part of this initial supported set.
+3. Search now has one text field and an Online toggle. The toggle switches
+   between library and online results without navigating away or clearing the
+   query. Online requests only run while Online is selected. Choose a catalog
+   there, then search songs/albums/playlists or paste a public music link.
+   Spotify, Tidal and Qobuz links require their matching source. YouTube Music
+   accepts regular youtube.com/watch and youtu.be links, Shorts/live/embed video
+   links, public playlist links and Music browse/album links. A video link with
+   both `v` and `list` opens that video; a playlist link opens the collection.
+   Private playlists and other providers' shortened share links are unsupported.
 4. Open the collection and play it through the shared queue. Playlist order and
    repeat entries are retained. Each song has its own download control; the
    collection download imports one copy of each distinct recording.
@@ -55,8 +60,8 @@ Navidrome scrobbling, favorites and server-playlist actions apply to library tra
 
 ## Extension runtime and playback
 
-The initial supported packages are Spotify Web 1.10.6, Tidal Web 1.2.14 and
-Qobuz Web 1.2.27. This is a reviewed subset of the Mornye JavaScript ecosystem;
+The supported packages are Spotify Web 1.10.6, Tidal Web 1.2.14,
+Qobuz Web 1.2.27 and YouTube Music 2.4.7. This is a reviewed subset of the Mornye JavaScript ecosystem;
 arbitrary extension installation and automatic package updates are not exposed.
 The native host is pinned to Mornye 5.3.1's runtime and retains its feature gates,
 network permissions, encrypted extension storage, signed sessions, cancellation
@@ -81,6 +86,20 @@ response. Segmented responses use the extension downloader and may wait for
 media preparation before playback begins. Prepared audio is temporary; app-side
 stream resolution is not a persistent offline library.
 
+YouTube searches use YouTube Music's catalog; this is not general YouTube video
+search. Pasted videos keep their exact upload ID, uploader, title and available
+thumbnail/duration. Native playback prefers M4A and forwards only the resolver's
+public User-Agent, Origin and Referer headers. If a direct link remains blocked,
+the package downloader tries its supported paths. Opus/WebM/Ogg playback copies
+are converted to AAC for the native players, so fallback playback may take longer
+to start. Imports convert the original downloaded audio directly to MP3 320;
+that conversion does not improve the source's original fidelity. There is no
+signed-session Verify button for YouTube; optional token settings use Configure.
+
+YouTube collection pagination retains repeated uploads and fails if a page is
+missing or the continuation chain loops/exceeds its bound. A failed page is not
+silently treated as a complete downloadable playlist.
+
 Installed packages, the host's encrypted store and temporary media live in app
 storage. The encryption key and source selection use the existing protected
 device store. Remote-folder and Navidrome credentials are never passed into an
@@ -90,8 +109,9 @@ alone publishes the validated MP3 to SMB.
 Build details, source revisions, licensing and replacement instructions:
 [native host](../apps/client/packages/mornye_host/UPSTREAM.md).
 
-Live checks returned Spotify and Tidal metadata and reached Qobuz's verification
-requirement. End-to-end gateway verification, provider audio, actual iPhone
+Live checks returned Spotify, Tidal and YouTube metadata, resolved a direct
+YouTube M4A URL, and reached Qobuz's verification requirement.
+End-to-end gateway verification, provider audio, actual iPhone
 playback and remote delivery still need user acceptance. Service availability is
 controlled by the provider and gateway. Durable import recovery, automatic
 fallback, additional extensions and library-index confirmation remain future work.

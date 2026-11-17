@@ -51,6 +51,78 @@ mod tests {
     fn call(method: &str, args: Value, id: &str) -> Value {
         json!({"op":"call","id":"tidal-web","method":method,"args":args,"request_id":id})
     }
+    fn youtube_fixture() -> (tempfile::TempDir, Host) {
+        let (root, host) = fixture();
+        let dir = host.directory("ytmusic-spotiflac").unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("manifest.json"), json!({
+            "name":"ytmusic-spotiflac","version":"2.4.7","displayName":"YouTube test", "description":"Synthetic test provider", "author":"Hyperstream tests",
+            "type":["metadata_provider","download_provider"],"minAppVersion":"4.5.1",
+            "permissions":{"network":["example.test"],"storage":true,"file":true}
+        }).to_string()).unwrap();
+        fs::write(dir.join("index.js"), r#"
+            function requestInnerTubeAudioDownload(id) {
+                if (id === 'failed') throw new Error('provider unavailable');
+                return {extension:'.opus', url:'https://example.test/opus', alternatives:
+                    id === 'opus' ? [] : [{extension:'.m4a', url:'https://example.test/'+id, ua:'Synthetic client'}]};
+            }
+            function waitUntilAvailable() { return true; }
+            function fetchVideoMetadataSync(id) { return {id:id, title:'User upload', duration:150}; }
+            function sanitizeTrackBeforeReturn(t) { return {id:t.id, name:t.title || 'Upload', duration_ms:(t.duration || 0)*1000}; }
+            var CONFIG = {clientVersion:'synthetic'}, MAX_CONTINUATION_PAGES = 2;
+            var fixtureMode = '';
+            function getRandomUserAgent() { return 'Synthetic client'; }
+            function fetchJSONSync(url, options) { fixtureMode = JSON.parse(options.body).browseId; return {}; }
+            function parseBrowseResponse() { return {name:'Practice', album:{total_tracks:4}, tracks:[{id:'a'},{id:'b'}], _continuationToken:'page2'}; }
+            function fetchContinuationSync() { return fixtureMode === 'VLbroken' ? null : {}; }
+            function parseContinuationResponse() { return {tracks:[{id:'a'},{id:'c'}], continuationToken:fixtureMode === 'VLloop' ? 'page2' : null}; }
+            function parseItemExtended(t) { return t; }
+            function applyBrowseCollectionMetadata() {}
+            registerExtension({getTrack:function() { return {title:'Loading...'}; }});
+        "#).unwrap();
+        host.environment
+            .set_setting("ytmusic-spotiflac", "_hyperstream_enabled", json!(true))
+            .unwrap();
+        (root, host)
+    }
+    #[test]
+    fn youtube_stream_uses_m4a_with_request_context_or_prepares_audio() {
+        let (_root, host) = youtube_fixture();
+        let resolve = |id| {
+            host.call(&json!({"op":"call","id":"ytmusic-spotiflac","method":"hyperstreamResolve", "args":[id,"best"],"request_id":id})).unwrap()
+        };
+        let direct = resolve("exact-upload");
+        assert_eq!(direct["url"], "https://example.test/exact-upload");
+        assert_eq!(direct["headers"]["User-Agent"], "Synthetic client");
+        assert_eq!(direct["prepareOnFailure"], true);
+        assert_eq!(resolve("opus"), json!({"prepare":true}));
+        assert_eq!(resolve("failed"), json!({"prepare":true}));
+    }
+    #[test]
+    fn youtube_pasted_upload_returns_metadata_without_placeholder_or_matching() {
+        let (_root, host) = youtube_fixture();
+        let track = host.call(&json!({"op":"call","id":"ytmusic-spotiflac","method":"getTrack", "args":["abcdefghijk"],"request_id":"track"})).unwrap();
+        assert_eq!(
+            track,
+            json!({"id":"abcdefghijk", "name":"User upload", "duration_ms":150000})
+        );
+    }
+    #[test]
+    fn youtube_playlist_pagination_preserves_repeats_and_rejects_partial_pages() {
+        let (_root, host) = youtube_fixture();
+        let request = |id| json!({"op":"call","id":"ytmusic-spotiflac","method":"getPlaylist", "args":[id],"request_id":id});
+        let playlist = host.call(&request("practice")).unwrap();
+        assert_eq!(playlist["total_tracks"], 4);
+        let ids: Vec<_> = playlist["tracks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["a", "b", "a", "c"]);
+        assert!(host.call(&request("broken")).is_err());
+        assert!(host.call(&request("loop")).is_err());
+    }
     #[test]
     fn real_js_adapter_resolves_and_preserves_identity() {
         let (_root, host) = fixture();

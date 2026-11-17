@@ -86,6 +86,7 @@ void main() {
           return [
             extension('spotify-web', audio: false),
             extension('tidal-web'),
+            extension('ytmusic-spotiflac'),
           ];
         }
         if (r['op'] == 'ffmpeg_poll') return [];
@@ -101,6 +102,109 @@ void main() {
     sources.dispose();
     await root.delete(recursive: true);
   });
+
+  test(
+    'YouTube links resolve exact uploads synchronously and reject lookalikes',
+    () async {
+      final requests = <Map<String, dynamic>>[];
+      operation = (r) async {
+        requests.add(r);
+        return {
+          'id': r['args'][0],
+          'name': 'A homemade remix',
+          'artists': 'Uploader',
+          'duration_ms': 145000,
+          'cover_url': 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg',
+        };
+      };
+      final provider = MornyeProvider(sources, 'ytmusic-spotiflac', proxy);
+      for (final link in [
+        'https://www.youtube.com/watch?v=abcdefghijk&list=PLother',
+        'https://music.youtube.com/watch?v=abcdefghijk',
+        'https://youtu.be/abcdefghijk?t=20',
+        'https://m.youtube.com/shorts/abcdefghijk',
+        'https://www.youtube.com/live/abcdefghijk',
+      ]) {
+        final found = await provider.search(link);
+        expect(found.tracks.single.source!.trackId, 'abcdefghijk');
+        expect(found.tracks.single.title, 'A homemade remix');
+        expect(found.tracks.single.duration, const Duration(seconds: 145));
+        expect(found.tracks.single.source!.artwork?.host, 'i.ytimg.com');
+      }
+      expect(requests.every((r) => r['method'] == 'getTrack'), true);
+      for (final link in [
+        'https://youtube.com.evil.test/watch?v=abcdefghijk',
+        'https://user:pass@youtube.com/watch?v=abcdefghijk',
+        'https://youtube.com/watch?v=bad',
+        'https://youtube.com/@channel',
+      ]) {
+        await expectLater(
+          provider.search(link),
+          throwsA(isA<SourceException>()),
+        );
+      }
+      expect(requests, hasLength(5));
+    },
+  );
+
+  test('YouTube public playlists retain upload IDs and repeat order', () async {
+    operation = (r) async {
+      expect(r['method'], 'getPlaylist');
+      expect(r['args'], ['PLpublic']);
+      return {
+        'name': 'Practice uploads',
+        'total_tracks': 3,
+        'tracks': [
+          for (final id in ['abcdefghijk', 'lmnopqrstuv', 'abcdefghijk'])
+            {'id': id, 'name': 'Upload $id', 'artists': 'Uploader'},
+        ],
+      };
+    };
+    final provider = MornyeProvider(sources, 'ytmusic-spotiflac', proxy);
+    final found = await provider.search(
+      'https://youtube.com/playlist?list=PLpublic',
+    );
+    expect(found.albums.single.id, 'playlist:PLpublic');
+    final tracks = await provider.album(found.albums.single);
+    expect(tracks.map((t) => t.source!.trackId), [
+      'abcdefghijk',
+      'lmnopqrstuv',
+      'abcdefghijk',
+    ]);
+  });
+
+  test(
+    'YouTube acquisition uses best audio and the actual returned format',
+    () async {
+      final recording = const SourceReference(
+        sourceId: 'mornye:ytmusic-spotiflac',
+        trackId: 'abcdefghijk',
+      );
+      final calls = <String>[];
+      operation = (r) async {
+        calls.add(r['method'] as String);
+        expect(r['id'], 'ytmusic-spotiflac');
+        expect(r['args'][0], 'abcdefghijk');
+        expect(r['args'][1], 'best');
+        if (r['method'] == 'hyperstreamResolve') return {'prepare': true};
+        final path = (r['args'][2] as String).replaceFirst('.m4a', '.opus');
+        await File(path).writeAsBytes([1, 2, 3]);
+        return {'success': true, 'file_path': path};
+      };
+      final acquisition = MornyeAcquisition(sources);
+      expect(await acquisition.resolve(recording, Completer<void>().future), {
+        'prepare': true,
+      });
+      final response = await MornyeProvider(
+        sources,
+        'ytmusic-spotiflac',
+        proxy,
+      ).download(recording, Completer<void>().future);
+      expect(response.headers['content-type'], 'audio/ogg');
+      expect(await response.stream.toBytes(), [1, 2, 3]);
+      expect(calls, ['hyperstreamResolve', 'hyperstreamDownload']);
+    },
+  );
 
   test(
     'playlist links open a collection and retain repeat tracks in order',

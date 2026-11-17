@@ -21,7 +21,12 @@ void main() {
     final catalog = await callMornye({'op': 'list'}) as List;
     expect(
       catalog.map((e) => e['id']),
-      containsAll(['spotify-web', 'tidal-web', 'qobuz-web']),
+      containsAll([
+        'spotify-web',
+        'tidal-web',
+        'qobuz-web',
+        'ytmusic-spotiflac',
+      ]),
     );
     expect(catalog.every((e) => e['installed'] == false), true);
     await expectLater(

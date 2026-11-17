@@ -29,6 +29,56 @@ void main() {
     ];
   });
   tearDown(() => sources.dispose());
+  test('YouTube request context is forwarded and blocked streams prepare a seekable fallback', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'hyperstream-youtube-fallback-',
+    );
+    final file = await File('${directory.path}/playback.m4a')
+        .writeAsBytes([0, 1, 2, 3, 4, 5]);
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    var preparations = 0;
+    upstream.listen((r) async {
+      requests++;
+      expect(r.headers.value('User-Agent'), 'Synthetic client');
+      expect(r.headers.value('Origin'), 'https://www.youtube.com');
+      expect(r.headers.value('Authorization'), isNull);
+      expect(r.headers.value('Cookie'), isNull);
+      r.response.statusCode = 403;
+      await r.response.close();
+    });
+    final proxy = SourceStreamProxy(
+      sources,
+      resolve: (_) async => SourceStreamMedia(
+        uri: Uri.parse('http://127.0.0.1:${upstream.port}/blocked'),
+        headers: {
+          'User-Agent': 'Synthetic client',
+          'Origin': 'https://www.youtube.com',
+          'Authorization': 'synthetic-must-not-forward',
+          'Cookie': 'synthetic-must-not-forward',
+        },
+        prepare: () async {
+          preparations++;
+          return PreparedSourceAudio(file, directory);
+        },
+      ),
+    );
+    await proxy.start();
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final url = proxy.uri(track);
+    final audio = await http.get(url, headers: {'Range': 'bytes=2-4'});
+    expect(audio.statusCode, 206);
+    expect(audio.headers['content-type'], 'audio/mp4');
+    expect(audio.bodyBytes, [2, 3, 4]);
+    final head = await http.head(url);
+    expect(head.headers['content-length'], '6');
+    expect(preparations, 1);
+    expect(requests, 2);
+    expect(sources.issue.value, isNull);
+  });
   test('HTTPS CDN redirects preserve ranges and reject a downgrade', () async {
     final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final seen = <String>[];

@@ -9,6 +9,7 @@ import 'mornye_sources.dart';
 import 'music_provider.dart';
 import 'source_stream_proxy.dart';
 import 'remote_transfer_background.dart';
+import 'source_audio_preparation.dart';
 
 class MornyeProvider implements MusicProvider {
   MornyeProvider(this.sources, this.extensionId, this.proxy);
@@ -39,12 +40,15 @@ class MornyeProvider implements MusicProvider {
       final kindIndex = link.pathSegments.indexWhere(
         (p) => ['playlist', 'album', 'track'].contains(p),
       );
-      final kind = kindIndex >= 0 && kindIndex + 1 < link.pathSegments.length
+      var kind = kindIndex >= 0 && kindIndex + 1 < link.pathSegments.length
           ? link.pathSegments[kindIndex]
           : null;
-      final collectionId = kind == null
-          ? null
-          : link.pathSegments[kindIndex + 1];
+      var collectionId = kind == null ? null : link.pathSegments[kindIndex + 1];
+      if (extensionId == 'ytmusic-spotiflac') {
+        final target = youtubeTarget(link);
+        kind = target.$1;
+        collectionId = target.$2;
+      }
       final response = kind == null
           ? await _call('handleUrl', [query])
           : await _call(
@@ -121,8 +125,41 @@ class MornyeProvider implements MusicProvider {
         'open.qobuz.com',
         'play.qobuz.com',
       ].contains(host),
+      'ytmusic-spotiflac' => [
+        'youtube.com',
+        'www.youtube.com',
+        'm.youtube.com',
+        'music.youtube.com',
+        'youtu.be',
+      ].contains(host),
       _ => false,
     };
+  }
+
+  static (String, String) youtubeTarget(Uri link) {
+    final path = link.pathSegments;
+    final video = link.host == 'youtu.be'
+        ? path.firstOrNull
+        : link.queryParameters['v'] ??
+              (path.length == 2 &&
+                      ['shorts', 'live', 'embed', 'v'].contains(path.first)
+                  ? path.last
+                  : null);
+    if (video != null && RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video)) {
+      return ('track', video);
+    }
+    final playlist = link.queryParameters['list'];
+    if (playlist != null && RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(playlist)) {
+      return ('playlist', playlist);
+    }
+    if (path.length == 2 &&
+        path.first == 'browse' &&
+        RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(path.last)) {
+      return ('album', path.last);
+    }
+    throw const SourceException(
+      'Paste a YouTube video, public playlist or YouTube Music album link.',
+    );
   }
 
   @override
@@ -259,7 +296,10 @@ class MornyeProvider implements MusicProvider {
       albumId: albumId,
       artwork:
           publicArtwork(
-            raw['cover_url'] ?? raw['images'] ?? raw['image_url'],
+            raw['cover_url'] ??
+                raw['images'] ??
+                raw['image_url'] ??
+                raw['thumbnail'],
           ) ??
           album?.artwork,
       isrc: raw['isrc'] as String?,
@@ -271,7 +311,11 @@ class MornyeProvider implements MusicProvider {
       title: _string(raw['name'] ?? raw['title'], 'Untitled track'),
       artist: _string(raw['artists'] ?? raw['artist'], 'Unknown artist'),
       album: _string(raw['album_name'] ?? raw['album'], album?.title ?? ''),
-      duration: Duration(milliseconds: _integer(raw['duration_ms']) ?? 0),
+      duration: Duration(
+        milliseconds:
+            _integer(raw['duration_ms']) ??
+            ((_integer(raw['duration']) ?? 0) * 1000),
+      ),
       number: _integer(raw['track_number']),
       albumId: albumId,
       source: source,
@@ -322,9 +366,7 @@ class MornyeAcquisition {
     if (catalog != 'spotify-web') return (catalog, track.trackId);
     final audio = sources.audioProvider;
     if (audio == null || !sources.has(audio)) {
-      throw const SourceException(
-        'Choose Tidal or Qobuz as your audio source in Music sources.',
-      );
+      throw const SourceException('Choose an audio source in Music sources.');
     }
     final original = await sources.execute({
       'op': 'call',
@@ -369,7 +411,14 @@ class MornyeAcquisition {
       'op': 'call',
       'id': id,
       'method': 'hyperstreamResolve',
-      'args': [trackId, id == 'tidal-web' ? 'HIGH' : 'LOSSLESS'],
+      'args': [
+        trackId,
+        id == 'ytmusic-spotiflac'
+            ? 'best'
+            : id == 'tidal-web'
+            ? 'HIGH'
+            : 'LOSSLESS',
+      ],
     }, abort: abort);
     if (result is! Map) {
       throw const SourceException('This source did not return playable audio.');
@@ -379,8 +428,9 @@ class MornyeAcquisition {
 
   Future<PreparedSourceAudio> download(
     SourceReference track,
-    Future<void> abort,
-  ) async {
+    Future<void> abort, {
+    bool forPlayback = false,
+  }) async {
     final directory = await Directory('${sources.root!.path}/downloads')
         .createTemp('audio-');
     var cancelled = false;
@@ -394,7 +444,11 @@ class MornyeAcquisition {
         'id': id,
         'method': 'hyperstreamDownload',
         'directory': directory.path,
-        'args': [trackId, 'LOSSLESS', '${directory.path}/source.flac'],
+        'args': [
+          trackId,
+          id == 'ytmusic-spotiflac' ? 'best' : 'LOSSLESS',
+          '${directory.path}/source.${id == 'ytmusic-spotiflac' ? 'm4a' : 'flac'}',
+        ],
       }, abort: abort);
       if (cancelled) throw const SourceException('Import cancelled.');
       if (result is! Map ||
@@ -413,7 +467,11 @@ class MornyeAcquisition {
           'The provider returned an invalid audio file.',
         );
       }
-      return PreparedSourceAudio(file, directory);
+      final playable = forPlayback
+          ? await SourceAudioPreparation.prepare(file, abort)
+          : file;
+      if (cancelled) throw const SourceException('Playback cancelled.');
+      return PreparedSourceAudio(playable, directory);
     } on Object {
       if (await directory.exists()) await directory.delete(recursive: true);
       rethrow;

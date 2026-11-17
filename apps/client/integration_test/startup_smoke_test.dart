@@ -52,7 +52,12 @@ void main() {
     expect(sources.error, isNull, reason: sources.error);
     expect(
       sources.extensions.map((source) => source.id),
-      containsAll(['spotify-web', 'tidal-web', 'qobuz-web']),
+      containsAll([
+        'spotify-web',
+        'tidal-web',
+        'qobuz-web',
+        'ytmusic-spotiflac',
+      ]),
     );
     if (Platform.isIOS) {
       await tester.runAsync(() async {
