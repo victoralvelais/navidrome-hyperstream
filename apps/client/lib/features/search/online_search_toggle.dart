@@ -195,27 +195,11 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
               onTap: _toggle,
               onLongPress: _chooseSource,
               onSecondaryTap: _chooseSource,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
+              child: Container(
                 constraints: const BoxConstraints(minHeight: 44),
-                margin: const EdgeInsets.all(3),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: 10,
                   vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: widget.enabled
-                      ? LinearGradient(
-                          colors: [
-                            colors.primary.withValues(alpha: .18),
-                            colors.primary.withValues(alpha: .04),
-                          ],
-                        )
-                      : null,
-                  color: _focused || _hovered
-                      ? colors.onSurface.withValues(alpha: .06)
-                      : null,
                 ),
                 child: ExcludeSemantics(
                   child: Row(
@@ -235,9 +219,10 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
                           color: widget.enabled
                               ? colors.primary
                               : colors.onSurfaceVariant,
-                          fontWeight: widget.enabled
-                              ? FontWeight.w700
-                              : FontWeight.w500,
+                          fontWeight: FontWeight.w600,
+                          decoration: _focused || _hovered
+                              ? TextDecoration.underline
+                              : TextDecoration.none,
                         ),
                       ),
                     ],

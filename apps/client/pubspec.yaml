@@ -5,7 +5,7 @@ description: "A native Navidrome library player for iPhone, iPad, and Windows."
 publish_to: 'none'
 # Semantic release version. Bump PATCH for fixes and MINOR for feature releases.
 # CI supplies platform build metadata separately from this public version.
-version: 0.57.1
+version: 0.57.2
 
 environment:
   # Dart SDK constraint. The tested Flutter SDK is 3.47.9 (also pinned in CI).

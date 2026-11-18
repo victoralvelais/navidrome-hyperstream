@@ -1,4 +1,4 @@
-# External music in 0.57.1
+# External music in 0.57.2
 
 ## Use
 
@@ -15,9 +15,11 @@
    expire quickly; close an expired attempt and retry the action. Pasting does not
    start a new challenge or change the chosen provider.
    Configure exposes the package's settings, including optional HTTPS endpoints.
-3. Search has one text field. Tap the Online indicator to add online results
+3. The floating Search title bar is the text field, leaving more space for
+   discovery and results. Tap the Online indicator to add online results
    alongside library matches; tap again to hide only the online results. The
-   indicator glows when enabled, without a separate button border or checkmark.
+   icon and label are gray when off and accent-colored when on, with no pill,
+   background, border or checkmark. Keyboard focus is shown with an underline.
    Hold it to choose a source from an anchored menu (right-click or Shift+F10 on
    Windows; an accessible source-selection action is also available). There is
    no separate source-selection field in unified search. Switching sources only

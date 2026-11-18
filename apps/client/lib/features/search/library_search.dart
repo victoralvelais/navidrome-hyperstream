@@ -5,7 +5,6 @@ import 'external_music_page.dart';
 import 'online_search_toggle.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
-import '../../widgets/floating_chrome.dart';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -241,55 +240,82 @@ class _LibrarySearchState extends State<LibrarySearch> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FloatingTopBar(
-          title: widget.onSongSelected != null ? 'Add songs' : 'Search',
-          trailing: widget.onSongSelected == null
-              ? OnlineSearchToggle(
-                  key: const ValueKey('search-online-toggle'),
-                  enabled: _online,
-                  onChanged: _toggleOnline,
-                  sources: widget.sources ?? MusicSources.instance,
-                )
-              : null,
-        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
           child: GlassSurface(
+            key: const ValueKey('search-bar'),
             radius: 28,
-            child: TextField(
-              controller: _controller,
-              onChanged: _changed,
-              onSubmitted: (_) => _submit(),
-              textInputAction: TextInputAction.search,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: _online
-                    ? 'Search library and online'
-                    : 'Search your library',
-                floatingLabelBehavior: FloatingLabelBehavior.never,
-                filled: false,
-                hintText: _online
-                    ? 'Songs, albums and playlist links'
-                    : 'Artists, albums and songs',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear search',
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () {
-                          _controller.clear();
-                          _changed('');
-                        },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      label: _online
+                          ? 'Search library and online'
+                          : 'Search your library',
+                      child: TextField(
+                        controller: _controller,
+                        onChanged: _changed,
+                        onSubmitted: (_) => _submit(),
+                        textInputAction: TextInputAction.search,
+                        autocorrect: false,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          filled: false,
+                          hintText: widget.onSongSelected != null
+                              ? 'Find songs to add'
+                              : 'Search',
+                          hintStyle: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 22,
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
+                          ),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Clear search',
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    _controller.clear();
+                                    _changed('');
+                                  },
+                                ),
+                        ),
                       ),
+                    ),
+                  ),
+                  if (widget.onSongSelected == null)
+                    TextFieldTapRegion(
+                      child: OnlineSearchToggle(
+                        key: const ValueKey('search-online-toggle'),
+                        enabled: _online,
+                        onChanged: _toggleOnline,
+                        sources: widget.sources ?? MusicSources.instance,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                ],
               ),
             ),
           ),
