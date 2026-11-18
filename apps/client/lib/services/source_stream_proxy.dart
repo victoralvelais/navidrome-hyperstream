@@ -288,15 +288,17 @@ class SourceStreamProxy {
     if (!_closed.isCompleted) _closed.complete();
     await _server?.close(force: true);
     _server = null;
-    for (final value in _media.values) {
+    // Cancellation may remove failed resolutions while cleanup awaits them.
+    final pending = List.of(_media.values);
+    _media.clear();
+    _tracks.clear();
+    for (final value in pending) {
       try {
         await (await value).file?.dispose();
       } on Object {
         /* Best effort on exit. */
       }
     }
-    _media.clear();
-    _tracks.clear();
   }
 }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/mornye_provider.dart';
 import 'package:hyperstream_client/services/mornye_sources.dart';
+import 'package:hyperstream_client/services/music_provider.dart';
 import 'package:hyperstream_client/services/source_stream_proxy.dart';
 
 void main() {
@@ -29,6 +31,28 @@ void main() {
     ];
   });
   tearDown(() => sources.dispose());
+  test('closing with a failing resolution retires the cache safely', () async {
+    final started = Completer<void>();
+    final pending = Completer<SourceStreamMedia>();
+    final proxy = SourceStreamProxy(
+      sources,
+      resolve: (_) {
+        started.complete();
+        return pending.future;
+      },
+    );
+    await proxy.start();
+    final request = http
+        .get(proxy.uri(track))
+        .then<void>((_) {}, onError: (Object _) {});
+    await started.future;
+    final closing = proxy.close();
+    // Let close begin waiting on the resolution before it removes its own entry.
+    await Future<void>.delayed(Duration.zero);
+    pending.completeError(const SourceException('Playback cancelled.'));
+    await closing;
+    await request;
+  });
   test('YouTube request context is forwarded and blocked streams prepare a seekable fallback', () async {
     final directory = await Directory.systemTemp.createTemp(
       'hyperstream-youtube-fallback-',
