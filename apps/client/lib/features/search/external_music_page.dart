@@ -24,6 +24,8 @@ class ExternalMusicPage extends StatefulWidget {
     this.sources,
     this.searchQuery,
     this.refreshRevision = 0,
+    this.showTracks = true,
+    this.showAlbums = true,
   });
   final NavidromeClient client;
   final PlaybackService playback;
@@ -33,6 +35,8 @@ class ExternalMusicPage extends StatefulWidget {
   /// When supplied, render slivers under the shared library search controls.
   final String? searchQuery;
   final int refreshRevision;
+  final bool showTracks;
+  final bool showAlbums;
   @override
   State<ExternalMusicPage> createState() => _ExternalMusicPageState();
 }
@@ -174,8 +178,12 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
   );
 
   Widget _heading(String text) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-    child: Text(text, style: Theme.of(context).textTheme.titleLarge),
+    padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
+    ),
   );
 
   Future<void> _play([Track? selected]) async {
@@ -298,8 +306,8 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
         ),
       ),
     ],
-    if (tracks.isNotEmpty) _heading('Songs'),
-    for (final track in tracks)
+    if (widget.showTracks && tracks.isNotEmpty) _heading('Songs'),
+    for (final track in widget.showTracks ? tracks : <Track>[])
       ListTile(
         enabled: track.source!.available,
         leading: SizedBox.square(
@@ -322,8 +330,8 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
         onTap: track.source!.available ? () => _play(track) : null,
         trailing: SourceDownloadButton(client: widget.client, tracks: [track]),
       ),
-    if (albums.isNotEmpty) _heading('Albums'),
-    for (final album in albums)
+    if (widget.showAlbums && albums.isNotEmpty) _heading('Albums'),
+    for (final album in widget.showAlbums ? albums : <SourceAlbum>[])
       ListTile(
         leading: SizedBox.square(
           dimension: 56,
@@ -357,8 +365,8 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
         error == null &&
         sources.hasProviders &&
         query.text.trim().isNotEmpty &&
-        tracks.isEmpty &&
-        albums.isEmpty)
+        (!widget.showTracks || tracks.isEmpty) &&
+        (!widget.showAlbums || albums.isEmpty))
       const Padding(
         padding: EdgeInsets.all(24),
         child: Text('No matches from this source.'),
@@ -367,9 +375,15 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
 
   Widget _embedded() => SliverMainAxisGroup(
     slivers: [
-      if (_sourcePicker() case final picker?) SliverToBoxAdapter(child: picker),
-      if (busy) const SliverToBoxAdapter(child: LinearProgressIndicator()),
-      SliverList.list(children: _results()),
+      if (widget.showTracks || widget.showAlbums) ...[
+        SliverToBoxAdapter(
+          child: _heading(
+            'Online${provider == null ? '' : ' · ${provider!.name}'}',
+          ),
+        ),
+        if (busy) const SliverToBoxAdapter(child: LinearProgressIndicator()),
+        SliverList.list(children: _results()),
+      ],
     ],
   );
 

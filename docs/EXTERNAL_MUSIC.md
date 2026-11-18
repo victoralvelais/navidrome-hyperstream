@@ -1,4 +1,4 @@
-# External music in 0.57.0
+# External music in 0.57.1
 
 ## Use
 
@@ -15,10 +15,18 @@
    expire quickly; close an expired attempt and retry the action. Pasting does not
    start a new challenge or change the chosen provider.
    Configure exposes the package's settings, including optional HTTPS endpoints.
-3. Search now has one text field and an Online toggle. The toggle switches
-   between library and online results without navigating away or clearing the
-   query. Online requests only run while Online is selected. Choose a catalog
-   there, then search songs/albums/playlists or paste a public music link.
+3. Search has one text field. Tap the Online indicator to add online results
+   alongside library matches; tap again to hide only the online results. The
+   indicator glows when enabled, without a separate button border or checkmark.
+   Hold it to choose a source from an anchored menu (right-click or Shift+F10 on
+   Windows; an accessible source-selection action is also available). There is
+   no separate source-selection field in unified search. Switching sources only
+   refreshes online results. Online requests only run for a nonempty query while
+   Online is enabled. Discovery remains visible when the query is empty.
+   All/Albums/Songs filters apply across the displayed library and online
+   sections; artists currently come from the library. Combined All results show
+   a library preview with Show all library matches for expansion and pagination.
+   Search songs/albums/playlists or paste a public music link.
    Spotify, Tidal and Qobuz links require their matching source. YouTube Music
    accepts regular youtube.com/watch and youtu.be links, Shorts/live/embed video
    links, public playlist links and Music browse/album links. A video link with

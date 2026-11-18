@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'discover_page.dart';
 import 'external_music_page.dart';
+import 'online_search_toggle.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/glass_surface.dart';
 import '../../widgets/floating_chrome.dart';
@@ -61,16 +62,14 @@ class _LibrarySearchState extends State<LibrarySearch> {
   final _adding = <String>{};
   bool _online = false;
   int _onlineRefresh = 0;
+  bool _expandedLibrary = false;
+  bool get _previewLibrary =>
+      _online && _filter == _SearchPage.all && !_expandedLibrary;
 
   void _toggleOnline(bool value) {
-    _debounce?.cancel();
-    ++_revision;
-    setState(() {
-      _online = value;
-      _busy = false;
-    });
-    if (_scroll.hasClients) _scroll.jumpTo(0);
-    if (!value && _query.isNotEmpty) unawaited(_load(_revision));
+    // Online augments the current library request; toggling it must not reset
+    // library results, pagination, focus, or an in-flight library response.
+    setState(() => _online = value);
   }
 
   Future<void> _add(Track song) async {
@@ -111,6 +110,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
     final revision = ++_revision;
     setState(() {
       _query = query;
+      _expandedLibrary = false;
       _albums.clear();
       _songs.clear();
       _artists.clear();
@@ -118,10 +118,10 @@ class _LibrarySearchState extends State<LibrarySearch> {
       _moreAlbums = false;
       _moreSongs = false;
       _moreArtists = false;
-      _busy = !_online && query.isNotEmpty;
+      _busy = query.isNotEmpty;
     });
     if (_scroll.hasClients) _scroll.jumpTo(0);
-    if (!_online && query.isNotEmpty) {
+    if (query.isNotEmpty) {
       _debounce = Timer(
         const Duration(milliseconds: 350),
         () => _load(revision),
@@ -133,7 +133,6 @@ class _LibrarySearchState extends State<LibrarySearch> {
     FocusScope.of(context).unfocus();
     if (_online) {
       setState(() => ++_onlineRefresh);
-      return;
     }
     if (_debounce?.isActive ?? false) {
       _debounce!.cancel();
@@ -143,7 +142,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
 
   Future<void> _load(int revision, {_SearchPage page = _SearchPage.all}) async {
     final query = _query;
-    if (_online || query.isEmpty || _loadingRevision == revision) return;
+    if (query.isEmpty || _loadingRevision == revision) return;
     _loadingRevision = revision;
     setState(() {
       _busy = true;
@@ -245,15 +244,11 @@ class _LibrarySearchState extends State<LibrarySearch> {
         FloatingTopBar(
           title: widget.onSongSelected != null ? 'Add songs' : 'Search',
           trailing: widget.onSongSelected == null
-              ? FilterChip(
+              ? OnlineSearchToggle(
                   key: const ValueKey('search-online-toggle'),
-                  selected: _online,
-                  onSelected: _toggleOnline,
-                  avatar: const Icon(Icons.public_rounded, size: 18),
-                  label: const Text('Online'),
-                  tooltip: _online
-                      ? 'Search your library'
-                      : 'Search online sources',
+                  enabled: _online,
+                  onChanged: _toggleOnline,
+                  sources: widget.sources ?? MusicSources.instance,
                 )
               : null,
         ),
@@ -269,7 +264,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
               autocorrect: false,
               decoration: InputDecoration(
                 labelText: _online
-                    ? 'Search online or paste a link'
+                    ? 'Search library and online'
                     : 'Search your library',
                 floatingLabelBehavior: FloatingLabelBehavior.never,
                 filled: false,
@@ -299,8 +294,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
             ),
           ),
         ),
-        if (!_online &&
-            widget.onSongSelected == null &&
+        if (widget.onSongSelected == null &&
             (_query.isNotEmpty || !widget.discover))
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -340,8 +334,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
   );
 
   @override
-  Widget build(BuildContext context) =>
-      !_online && widget.discover && _query.isEmpty
+  Widget build(BuildContext context) => widget.discover && _query.isEmpty
       ? DiscoverPage(
           client: widget.client,
           onAlbum: widget.onAlbumSelected,
@@ -355,9 +348,8 @@ class _LibrarySearchState extends State<LibrarySearch> {
               _debounce?.cancel();
               if (_online) {
                 setState(() => ++_onlineRefresh);
-              } else {
-                await _load(++_revision);
               }
+              await _load(++_revision);
             },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -365,7 +357,188 @@ class _LibrarySearchState extends State<LibrarySearch> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
                 _header(),
-                if (_online)
+                if (_online && _query.isNotEmpty)
+                  SliverToBoxAdapter(child: _heading('Library')),
+                if (_query.isEmpty)
+                  SliverToBoxAdapter(
+                    child: _message(
+                      'Find your next listen. Search albums and songs in your Navidrome library.',
+                      icon: Icons.manage_search_rounded,
+                    ),
+                  ),
+                if ((_filter == _SearchPage.all ||
+                        _filter == _SearchPage.artists) &&
+                    _artists.isNotEmpty) ...[
+                  SliverToBoxAdapter(child: _heading('Artists')),
+                  SliverList.builder(
+                    itemCount: _previewLibrary
+                        ? _artists.length.clamp(0, 3)
+                        : _artists.length,
+                    itemBuilder: (_, index) => ArtistRow(
+                      artist: _artists[index],
+                      client: widget.client,
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                        widget.onArtistSelected?.call(_artists[index]);
+                      },
+                    ),
+                  ),
+                  if (_moreArtists && !_previewLibrary)
+                    SliverToBoxAdapter(
+                      child: TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _load(_revision, page: _SearchPage.artists),
+                        child: const Text('More artists'),
+                      ),
+                    ),
+                ],
+                if ((_filter == _SearchPage.all ||
+                        _filter == _SearchPage.albums) &&
+                    _albums.isNotEmpty) ...[
+                  SliverToBoxAdapter(child: _heading('Albums')),
+                  AlbumGrid(
+                    albums: _previewLibrary
+                        ? _albums.take(4).toList()
+                        : _albums,
+                    client: widget.client,
+                    onSelected: (album) {
+                      FocusScope.of(context).unfocus();
+                      widget.onAlbumSelected(album);
+                    },
+                  ),
+                ],
+                if ((_filter == _SearchPage.all ||
+                        _filter == _SearchPage.albums) &&
+                    _moreAlbums &&
+                    !_previewLibrary)
+                  SliverToBoxAdapter(
+                    child: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _load(_revision, page: _SearchPage.albums),
+                      child: const Text('More albums'),
+                    ),
+                  ),
+                if ((_filter == _SearchPage.all ||
+                        _filter == _SearchPage.songs) &&
+                    _songs.isNotEmpty) ...[
+                  SliverToBoxAdapter(child: _heading('Songs')),
+                  SliverList.builder(
+                    itemCount: _previewLibrary
+                        ? _songs.length.clamp(0, 5)
+                        : _songs.length,
+                    itemBuilder: (context, index) {
+                      final song = _songs[index];
+                      return ListTile(
+                        selected: playing.data?.id == song.id,
+                        leading: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CoverArt(
+                            client: widget.client,
+                            id: song.coverArt,
+                          ),
+                        ),
+                        title: Text(
+                          song.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${song.artist} · ${song.album}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: widget.onSongSelected != null
+                            ? IconButton(
+                                tooltip: 'Add ${song.title} to playlist',
+                                onPressed: _adding.contains(song.id)
+                                    ? null
+                                    : () => _add(song),
+                                icon: const Icon(
+                                  Icons.add_circle_outline_rounded,
+                                ),
+                              )
+                            : widget.collections == null
+                            ? const Icon(Icons.play_arrow_rounded)
+                            : SongActions(
+                                collections: widget.collections!,
+                                song: song,
+                              ),
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          if (widget.onSongSelected != null) {
+                            _add(song);
+                            return;
+                          }
+                          // Snapshot the loaded results so later paging/searching
+                          // cannot mutate a queue while the native player loads.
+                          widget.playback.playAlbum(
+                            widget.client,
+                            List.of(_songs),
+                            index,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+                if ((_filter == _SearchPage.all ||
+                        _filter == _SearchPage.songs) &&
+                    _moreSongs &&
+                    !_previewLibrary)
+                  SliverToBoxAdapter(
+                    child: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _load(_revision, page: _SearchPage.songs),
+                      child: const Text('More songs'),
+                    ),
+                  ),
+                if (!_busy && _error != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          TextButton(
+                            onPressed: () =>
+                                _load(_revision, page: _failedPage),
+                            child: const Text('Retry search'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (!_busy &&
+                    _error == null &&
+                    _query.isNotEmpty &&
+                    (_filter == _SearchPage.all
+                        ? _albums.isEmpty && _songs.isEmpty && _artists.isEmpty
+                        : switch (_filter) {
+                            _SearchPage.artists => _artists.isEmpty,
+                            _SearchPage.albums => _albums.isEmpty,
+                            _SearchPage.songs => _songs.isEmpty,
+                            _SearchPage.all => false,
+                          }))
+                  SliverToBoxAdapter(
+                    child: _message(
+                      _online ? 'No library matches.' : 'No matches. Try another album, song, or artist name.',
+                    ),
+                  ),
+                if (_previewLibrary &&
+                    (_albums.length > 4 ||
+                        _songs.length > 5 ||
+                        _artists.length > 3))
+                  SliverToBoxAdapter(
+                    child: TextButton(
+                      onPressed: () => setState(() => _expandedLibrary = true),
+                      child: const Text('Show all library matches'),
+                    ),
+                  ),
+                if (_online && _query.isNotEmpty)
                   ExternalMusicPage(
                     key: const ValueKey('online-search-results'),
                     client: widget.client,
@@ -373,173 +546,13 @@ class _LibrarySearchState extends State<LibrarySearch> {
                     sources: widget.sources,
                     searchQuery: _query,
                     refreshRevision: _onlineRefresh,
-                  )
-                else ...[
-                  if (_query.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _message(
-                        'Find your next listen. Search albums and songs in your Navidrome library.',
-                        icon: Icons.manage_search_rounded,
-                      ),
-                    ),
-                  if ((_filter == _SearchPage.all ||
-                          _filter == _SearchPage.artists) &&
-                      _artists.isNotEmpty) ...[
-                    SliverToBoxAdapter(child: _heading('Artists')),
-                    SliverList.builder(
-                      itemCount: _artists.length,
-                      itemBuilder: (_, index) => ArtistRow(
-                        artist: _artists[index],
-                        client: widget.client,
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          widget.onArtistSelected?.call(_artists[index]);
-                        },
-                      ),
-                    ),
-                    if (_moreArtists)
-                      SliverToBoxAdapter(
-                        child: TextButton(
-                          onPressed: _busy
-                              ? null
-                              : () =>
-                                    _load(_revision, page: _SearchPage.artists),
-                          child: const Text('More artists'),
-                        ),
-                      ),
-                  ],
-                  if ((_filter == _SearchPage.all ||
-                          _filter == _SearchPage.albums) &&
-                      _albums.isNotEmpty) ...[
-                    SliverToBoxAdapter(child: _heading('Albums')),
-                    AlbumGrid(
-                      albums: _albums,
-                      client: widget.client,
-                      onSelected: (album) {
-                        FocusScope.of(context).unfocus();
-                        widget.onAlbumSelected(album);
-                      },
-                    ),
-                  ],
-                  if ((_filter == _SearchPage.all ||
-                          _filter == _SearchPage.albums) &&
-                      _moreAlbums)
-                    SliverToBoxAdapter(
-                      child: TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _load(_revision, page: _SearchPage.albums),
-                        child: const Text('More albums'),
-                      ),
-                    ),
-                  if ((_filter == _SearchPage.all ||
-                          _filter == _SearchPage.songs) &&
-                      _songs.isNotEmpty) ...[
-                    SliverToBoxAdapter(child: _heading('Songs')),
-                    SliverList.builder(
-                      itemCount: _songs.length,
-                      itemBuilder: (context, index) {
-                        final song = _songs[index];
-                        return ListTile(
-                          selected: playing.data?.id == song.id,
-                          leading: SizedBox(
-                            width: 48,
-                            height: 48,
-                            child: CoverArt(
-                              client: widget.client,
-                              id: song.coverArt,
-                            ),
-                          ),
-                          title: Text(
-                            song.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${song.artist} · ${song.album}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: widget.onSongSelected != null
-                              ? IconButton(
-                                  tooltip: 'Add ${song.title} to playlist',
-                                  onPressed: _adding.contains(song.id)
-                                      ? null
-                                      : () => _add(song),
-                                  icon: const Icon(
-                                    Icons.add_circle_outline_rounded,
-                                  ),
-                                )
-                              : widget.collections == null
-                              ? const Icon(Icons.play_arrow_rounded)
-                              : SongActions(
-                                  collections: widget.collections!,
-                                  song: song,
-                                ),
-                          onTap: () {
-                            FocusScope.of(context).unfocus();
-                            if (widget.onSongSelected != null) {
-                              _add(song);
-                              return;
-                            }
-                            // Snapshot the loaded results so later paging/searching
-                            // cannot mutate a queue while the native player loads.
-                            widget.playback.playAlbum(
-                              widget.client,
-                              List.of(_songs),
-                              index,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                  if ((_filter == _SearchPage.all ||
-                          _filter == _SearchPage.songs) &&
-                      _moreSongs)
-                    SliverToBoxAdapter(
-                      child: TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _load(_revision, page: _SearchPage.songs),
-                        child: const Text('More songs'),
-                      ),
-                    ),
-                  if (!_busy && _error != null)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Text(_error!, textAlign: TextAlign.center),
-                            TextButton(
-                              onPressed: () =>
-                                  _load(_revision, page: _failedPage),
-                              child: const Text('Retry search'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (!_busy &&
-                      _error == null &&
-                      _query.isNotEmpty &&
-                      (_filter == _SearchPage.all
-                          ? _albums.isEmpty &&
-                                _songs.isEmpty &&
-                                _artists.isEmpty
-                          : switch (_filter) {
-                              _SearchPage.artists => _artists.isEmpty,
-                              _SearchPage.albums => _albums.isEmpty,
-                              _SearchPage.songs => _songs.isEmpty,
-                              _SearchPage.all => false,
-                            }))
-                    SliverToBoxAdapter(
-                      child: _message(
-                        'No matches. Try another album, song, or artist name.',
-                      ),
-                    ),
-                ],
+                    showTracks:
+                        _filter == _SearchPage.all ||
+                        _filter == _SearchPage.songs,
+                    showAlbums:
+                        _filter == _SearchPage.all ||
+                        _filter == _SearchPage.albums,
+                  ),
                 const SliverToBoxAdapter(child: DockSpacer()),
               ],
             ),

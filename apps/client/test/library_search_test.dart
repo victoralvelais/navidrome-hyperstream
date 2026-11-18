@@ -7,6 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:hyperstream_client/app_theme.dart';
 import 'package:hyperstream_client/features/search/library_search.dart';
+import 'package:hyperstream_client/features/search/online_search_toggle.dart';
+import 'package:hyperstream_client/services/mornye_sources.dart';
+import 'package:hyperstream_client/services/music_provider.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/music_sources.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
@@ -78,7 +81,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-      'one search field keeps its query across online/library toggle in $brightness',
+      'online augments library results and keeps one search field in $brightness',
       (tester) async {
         tester.view.physicalSize = const Size(393, 850);
         tester.view.devicePixelRatio = 1;
@@ -139,7 +142,9 @@ void main() {
           same(editor),
         );
         expect(find.text('Online upload'), findsOneWidget);
-        expect(find.text('Library song'), findsNothing);
+        expect(find.text('Library song'), findsOneWidget);
+        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+        expect(find.byType(FilterChip), findsNothing);
         expect(
           find.byTooltip('Download song to remote folder'),
           findsOneWidget,
@@ -170,6 +175,182 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'long press selects a source without toggling online or replacing library results',
+    (tester) async {
+      final catalogs = _SearchCatalogs();
+      final sources = MusicSources(extensions: catalogs);
+      addTearDown(() {
+        sources.dispose();
+        catalogs.dispose();
+      });
+      var libraryCalls = 0;
+      await mount(tester, (_) async {
+        libraryCalls++;
+        return results(
+          songs: [
+            {'id': 'saved', 'title': 'Library song'},
+          ],
+        );
+      }, sources: sources);
+      await query(tester, 'remix');
+      await tester.pumpAndSettle();
+      final toggle = find.byKey(const ValueKey('search-online-toggle'));
+      await tester.longPress(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<OnlineSearchToggle>(toggle).enabled, false);
+      await tester.tap(
+        find.byKey(const ValueKey('online-source-ytmusic-spotiflac')),
+      );
+      await tester.pumpAndSettle();
+      expect(catalogs.selected, 'ytmusic-spotiflac');
+      expect(catalogs.queries, isEmpty);
+      expect(find.text('Library song'), findsOneWidget);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.text('YouTube upload'), findsOneWidget);
+      expect(find.text('Library song'), findsOneWidget);
+      expect(find.text('Browse source'), findsNothing);
+      await tester.longPress(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<OnlineSearchToggle>(toggle).enabled, true);
+      await tester.tap(find.byKey(const ValueKey('online-source-tidal-web')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tidal song'), findsOneWidget);
+      expect(find.text('YouTube upload'), findsNothing);
+      expect(find.text('Library song'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'remix',
+      );
+      expect(catalogs.queries, ['ytmusic-spotiflac:remix', 'tidal-web:remix']);
+      expect(libraryCalls, 1);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.text('Tidal song'), findsNothing);
+      expect(find.text('Library song'), findsOneWidget);
+      expect(libraryCalls, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'online failure leaves library matches usable and retry only requests online',
+    (tester) async {
+      var libraryCalls = 0;
+      final catalogs = _SearchCatalogs()..fail = true;
+      final sources = MusicSources(extensions: catalogs);
+      addTearDown(() {
+        sources.dispose();
+        catalogs.dispose();
+      });
+      await mount(tester, (_) async {
+        libraryCalls++;
+        return results(
+          songs: [
+            {'id': 'saved', 'title': 'Library song'},
+          ],
+        );
+      }, sources: sources);
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      await query(tester, 'remix');
+      await tester.pumpAndSettle();
+      expect(find.text('Library song'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(catalogs.queries, hasLength(2));
+      expect(libraryCalls, 1);
+      expect(find.text('Library song'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'filters apply to both result groups without repeating their searches',
+    (tester) async {
+      final catalogs = _SearchCatalogs()..includeAlbum = true;
+      final sources = MusicSources(extensions: catalogs);
+      addTearDown(() {
+        sources.dispose();
+        catalogs.dispose();
+      });
+      var libraryCalls = 0;
+      await mount(tester, (_) async {
+        libraryCalls++;
+        return results(
+          songs: [
+            {'id': 'saved', 'title': 'Library song'},
+          ],
+          albums: [
+            {'id': 'album', 'name': 'Library album'},
+          ],
+        );
+      }, sources: sources);
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      await query(tester, 'remix');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('search-filter-albums')));
+      await tester.pumpAndSettle();
+      expect(find.text('Library album'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Online album'),
+        150,
+        scrollable: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
+      expect(find.text('Online album'), findsOneWidget);
+      expect(find.text('Library song'), findsNothing);
+      expect(find.text('Tidal song'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('search-filter-songs')));
+      await tester.pumpAndSettle();
+      expect(find.text('Library song'), findsOneWidget);
+      expect(find.text('Tidal song'), findsOneWidget);
+      expect(find.text('Library album'), findsNothing);
+      expect(find.text('Online album'), findsNothing);
+      expect(libraryCalls, 1);
+      expect(catalogs.queries, hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'online finishes independently while the library request is pending',
+    (tester) async {
+      final catalogs = _SearchCatalogs();
+      final sources = MusicSources(extensions: catalogs);
+      addTearDown(() {
+        sources.dispose();
+        catalogs.dispose();
+      });
+      final library = Completer<http.Response>();
+      await mount(tester, (_) => library.future, sources: sources);
+      await query(tester, 'remix');
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Tidal song'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      library.complete(
+        results(
+          songs: [
+            {'id': 'saved', 'title': 'Library song'},
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Library song'), findsOneWidget);
+      expect(find.text('Tidal song'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'search stays pinned over discovery and results without losing focus',
@@ -203,6 +384,12 @@ void main() {
           200,
         );
       }, discover: true);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('Recently added'), findsOneWidget);
+      expect(find.text('Browse source'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
       await tester.pumpAndSettle();
       final field = find.byType(TextField);
       final fieldBounds = tester.getRect(field);
@@ -382,4 +569,63 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+class _SearchCatalogs extends MornyeSources {
+  _SearchCatalogs() {
+    extensions = [
+      for (final entry in [
+        ('tidal-web', 'Tidal'),
+        ('ytmusic-spotiflac', 'YouTube Music'),
+      ])
+        MornyeExtension({
+          'id': entry.$1,
+          'display_name': entry.$2,
+          'version': '1.0.0',
+          'download_url': 'https://example.test/extension',
+          'sha256': 'synthetic',
+          'audio': true,
+          'installed': true,
+          'enabled': true,
+        }),
+    ];
+    selected = 'tidal-web';
+  }
+  final queries = <String>[];
+  bool fail = false;
+  bool includeAlbum = false;
+  @override
+  Future<void> choose({
+    String? catalog,
+    String? audio,
+    bool legacy = false,
+  }) async {
+    selected = catalog;
+    notifyListeners();
+  }
+
+  @override
+  Future<dynamic> execute(
+    Map<String, dynamic> request, {
+    Future<void>? abort,
+  }) async {
+    queries.add('${request['id']}:${request['args'][0]}');
+    if (fail) {
+      throw const SourceException('This source is unavailable. Try again.');
+    }
+    return [
+      if (includeAlbum)
+        {
+          'id': 'album',
+          'name': 'Online album',
+          'item_type': 'album',
+          'artists': 'Artist',
+        },
+      {
+        'id': 'upload',
+        'name': request['id'] == 'tidal-web' ? 'Tidal song' : 'YouTube upload',
+        'artists': 'Artist',
+      },
+    ];
+  }
 }
