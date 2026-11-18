@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import 'glass_surface.dart';
@@ -178,7 +179,7 @@ class GlassDropdownField<T> extends StatelessWidget {
             children: [
               Expanded(child: item.child),
               if (item.value == initialValue)
-                const Icon(Icons.check_rounded, size: 18),
+                const AppIcon(Icons.check_rounded, size: 18),
             ],
           ),
         ),
@@ -195,7 +196,7 @@ class GlassDropdownField<T> extends StatelessWidget {
                     ?.child ??
                 const SizedBox.shrink(),
           ),
-          const Icon(Icons.unfold_more_rounded, size: 20),
+          const AppIcon(Icons.unfold_more_rounded, size: 20),
         ],
       ),
     ),

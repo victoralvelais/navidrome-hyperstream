@@ -1,0 +1,87 @@
+name,material,cupertino,iconoir,ph,lucide,solar
+add,add add_rounded,add,plus,plus-light,plus,add
+add_circle,add_circle_outline_rounded,add_circled,plus-circle,plus-circle-light,circle-plus,add-circle
+airplay,airplay_rounded,antenna_radiowaves_left_right,airplay,airplay-light,airplay,screencast
+album,album_outlined album_rounded,music_albums,album,vinyl-record-light,disc-3,vinyl-record
+back,arrow_back_ios_new_rounded chevron_left chevron_left_rounded,chevron_left,nav-arrow-left,caret-left-light,chevron-left,alt-arrow-left
+arrow_back,arrow_back_rounded,arrow_left,arrow-left,arrow-left-light,arrow-left,arrow-left
+arrow_down,arrow_downward_rounded,arrow_down,arrow-down,arrow-down-light,arrow-down,arrow-down
+arrow_up,arrow_upward_rounded,arrow_up,arrow-up,arrow-up-light,arrow-up,arrow-up
+sparkles,auto_awesome_outlined auto_awesome_rounded,sparkles,sparks,sparkle-light,sparkles,stars
+moon,bedtime_outlined nightlight_round,moon,half-moon,moon-light,moon,moon
+bolt,bolt_rounded,bolt,flash,lightning-light,zap,bolt
+camera_flip,cameraswitch_outlined,camera_rotate,rotate-camera-right,camera-rotate-light,switch-camera,camera-rotate
+check_circle,check_circle_outline_rounded,check_mark_circled,check-circle,check-circle-light,circle-check,check-circle
+check_circle_fill,check_circle_rounded,check_mark_circled_solid,check-circle-solid,check-circle-fill,circle-check,check-circle
+check,check_rounded,check_mark,check,check-light,check,check
+next,chevron_right_rounded,chevron_right,nav-arrow-right,caret-right-light,chevron-right,alt-arrow-right
+record,circle,circle_fill,circle,circle-fill,circle,circle
+clear_queue,clear_all_rounded,text_badge_minus,list,rows-light,list-x,playlist-minimalistic
+close,close close_rounded,xmark,xmark,x-light,x,close
+cloud_upload,cloud_upload_outlined,cloud_upload,cloud-upload,cloud-arrow-up-light,cloud-upload,cloud-upload
+coffee,coffee_rounded,,coffee-cup,coffee-light,coffee,tea-cup
+paste,content_paste_rounded,doc_on_clipboard,paste-clipboard,clipboard-light,clipboard-paste,clipboard-paste
+folder_add,create_new_folder_outlined,folder_badge_plus,folder-plus,folder-plus-light,folder-plus,add-folder
+server,dns_outlined,desktopcomputer,server,hard-drives-light,server,server
+download,download_rounded,arrow_down_to_line,download,download-simple-light,download,download
+drag,drag_handle_rounded,line_horizontal_3,drag,equals-light,grip-horizontal,hamburger-menu
+folder_upload,drive_folder_upload_outlined,folder,folder,folder-light,folder-up,folder-up
+edit,edit_outlined,pencil,edit-pencil,pencil-simple-light,pencil,pen
+expand_less,expand_less,chevron_up,nav-arrow-up,caret-up-light,chevron-up,alt-arrow-up
+expand_more,expand_more,chevron_down,nav-arrow-down,caret-down-light,chevron-down,alt-arrow-down
+discover,explore_rounded,compass,compass,compass-light,compass,compass
+heart,favorite_border_rounded,heart,heart,heart-light,heart,heart
+heart_fill,favorite_rounded,heart_fill,heart-solid,heart-fill,heart,heart
+filter,filter_alt_outlined,line_horizontal_3_decrease,filter,funnel-light,list-filter,filter
+folder,folder_outlined,folder,folder,folder-light,folder,folder
+fullscreen,fullscreen,arrow_up_left_arrow_down_right,expand,arrows-out-light,maximize,full-screen
+fullscreen_exit,fullscreen_exit,arrow_down_right_arrow_up_left,collapse,arrows-in-light,minimize,quit-full-screen
+equalizer,graphic_eq_rounded,waveform,sound-high,equalizer-light,audio-lines,soundwave
+headphones,headphones_rounded,headphones,headset,headphones-light,headphones,headphones-round
+home,home_outlined,house,home-simple-door,house-light,house,home-2
+home_fill,home_rounded,house_fill,home-simple-door,house-fill,house,home-2
+info,info_outline_rounded,info_circle,info-circle,info-light,info,info-circle
+share,ios_share_rounded,share,share-ios,export-light,share,share
+library,library_music_outlined,music_albums,album-list,music-notes-light,library,music-library-2
+library_fill,library_music_rounded,music_albums_fill,album-list,music-notes-fill,library,music-library-2
+lock,lock_outline_rounded,lock,lock,lock-simple-light,lock-keyhole,lock
+lyrics,lyrics_outlined,text_alignleft,page,article-light,text,document-text
+search_library,manage_search_rounded,search,text-magnifying-glass,list-magnifying-glass-light,list-filter,rounded-magnifer
+microphone,mic_none mic_none_rounded,mic,microphone,microphone-light,mic,microphone
+more,more_horiz_rounded,ellipsis,more-horiz,dots-three-light,ellipsis,menu-dots
+music,music_note_rounded,music_note,music-note,music-note-light,music-2,music-note
+pause,pause_rounded,pause_fill,pause-solid,pause-fill,pause,pause
+person,person_outline_rounded,person,user,user-light,user,user-rounded
+camera,photo_camera_outlined,camera,camera,camera-light,camera,camera
+photos,photo_library_outlined,photo_on_rectangle,media-image-list,images-light,images,gallery
+play,play_arrow_rounded,play_fill,play-solid,play-fill,play,play
+playlist_add,playlist_add_rounded,text_badge_plus,playlist-plus,playlist-light,list-plus,playlist-2
+preview,preview_outlined,eye,eye,eye-light,eye,eye
+online,public_rounded,globe,globe,globe-light,globe,global
+queue,queue_music_rounded,music_note_list,playlist,queue-light,list-music,playlist
+radio,radio_rounded,antenna_radiowaves_left_right,antenna-signal,radio-light,radio,radio
+remove,remove,minus,minus,minus-light,minus,minus
+remove_circle,remove_circle_outline_rounded,minus_circle,minus-circle,minus-circle-light,circle-minus,minus-circle
+repeat_one,repeat_one_rounded,repeat_1,repeat-once,repeat-once-light,repeat-1,repeat-one
+repeat,repeat_rounded,repeat,repeat,repeat-light,repeat,repeat
+reset,restart_alt_rounded,arrow_counterclockwise,refresh,arrow-counter-clockwise-light,rotate-ccw,restart
+search,search_rounded,search,search,magnifying-glass-light,search,rounded-magnifer
+shuffle,shuffle_rounded,shuffle,shuffle,shuffle-light,shuffle,shuffle
+skip_next,skip_next_rounded,forward_end_fill,skip-next-solid,skip-forward-fill,skip-forward,skip-next
+skip_previous,skip_previous_rounded,backward_end_fill,skip-prev-solid,skip-back-fill,skip-back,skip-previous
+speakers,speaker_group_outlined,hifispeaker,sound-min,music-notes-light,speaker,speaker
+speaker,speaker_outlined,hifispeaker,sound-min,speaker-hifi-light,speaker,speaker
+tempo,speed_rounded,speedometer,dashboard-speed,gauge-light,gauge,playback-speed
+star,star_border_rounded star_outline_rounded,star,star,star-light,star,star
+star_fill,star_rounded,star_fill,star-solid,star-fill,star,star
+timer_off,timer_off_outlined,timer,alarm,alarm-light,timer-off,alarm
+settings,tune tune_rounded,slider_horizontal_3,settings,sliders-horizontal-light,sliders-horizontal,tuning-2
+unfold,unfold_more_rounded,chevron_up_chevron_down,expand,caret-up-down-light,chevrons-up-down,sort-vertical
+verified,verified_user_outlined,checkmark_shield,shield-check,shield-check-light,shield-check,shield-check
+move_top,vertical_align_top_rounded,arrow_up_to_line,arrow-up,arrow-line-up-light,arrow-up-to-line,arrow-up
+eye_off,visibility_off_outlined,eye_slash,eye-closed,eye-slash-light,eye-off,eye-closed
+eye,visibility_outlined,eye,eye,eye-light,eye,eye
+volume_low,volume_down_rounded,speaker_1,sound-low,speaker-low-light,volume-1,volume-small
+volume_off,volume_off_rounded,speaker_slash,sound-off,speaker-slash-light,volume-x,volume-cross
+volume_high,volume_up_rounded,speaker_2,sound-high,speaker-high-light,volume-2,volume-loud
+warning,warning_amber_rounded,exclamationmark_triangle,warning-triangle,warning-light,triangle-alert,danger-triangle

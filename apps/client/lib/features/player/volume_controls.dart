@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/playback_service.dart';
@@ -16,7 +17,7 @@ class VolumeControls extends StatelessWidget {
           IconButton(
             tooltip: volume == 0 ? 'Unmute music' : 'Mute music',
             onPressed: playback.toggleMute,
-            icon: Icon(
+            icon: AppIcon(
               volume == 0
                   ? Icons.volume_off_rounded
                   : Icons.volume_down_rounded,

@@ -130,7 +130,7 @@ class _CameraPageState extends State<CameraPage> {
                     onPressed: camera.recording || camera.saving
                         ? null
                         : camera.retry,
-                    icon: const Icon(Icons.photo_library_outlined),
+                    icon: const AppIcon(Icons.photo_library_outlined),
                     label: Text('Retry saving (${camera.pending})'),
                   ),
                   TextButton(
@@ -233,7 +233,7 @@ class _CameraPageState extends State<CameraPage> {
                         camera.ready && !camera.recording && !camera.saving
                         ? camera.switchCamera
                         : null,
-                    icon: const Icon(Icons.cameraswitch_outlined),
+                    icon: const AppIcon(Icons.cameraswitch_outlined),
                   ),
                 ),
               ),
@@ -244,7 +244,7 @@ class _CameraPageState extends State<CameraPage> {
                 child: Semantics(
                   liveRegion: true,
                   child: const Chip(
-                    avatar: Icon(
+                    avatar: AppIcon(
                       Icons.circle,
                       color: Colors.redAccent,
                       size: 12,
@@ -321,7 +321,7 @@ class _CameraPageState extends State<CameraPage> {
                       setState(() => _playbackExpanded = !_playbackExpanded);
                       if (_fullscreen) _showControls();
                     },
-                    icon: Icon(
+                    icon: AppIcon(
                       _playbackExpanded ? Icons.expand_more : Icons.expand_less,
                     ),
                   ),
@@ -362,7 +362,7 @@ class _CameraPageState extends State<CameraPage> {
               IconButton(
                 tooltip: 'Dismiss message',
                 onPressed: camera.dismissMessage,
-                icon: const Icon(Icons.close, size: 18),
+                icon: const AppIcon(Icons.close, size: 18),
               ),
             ],
           ),
@@ -372,13 +372,13 @@ class _CameraPageState extends State<CameraPage> {
     builder: (context, bounds) {
       final back = TextButton.icon(
         onPressed: _leave,
-        icon: const Icon(Icons.chevron_left),
+        icon: const AppIcon(Icons.chevron_left),
         label: const Text('Music'),
       );
       final details = IconButton(
         onPressed: _details,
         tooltip: 'Camera details',
-        icon: const Icon(Icons.tune),
+        icon: const AppIcon(Icons.tune),
       );
       final modes = SegmentedButton<bool>(
         showSelectedIcon: false,
@@ -461,7 +461,7 @@ class _CameraPageState extends State<CameraPage> {
                       children: [
                         FilledButton.tonalIcon(
                           onPressed: camera.ready ? _enterFullscreen : null,
-                          icon: const Icon(Icons.fullscreen),
+                          icon: const AppIcon(Icons.fullscreen),
                           label: const Text('Full Screen'),
                         ),
                         TextButton(
@@ -596,7 +596,7 @@ class _CameraPageState extends State<CameraPage> {
                         children: [
                           TextButton.icon(
                             onPressed: _leave,
-                            icon: const Icon(Icons.fullscreen_exit),
+                            icon: const AppIcon(Icons.fullscreen_exit),
                             label: const Text('Exit'),
                           ),
                           TextButton(
@@ -609,7 +609,7 @@ class _CameraPageState extends State<CameraPage> {
                           ),
                           TextButton.icon(
                             onPressed: _broadcast,
-                            icon: const Icon(Icons.mic_none),
+                            icon: const AppIcon(Icons.mic_none),
                             label: const Text('Mic'),
                           ),
                         ],

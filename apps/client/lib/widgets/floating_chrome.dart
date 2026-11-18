@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import 'glass_surface.dart';
@@ -132,7 +133,7 @@ class FloatingNavigation extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
+                          AppIcon(
                             selectedIndex == index
                                 ? destination.$3
                                 : destination.$2,
@@ -189,7 +190,7 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
           ? IconButton(
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               onPressed: () => Navigator.maybePop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              icon: const AppIcon(Icons.arrow_back_ios_new_rounded, size: 20),
             )
           : null,
       trailing: actions.isEmpty

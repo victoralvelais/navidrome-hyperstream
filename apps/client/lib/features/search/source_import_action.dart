@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -20,7 +22,7 @@ class SourceDownloadButton extends StatelessWidget {
     tooltip: tracks.length == 1
         ? 'Download song to remote folder'
         : 'Download album to remote folder',
-    icon: const Icon(Icons.download_rounded),
+    icon: const AppIcon(Icons.download_rounded),
     onPressed:
         tracks.isEmpty || tracks.any((track) => track.source?.available != true)
         ? null

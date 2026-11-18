@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/library.dart';
@@ -165,7 +166,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   Positioned(
                     right: -8,
                     top: -8,
-                    child: Icon(
+                    child: AppIcon(
                       Icons.graphic_eq_rounded,
                       size: 112,
                       color: Colors.white.withValues(alpha: .12),
@@ -255,7 +256,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: () => _select(null),
-                  icon: const Icon(Icons.chevron_left_rounded),
+                  icon: const AppIcon(Icons.chevron_left_rounded),
                   label: const Text('Back to discover'),
                 ),
               ),

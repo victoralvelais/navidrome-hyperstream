@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
@@ -181,7 +182,7 @@ class _AlbumTracksState extends State<AlbumTracks> {
                   leading: SizedBox(
                     width: 28,
                     child: playing.data?.id == track.id
-                        ? const Icon(Icons.graphic_eq_rounded, size: 20)
+                        ? const AppIcon(Icons.graphic_eq_rounded, size: 20)
                         : Text('${track.number ?? index}'),
                   ),
                   title: Text(

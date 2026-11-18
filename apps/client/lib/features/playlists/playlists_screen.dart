@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:flutter/material.dart';
@@ -41,7 +43,7 @@ class NewPlaylistMenu extends StatelessWidget {
       PopupMenuItem(value: 'manual', child: Text('New playlist')),
       PopupMenuItem(value: 'smart', child: Text('New smart playlist')),
     ],
-    icon: const Icon(Icons.add_rounded),
+    icon: const AppIcon(Icons.add_rounded),
   );
 }
 
@@ -144,13 +146,13 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: 'Search Playlists',
-                        prefixIcon: const Icon(Icons.search_rounded),
+                        prefixIcon: const AppIcon(Icons.search_rounded),
                         suffixIcon: query.isEmpty
                             ? null
                             : IconButton(
                                 tooltip: 'Clear playlist search',
                                 onPressed: () => setState(_search.clear),
-                                icon: const Icon(Icons.close_rounded),
+                                icon: const AppIcon(Icons.close_rounded),
                               ),
                         filled: true,
                         fillColor: Theme.of(context).colorScheme.onSurface
@@ -246,7 +248,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         subtitle: subtitle == null
             ? null
             : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: const AppIcon(Icons.chevron_right_rounded),
         onTap: onTap,
       ),
       const Padding(

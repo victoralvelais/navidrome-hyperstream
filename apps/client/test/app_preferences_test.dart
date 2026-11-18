@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/services/app_preferences.dart';
+import 'package:hyperstream_client/models/icon_style.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakePreferenceStorage extends Fake implements SharedPreferencesAsync {
@@ -18,6 +19,33 @@ class FakePreferenceStorage extends Fake implements SharedPreferencesAsync {
 }
 
 void main() {
+  test(
+    'each icon style survives restart and unrelated preference changes',
+    () async {
+      String? saved;
+      final preferences = AppPreferences(save: (json) async => saved = json);
+      addTearDown(preferences.dispose);
+      for (final style in IconStyle.values) {
+        await preferences.setIconStyle(style);
+        await preferences.setVolume(.42);
+        final restored = AppPreferences()..restore(saved!);
+        expect(restored.iconStyle, style);
+        expect(restored.volume, .42);
+        restored.dispose();
+      }
+    },
+  );
+
+  test('missing and unknown icon styles preserve other preferences', () {
+    for (final value in [null, 'future-style', 7, false]) {
+      final preferences = AppPreferences()
+        ..restore(jsonEncode({'iconStyle': value, 'volume': .3}));
+      expect(preferences.iconStyle, IconStyle.iconoir);
+      expect(preferences.volume, .3);
+      preferences.dispose();
+    }
+  });
+
   test(
     'stalled preference reads fall back without overwriting unread settings',
     () async {

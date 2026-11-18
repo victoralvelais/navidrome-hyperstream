@@ -1,0 +1,31 @@
+Hyperstream icon artwork
+
+Iconoir: Luca Burgio and the Iconoir contributors.
+https://iconoir.com
+MIT license: ICONOIR-LICENSE.txt
+
+Phosphor: Phosphor Icons contributors.
+https://phosphoricons.com
+MIT license: PHOSPHOR-LICENSE.txt
+
+Lucide: Lucide Icons and contributors; Feather-derived artwork by Cole Bemis.
+https://lucide.dev
+ISC and MIT licenses: LUCIDE-LICENSE.txt
+
+Solar: original artwork by 480 Design, with maintained artwork by Solar Icons
+contributors. Original and corrected artwork is licensed under Creative Commons
+Attribution 4.0 International (CC BY 4.0).
+Original artwork: https://www.figma.com/community/file/1166831539721848736
+License: https://creativecommons.org/licenses/by/4.0/
+Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
+Maintained catalogue: https://solar-icons.dev
+Additional MIT terms: SOLAR-LICENSE.txt
+
+Cupertino Icons is distributed through Flutter's cupertino_icons package. Its
+MIT notice appears separately in this app's open-source licenses.
+
+Bundled SVGs are selected from the pinned Iconify packages recorded in
+tools/ui_icons_sources.json. Hyperstream normalizes SVG wrappers and colors for
+theme tinting, fills Lucide transport/active symbols and recording dots, and
+selects equivalent actions across families. Solar's original opacity is retained.
+These changes do not imply endorsement by any icon author.

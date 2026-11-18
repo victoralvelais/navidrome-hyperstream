@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
@@ -97,7 +98,7 @@ class _TempoControls extends StatelessWidget {
                   onPressed: enabled && speed > .5
                       ? () => playback.adjustSpeed(-.01)
                       : null,
-                  icon: const Icon(Icons.remove),
+                  icon: const AppIcon(Icons.remove),
                 ),
                 Expanded(
                   child: Text(
@@ -111,7 +112,7 @@ class _TempoControls extends StatelessWidget {
                   onPressed: enabled && speed < 2
                       ? () => playback.adjustSpeed(.01)
                       : null,
-                  icon: const Icon(Icons.add),
+                  icon: const AppIcon(Icons.add),
                 ),
               ],
             ),

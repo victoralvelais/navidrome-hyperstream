@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/mornye_sources.dart';
@@ -156,7 +157,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                                         _verified(extension);
                                       }
                                     }),
-                              icon: Icon(
+                              icon: AppIcon(
                                 sources.verification.value == extension.id
                                     ? Icons.warning_amber_rounded
                                     : Icons.verified_user_outlined,
@@ -173,7 +174,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                                       extension.id,
                                       () => _pasteVerification(extension),
                                     ),
-                              icon: const Icon(Icons.content_paste_rounded),
+                              icon: const AppIcon(Icons.content_paste_rounded),
                               label: const Text('Paste verification'),
                             ),
                           TextButton.icon(
@@ -183,7 +184,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                                     extension.id,
                                     () => _settings(extension),
                                   ),
-                            icon: const Icon(Icons.tune_rounded),
+                            icon: const AppIcon(Icons.tune_rounded),
                             label: const Text('Configure'),
                           ),
                         ],

@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/collection_play_controls.dart';
 
 import 'dart:async';
@@ -103,7 +105,7 @@ class SmartPlaylistResults extends StatelessWidget {
               onPressed: preview.busy || reshuffling || result.matchedCount < 2
                   ? null
                   : onReshuffle,
-              icon: const Icon(Icons.shuffle_rounded),
+              icon: const AppIcon(Icons.shuffle_rounded),
               label: Text(reshuffling ? 'Saving shuffle…' : 'Reshuffle'),
             ),
           CollectionPlayControls(

@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:flutter/material.dart';
@@ -48,7 +50,7 @@ class FavoriteButton extends StatelessWidget {
         tooltip: selected ? 'Remove from favorites' : 'Add to favorites',
         isSelected: selected,
         color: selected ? Theme.of(context).colorScheme.primary : null,
-        icon: Icon(
+        icon: AppIcon(
           selected ? Icons.favorite_rounded : Icons.favorite_border_rounded,
         ),
         onPressed: collections.favoritePending(id, album: album != null)
@@ -91,7 +93,7 @@ class SongActions extends StatelessWidget {
       return GlassPopupMenuButton<_SongAction>(
         tooltip: 'Song actions for ${song.title}',
         enabled: enabled,
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: const AppIcon(Icons.more_horiz_rounded),
         itemBuilder: (_) => [
           PopupMenuItem(
             value: _SongAction.favorite,

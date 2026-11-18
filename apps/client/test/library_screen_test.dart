@@ -1,5 +1,7 @@
 import 'package:hyperstream_client/widgets/glass_overlays.dart';
 import 'package:hyperstream_client/widgets/hyperstream_mark.dart';
+import 'package:hyperstream_client/widgets/app_icon.dart';
+import 'package:hyperstream_client/models/icon_style.dart';
 import 'package:hyperstream_client/features/library/artwork_backdrop.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -48,6 +50,11 @@ Future<void> main() async {
     final icons = FontLoader('MaterialIcons')
       ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
     await icons.load();
+    final cupertino = FontLoader('packages/cupertino_icons/CupertinoIcons')
+      ..addFont(
+        rootBundle.load('packages/cupertino_icons/assets/CupertinoIcons.ttf'),
+      );
+    await cupertino.load();
   }
   final covers = const bool.fromEnvironment('CAPTURE_PREVIEWS')
       ? await Future.wait(List.generate(4, previewArtwork))
@@ -341,7 +348,10 @@ Future<void> main() async {
               ),
               child: GlassSettings(
                 preferences: playback.preferences,
-                child: child!,
+                child: AppIconTheme(
+                  style: playback.preferences.iconStyle,
+                  child: child!,
+                ),
               ),
             ),
             home: LibraryScreen(
@@ -390,6 +400,31 @@ Future<void> main() async {
         );
       }
       await _capturePreview(tester, '${viewport.name}-home');
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Icon style')),
+        alignment: .35,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Icon style'));
+      await tester.pumpAndSettle();
+      final solarChoice = find.byKey(const ValueKey('icon-style-solarBroken'));
+      await Scrollable.ensureVisible(
+        tester.element(solarChoice),
+        alignment: .35,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(solarChoice);
+      await tester.pumpAndSettle();
+      expect(playback.preferences.iconStyle, IconStyle.solarBroken);
+      expect(find.byTooltip('Previous track'), findsOneWidget);
+      await _capturePreview(tester, '${viewport.name}-icon-style');
+      await tester.tap(find.byTooltip('Back to appearance'));
+      await tester.pumpAndSettle();
+      expect(find.text('Glass effects'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back to home'));
+      await tester.pumpAndSettle();
       await Scrollable.ensureVisible(
         tester.element(find.text('Library sync')),
         alignment: .35,

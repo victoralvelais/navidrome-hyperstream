@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import '../../widgets/glass_overlays.dart';
@@ -177,7 +179,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   void _tab(int index) {
     FocusScope.of(context).unfocus();
-    if (index == _Section.home.index) _settingsKey.currentState?.back();
+    if (index == _Section.home.index) _settingsKey.currentState?.showHome();
     setState(() {
       _section = _Section.values[index];
       _dockCollapsed = false;
@@ -341,12 +343,12 @@ class _LibraryScreenState extends State<LibraryScreen>
                     ('Favorites', Icons.favorite_border_rounded),
                   ])
                     ListTile(
-                      leading: Icon(
+                      leading: AppIcon(
                         entry.$2,
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       title: Text(entry.$1),
-                      trailing: const Icon(Icons.chevron_right_rounded),
+                      trailing: const AppIcon(Icons.chevron_right_rounded),
                       onTap: () => _openCategory(entry.$1),
                     ),
                 ],
@@ -482,7 +484,7 @@ class _LibraryScreenState extends State<LibraryScreen>
       _libraryPage != null ||
       (_section == _Section.home && _homeHasPage);
   String get _backLabel => _section == _Section.home
-      ? 'Back to home'
+      ? (_settingsKey.currentState?.backLabel ?? 'Back to home')
       : _selected != null && _artist != null
       ? 'Back to artist'
       : _hasSelection
@@ -515,7 +517,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     if (_smartId != null) {
       return GlassPopupMenuButton<String>(
         tooltip: 'Playlist options',
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: const AppIcon(Icons.more_horiz_rounded),
         onSelected: (action) {
           if (action == 'edit') _smartKey.currentState?.edit();
           if (action == 'delete') _smartKey.currentState?.delete();
@@ -540,7 +542,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     if (_playlistId != null) {
       return GlassPopupMenuButton<String>(
         tooltip: 'Playlist options',
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: const AppIcon(Icons.more_horiz_rounded),
         onSelected: (action) {
           if (action == 'icon') {
             choosePlaylistIcon(
@@ -565,7 +567,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     if (_libraryPage == 'Recent Radio') {
       return IconButton(
         tooltip: 'Choose icon for Recent Radio',
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: const AppIcon(Icons.more_horiz_rounded),
         onPressed: () => choosePlaylistIcon(
           context,
           store: _icons,
@@ -678,23 +680,23 @@ class _LibraryScreenState extends State<LibraryScreen>
                                         onDestinationSelected: _tab,
                                         destinations: const [
                                           NavigationRailDestination(
-                                            icon: Icon(Icons.home_outlined),
-                                            selectedIcon: Icon(
+                                            icon: AppIcon(Icons.home_outlined),
+                                            selectedIcon: AppIcon(
                                               Icons.home_rounded,
                                             ),
                                             label: Text('Home'),
                                           ),
                                           NavigationRailDestination(
-                                            icon: Icon(
+                                            icon: AppIcon(
                                               Icons.library_music_outlined,
                                             ),
-                                            selectedIcon: Icon(
+                                            selectedIcon: AppIcon(
                                               Icons.library_music_rounded,
                                             ),
                                             label: Text('Library'),
                                           ),
                                           NavigationRailDestination(
-                                            icon: Icon(Icons.search_rounded),
+                                            icon: AppIcon(Icons.search_rounded),
                                             label: Text('Search'),
                                           ),
                                         ],
@@ -773,7 +775,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                     ? IconButton(
                                         tooltip: _backLabel,
                                         onPressed: _back,
-                                        icon: const Icon(
+                                        icon: const AppIcon(
                                           Icons.arrow_back_ios_new_rounded,
                                           size: 20,
                                         ),
@@ -816,7 +818,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                     tooltip: 'Expand navigation',
                                     onPressed: () =>
                                         setState(() => _dockCollapsed = false),
-                                    icon: Icon(
+                                    icon: AppIcon(
                                       _section == _Section.home
                                           ? Icons.home_rounded
                                           : _section == _Section.search
@@ -843,7 +845,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                     tooltip: 'Search',
                                     onPressed: () =>
                                         _tab(_Section.search.index),
-                                    icon: const Icon(Icons.search_rounded),
+                                    icon: const AppIcon(Icons.search_rounded),
                                   ),
                                 ),
                               ],

@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import 'glass_surface.dart';
@@ -32,7 +33,7 @@ class CollectionPlayControls extends StatelessWidget {
                 ),
                 tooltip: 'Shuffle',
                 onPressed: onShuffle,
-                icon: const Icon(Icons.shuffle_rounded),
+                icon: const AppIcon(Icons.shuffle_rounded),
               ),
             ),
             const SizedBox(width: 12),
@@ -49,7 +50,7 @@ class CollectionPlayControls extends StatelessWidget {
                   shape: const StadiumBorder(),
                 ),
                 onPressed: onPlay,
-                icon: const Icon(Icons.play_arrow_rounded),
+                icon: const AppIcon(Icons.play_arrow_rounded),
                 label: const Text('Play'),
               ),
             ),

@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:flutter/foundation.dart';
@@ -35,7 +37,10 @@ class OutputButton extends StatelessWidget {
               return ExcludeSemantics(
                 child: Center(
                   key: const ValueKey('covered-airplay-placeholder'),
-                  child: Icon(Icons.airplay_rounded, color: scheme.onSurface),
+                  child: AppIcon(
+                    Icons.airplay_rounded,
+                    color: scheme.onSurface,
+                  ),
                 ),
               );
             }
@@ -60,7 +65,7 @@ class OutputButton extends StatelessWidget {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
       return IconButton(
         tooltip: 'Choose audio output',
-        icon: const Icon(Icons.speaker_group_outlined),
+        icon: const AppIcon(Icons.speaker_group_outlined),
         onPressed: () => showGlassSheet<void>(
           context: context,
           useSafeArea: true,
@@ -154,7 +159,7 @@ class _AudioOutputsSheetState extends State<AudioOutputsSheet> {
               IconButton(
                 tooltip: 'Close audio outputs',
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded),
+                icon: const AppIcon(Icons.close_rounded),
               ),
             ],
           ),
@@ -168,11 +173,11 @@ class _AudioOutputsSheetState extends State<AudioOutputsSheet> {
               children: [
                 for (final output in _outputs)
                   ListTile(
-                    leading: const Icon(Icons.speaker_outlined),
+                    leading: const AppIcon(Icons.speaker_outlined),
                     title: Text(output['name'] as String),
                     selected: output['selected'] == true,
                     trailing: output['selected'] == true
-                        ? const Icon(Icons.check_rounded)
+                        ? const AppIcon(Icons.check_rounded)
                         : null,
                     onTap: _busy ? null : () => _select(output['id'] as String),
                   ),

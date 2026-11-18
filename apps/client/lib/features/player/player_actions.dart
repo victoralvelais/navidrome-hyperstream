@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,13 +107,13 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
                             ? 'No rating'
                             : '$rating ${rating == 1 ? 'star' : 'stars'}',
                       ),
-                      leading: Icon(
+                      leading: AppIcon(
                         rating == 0
                             ? Icons.star_border_rounded
                             : Icons.star_rounded,
                       ),
                       trailing: collections.rating(song) == rating
-                          ? const Icon(Icons.check_rounded)
+                          ? const AppIcon(Icons.check_rounded)
                           : null,
                       onTap: () => Navigator.pop(context, rating),
                     ),
@@ -169,7 +170,7 @@ class _NowPlayingTrackActionsState extends State<NowPlayingTrackActions> {
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.more_horiz_rounded),
+            : const AppIcon(Icons.more_horiz_rounded),
         onSelected: _select,
         itemBuilder: (_) => [
           menuAction('mix', 'Instant Mix', Icons.auto_awesome_rounded),
@@ -229,7 +230,7 @@ PopupMenuItem<String> menuAction(
   enabled: enabled,
   child: Row(
     children: [
-      Icon(icon, size: 22),
+      AppIcon(icon, size: 22),
       const SizedBox(width: 14),
       Expanded(child: Text(label)),
     ],
@@ -250,7 +251,7 @@ Future<void> showSleepTimer(BuildContext context, PlaybackService playback) =>
             const SizedBox(height: 12),
             for (final minutes in [15, 30, 45, 60, 90])
               ListTile(
-                leading: const Icon(Icons.bedtime_outlined),
+                leading: const AppIcon(Icons.bedtime_outlined),
                 title: Text('$minutes minutes'),
                 onTap: () {
                   playback.setSleepTimer(duration: Duration(minutes: minutes));
@@ -258,7 +259,7 @@ Future<void> showSleepTimer(BuildContext context, PlaybackService playback) =>
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.music_note_rounded),
+              leading: const AppIcon(Icons.music_note_rounded),
               title: const Text('End of current track'),
               onTap: () {
                 playback.setSleepTimer(endOfTrack: true);
@@ -267,7 +268,7 @@ Future<void> showSleepTimer(BuildContext context, PlaybackService playback) =>
             ),
             if (playback.sleepTimer.value != null)
               ListTile(
-                leading: const Icon(Icons.timer_off_outlined),
+                leading: const AppIcon(Icons.timer_off_outlined),
                 title: const Text('Cancel sleep timer'),
                 onTap: () {
                   playback.cancelSleepTimer();

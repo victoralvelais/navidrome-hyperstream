@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:flutter/material.dart';
@@ -191,7 +193,7 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                     children: [
                       for (final playlist in owned)
                         ListTile(
-                          leading: const Icon(Icons.queue_music_rounded),
+                          leading: const AppIcon(Icons.queue_music_rounded),
                           title: Text(playlist.name),
                           subtitle: Text('${playlist.songCount} songs'),
                           enabled: !_saving,

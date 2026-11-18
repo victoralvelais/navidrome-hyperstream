@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -209,7 +211,7 @@ class _VolumeButtonState extends State<VolumeButton> {
                                                   : theme.colorScheme.onSurface,
                                               onPressed:
                                                   widget.playback.toggleMute,
-                                              icon: Icon(
+                                              icon: AppIcon(
                                                 value == 0
                                                     ? Icons.volume_off_rounded
                                                     : Icons.volume_up_rounded,
@@ -268,7 +270,7 @@ class _VolumeButtonState extends State<VolumeButton> {
       focusNode: _buttonFocus,
       tooltip: 'Music volume',
       onPressed: _show,
-      icon: Icon(
+      icon: AppIcon(
         widget.playback.preferences.volume == 0
             ? Icons.volume_off_rounded
             : Icons.volume_up_rounded,

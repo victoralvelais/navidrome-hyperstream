@@ -5,7 +5,7 @@ description: "A native Navidrome library player for iPhone, iPad, and Windows."
 publish_to: 'none'
 # Semantic release version. Bump PATCH for fixes and MINOR for feature releases.
 # CI supplies platform build metadata separately from this public version.
-version: 0.57.2
+version: 0.58.0
 
 environment:
   # Dart SDK constraint. The tested Flutter SDK is 3.47.9 (also pinned in CI).
@@ -16,11 +16,13 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.2.4
   crypto: ^3.0.8
+  cupertino_icons: 2.0.0
   dart_smb2:
     path: packages/dart_smb2
   flutter:
     sdk: flutter
   flutter_secure_storage: 11.2.0
+  flutter_svg: 2.4.0
   ffmpeg_kit_flutter_new_audio: 2.5.8
   http: ^1.6.0
   flutter_web_auth_2: 5.1.0
@@ -47,6 +49,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/licenses/
+    - assets/icons/iconoir/
+    - assets/icons/phosphorLight/
+    - assets/icons/lucide/
+    - assets/icons/solarLinear/
+    - assets/icons/solarOutline/
+    - assets/icons/solarBroken/
+    - assets/icons/solarLineDuotone/
+    - assets/icons/solarBold/
+    - assets/icons/solarBoldDuotone/
     - packages/mornye_host/assets/catalog.json
   shaders:
     - shaders/glass.frag

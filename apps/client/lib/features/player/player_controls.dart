@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
@@ -255,7 +257,7 @@ class _Previous extends StatelessWidget {
             state.processingState != AudioProcessingState.error
         ? playback.skipToPrevious
         : null,
-    icon: const Icon(Icons.skip_previous_rounded),
+    icon: const AppIcon(Icons.skip_previous_rounded),
   );
 }
 
@@ -278,7 +280,7 @@ class _Next extends StatelessWidget {
             state.processingState != AudioProcessingState.error
         ? playback.skipToNext
         : null,
-    icon: const Icon(Icons.skip_next_rounded),
+    icon: const AppIcon(Icons.skip_next_rounded),
   );
 }
 
@@ -303,7 +305,9 @@ class _PlayButton extends StatelessWidget {
         : state.playing
         ? playback.pause
         : playback.play,
-    icon: Icon(state.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+    icon: AppIcon(
+      state.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+    ),
   );
 }
 

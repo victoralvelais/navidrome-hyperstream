@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 
 import 'app_theme.dart';
+import 'models/icon_style.dart';
+import 'widgets/app_icon.dart';
 import 'features/connect/connection_screen.dart';
 import 'features/library/library_screen.dart';
 import 'features/startup/startup_screen.dart';
@@ -169,9 +171,12 @@ class _HyperstreamAppState extends State<HyperstreamApp>
         builder: (context, child) => SourceVerificationHost(
           sources: MusicSources.instance.extensions!,
           navigatorKey: _navigatorKey,
-          child: GlassSettings(
-            preferences: _playback?.preferences,
-            child: child!,
+          child: AppIconTheme(
+            style: _playback?.preferences.iconStyle ?? IconStyle.iconoir,
+            child: GlassSettings(
+              preferences: _playback?.preferences,
+              child: child!,
+            ),
           ),
         ),
         home: FutureBuilder<PlaybackService>(

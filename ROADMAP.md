@@ -1,5 +1,14 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 18: selectable icon styles, 0.58.0
+
+- Home > Appearance > Icon style previews and switches Iconoir, Cupertino,
+  Phosphor Light, Lucide, and all six Solar variants without restarting playback.
+- Persist the device-local choice, bundle the artwork for offline use, and apply
+  it across app navigation, player controls, menus, settings, and playlist symbols.
+- Keep editable action mappings and pinned artwork sources in `tools/ui_icons.csv`
+  and `tools/ui_icons_sources.json`, with author notices in the app's licenses.
+
 ## November 17: Mornye provider trial, 0.56.0
 
 - Embed Mornye's pinned Rust/QuickJS runtime with reviewed Spotify Web, Tidal and

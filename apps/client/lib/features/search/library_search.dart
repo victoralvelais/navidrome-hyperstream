@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import 'discover_page.dart';
@@ -225,7 +227,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
     child: Column(
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
+          AppIcon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 16),
         ],
         Text(text, textAlign: TextAlign.center),
@@ -280,7 +282,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
-                          prefixIcon: const Icon(
+                          prefixIcon: const AppIcon(
                             Icons.search_rounded,
                             size: 22,
                           ),
@@ -292,7 +294,7 @@ class _LibrarySearchState extends State<LibrarySearch> {
                               ? null
                               : IconButton(
                                   tooltip: 'Clear search',
-                                  icon: const Icon(
+                                  icon: const AppIcon(
                                     Icons.close_rounded,
                                     size: 20,
                                   ),
@@ -482,12 +484,12 @@ class _LibrarySearchState extends State<LibrarySearch> {
                                 onPressed: _adding.contains(song.id)
                                     ? null
                                     : () => _add(song),
-                                icon: const Icon(
+                                icon: const AppIcon(
                                   Icons.add_circle_outline_rounded,
                                 ),
                               )
                             : widget.collections == null
-                            ? const Icon(Icons.play_arrow_rounded)
+                            ? const AppIcon(Icons.play_arrow_rounded)
                             : SongActions(
                                 collections: widget.collections!,
                                 song: song,

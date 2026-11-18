@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'glass_overlays.dart';
 
 import 'package:flutter/material.dart';
@@ -66,7 +68,7 @@ Future<void> choosePlaylistIcon(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(icon.graphic),
+                          AppIcon(icon.graphic),
                           const SizedBox(height: 6),
                           Text(icon.label, textAlign: TextAlign.center),
                         ],
@@ -124,7 +126,7 @@ class PlaylistIconTile extends StatelessWidget {
                           .withValues(alpha: .08),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(
+                    child: AppIcon(
                       (icon == PlaylistIcon.automatic ? fallback : icon)
                           .graphic,
                       size: 28,

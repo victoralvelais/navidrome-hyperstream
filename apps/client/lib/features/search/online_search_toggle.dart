@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
@@ -130,7 +131,7 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
       Expanded(child: Text(name)),
       const SizedBox(width: 12),
       if (selected)
-        Icon(
+        AppIcon(
           Icons.check_rounded,
           size: 20,
           color: Theme.of(context).colorScheme.primary,
@@ -205,7 +206,7 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         Icons.public_rounded,
                         size: 19,
                         color: widget.enabled

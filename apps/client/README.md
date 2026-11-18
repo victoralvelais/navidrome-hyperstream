@@ -6,6 +6,22 @@ It includes play/pause, previous/next, seeking, connection errors, and disconnec
 Wide windows show albums and tracks side by side; narrow windows use one pane.
 The library uses an artwork-first layout with a floating mini player and an
 expanded Now Playing sheet. Light, dark, and system appearance are available.
+
+**Home > Appearance > Icon style** switches app icons immediately between
+Iconoir (default), Cupertino, Phosphor Light, Lucide, and six Solar variants:
+Linear, Outline, Broken, Line duotone, Bold, and Bold duotone. Each choice has
+previews. The style is saved on this device and applies to app navigation,
+playback, settings, menus, and playlist symbols; system-owned controls such as
+the native iOS output picker keep their platform appearance. Artwork is bundled
+for offline use, and credits appear in Open-source licenses.
+
+Icon actions are mapped in `../../tools/ui_icons.csv`. To adjust artwork, edit
+that mapping and run `python tools/generate_ui_icons.py` from the repository root,
+then format `lib/widgets/app_icon_data.dart`. Source packages and SHA-256 checksums
+are pinned in `../../tools/ui_icons_sources.json`; no CDN requests happen in the
+app. Add new UI symbols through `AppIcon` so they follow the selected family.
+Cupertino uses Flutter's font; its missing coffee-cup symbol uses Iconoir artwork.
+
 The current visual pass draws on the user-supplied
 [Kanade gallery](https://www.reddit.com/r/UI_Design/comments/1wrj8d5/how_can_i_improve_the_uiux_of_my_app_more/)
 and Apple's [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).

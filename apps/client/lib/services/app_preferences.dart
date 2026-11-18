@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/icon_style.dart';
+
 /// Non-secret preferences only. Credentials never enter this store.
 /// A single JSON value keeps mute and its restore level together.
 class AppPreferences extends ChangeNotifier {
@@ -20,6 +22,7 @@ class AppPreferences extends ChangeNotifier {
   bool reportListens = true;
   int catalogBatchSize = defaultCatalogBatchSize;
   ThemeMode themeMode = ThemeMode.system;
+  IconStyle iconStyle = IconStyle.iconoir;
   String? notice;
 
   static Future<AppPreferences> load({
@@ -64,6 +67,7 @@ class AppPreferences extends ChangeNotifier {
       (mode) => mode.name == data['theme'],
       orElse: () => ThemeMode.system,
     );
+    iconStyle = IconStyle.restore(data['iconStyle']);
   }
 
   Future<void> setVolume(double value) {
@@ -84,6 +88,11 @@ class AppPreferences extends ChangeNotifier {
 
   Future<void> setGlassEffects(bool value) {
     glassEffects = value;
+    return _persist();
+  }
+
+  Future<void> setIconStyle(IconStyle value) {
+    iconStyle = value;
     return _persist();
   }
 
@@ -113,6 +122,7 @@ class AppPreferences extends ChangeNotifier {
       'reportListens': reportListens,
       'catalogBatchSize': catalogBatchSize,
       'theme': themeMode.name,
+      'iconStyle': iconStyle.name,
     });
     notifyListeners();
     if (_save == null) return Future.value();

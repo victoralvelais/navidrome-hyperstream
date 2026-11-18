@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -229,7 +231,7 @@ class _RemoteFolderBrowserState extends State<RemoteFolderBrowser> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: enabled ? _up : null,
-                icon: const Icon(Icons.arrow_back_rounded),
+                icon: const AppIcon(Icons.arrow_back_rounded),
                 label: Text(
                   _location!.folder.isEmpty ? 'All shares' : 'Up one folder',
                 ),
@@ -266,13 +268,13 @@ class _RemoteFolderBrowserState extends State<RemoteFolderBrowser> {
                 itemCount: _names.length,
                 itemBuilder: (context, index) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.folder_outlined),
+                  leading: const AppIcon(Icons.folder_outlined),
                   title: Text(
                     _names[index],
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
+                  trailing: const AppIcon(Icons.chevron_right_rounded),
                   onTap: enabled ? () => _open(_names[index]) : null,
                 ),
               ),
@@ -304,7 +306,7 @@ class _RemoteFolderBrowserState extends State<RemoteFolderBrowser> {
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: enabled && (_manual || _ready) ? _save : null,
-            icon: const Icon(Icons.check_rounded),
+            icon: const AppIcon(Icons.check_rounded),
             label: const Text('Use this folder'),
           ),
         ],

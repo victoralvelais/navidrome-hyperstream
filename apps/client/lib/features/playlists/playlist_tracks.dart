@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/collection_play_controls.dart';
 import '../../widgets/glass_overlays.dart';
 
@@ -131,7 +133,7 @@ class PlaylistTracksState extends State<PlaylistTracks> {
             child: IconButton(
               tooltip: 'Close add songs',
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded),
+              icon: const AppIcon(Icons.close_rounded),
             ),
           ),
           Expanded(
@@ -229,7 +231,7 @@ class PlaylistTracksState extends State<PlaylistTracks> {
                               onPressed: _editing || _loading
                                   ? null
                                   : _addSongs,
-                              icon: const Icon(
+                              icon: const AppIcon(
                                 Icons.add_circle_outline_rounded,
                               ),
                               label: const Text('Add songs'),

@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/floating_chrome.dart';
@@ -106,7 +107,7 @@ class ArtistRow extends StatelessWidget {
     ),
     title: Text(artist.name, maxLines: 2, overflow: TextOverflow.ellipsis),
     subtitle: Text('${artist.albumCount} albums'),
-    trailing: const Icon(Icons.chevron_right_rounded),
+    trailing: const AppIcon(Icons.chevron_right_rounded),
     onTap: onTap,
   );
 }

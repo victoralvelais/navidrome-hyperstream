@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/hyperstream_mark.dart';
 
 import 'package:flutter/material.dart';
@@ -58,7 +60,7 @@ class ConnectionScreen extends StatelessWidget {
                       ListTile(
                         title: Text(server.displayName),
                         subtitle: Text(server.username),
-                        trailing: const Icon(Icons.chevron_right_rounded),
+                        trailing: const AppIcon(Icons.chevron_right_rounded),
                         onTap: session.busy
                             ? null
                             : () => session.switchServer(server.id),

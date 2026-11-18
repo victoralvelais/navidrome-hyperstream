@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'package:flutter/material.dart';
@@ -112,7 +114,7 @@ class SmartRuleEditor extends StatelessWidget {
           for (final (index, rule) in group.children.indexed)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(
+              leading: AppIcon(
                 rule is SmartGroup
                     ? Icons.folder_outlined
                     : Icons.filter_alt_outlined,
@@ -122,7 +124,7 @@ class SmartRuleEditor extends StatelessWidget {
               trailing: IconButton(
                 tooltip: 'Remove condition',
                 onPressed: () => _replace(index, null),
-                icon: const Icon(Icons.close_rounded),
+                icon: const AppIcon(Icons.close_rounded),
               ),
               onTap: () => rule is SmartGroup
                   ? _group(context, index)
@@ -135,7 +137,7 @@ class SmartRuleEditor extends StatelessWidget {
                 onPressed: group.children.length >= 50
                     ? null
                     : () => _condition(context),
-                icon: const Icon(Icons.add_rounded),
+                icon: const AppIcon(Icons.add_rounded),
                 label: const Text('Add condition'),
               ),
               if (depth < 3)
@@ -143,7 +145,7 @@ class SmartRuleEditor extends StatelessWidget {
                   onPressed: group.children.length >= 50
                       ? null
                       : () => _group(context),
-                  icon: const Icon(Icons.create_new_folder_outlined),
+                  icon: const AppIcon(Icons.create_new_folder_outlined),
                   label: const Text('Add group'),
                 ),
             ],

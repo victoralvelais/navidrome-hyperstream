@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'dart:async';
@@ -249,12 +251,12 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                       ButtonSegment(
                         value: SmartPlaylistType.rules,
                         label: Text('Rules'),
-                        icon: Icon(Icons.filter_alt_outlined),
+                        icon: AppIcon(Icons.filter_alt_outlined),
                       ),
                       ButtonSegment(
                         value: SmartPlaylistType.mix,
                         label: Text('Mix'),
-                        icon: Icon(Icons.shuffle_rounded),
+                        icon: AppIcon(Icons.shuffle_rounded),
                       ),
                     ],
                     selected: {_type},
@@ -305,7 +307,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                                 subtitle: Text(
                                   '${pool.rules.summary}\n${pool.order.label}',
                                 ),
-                                trailing: const Icon(Icons.edit_outlined),
+                                trailing: const AppIcon(Icons.edit_outlined),
                                 onTap: () => _editPool(index),
                               ),
                               Wrap(
@@ -319,7 +321,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                                             _pools[index - 1] = pool;
                                             _pools[index] = previous;
                                           }),
-                                    icon: const Icon(
+                                    icon: const AppIcon(
                                       Icons.arrow_upward_rounded,
                                     ),
                                   ),
@@ -332,7 +334,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                                             _pools[index + 1] = pool;
                                             _pools[index] = next;
                                           }),
-                                    icon: const Icon(
+                                    icon: const AppIcon(
                                       Icons.arrow_downward_rounded,
                                     ),
                                   ),
@@ -342,7 +344,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                                         : () => _change(
                                             () => _pools.removeAt(index),
                                           ),
-                                    icon: const Icon(Icons.close_rounded),
+                                    icon: const AppIcon(Icons.close_rounded),
                                     label: const Text('Remove pool'),
                                   ),
                                 ],
@@ -353,7 +355,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                       ),
                     TextButton.icon(
                       onPressed: _pools.length >= 8 ? null : () => _editPool(),
-                      icon: const Icon(Icons.add_rounded),
+                      icon: const AppIcon(Icons.add_rounded),
                       label: const Text('Add pool'),
                     ),
                     Text(
@@ -442,7 +444,7 @@ class _SmartPlaylistEditorState extends State<SmartPlaylistEditor> {
                     ),
                   FilledButton.tonalIcon(
                     onPressed: _preview.busy ? null : _showPreview,
-                    icon: const Icon(Icons.preview_outlined),
+                    icon: const AppIcon(Icons.preview_outlined),
                     label: const Text('Preview tracks'),
                   ),
                   const SizedBox(height: 16),

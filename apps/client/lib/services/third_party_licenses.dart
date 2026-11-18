@@ -3,6 +3,20 @@ import 'package:flutter/services.dart';
 
 void registerNativeLicenses() {
   LicenseRegistry.addLicense(() async* {
+    final iconNotice = await rootBundle.loadString(
+      'assets/licenses/UI-ICONS-NOTICE.txt',
+    );
+    for (final entry in const {
+      'Iconoir': 'ICONOIR-LICENSE.txt',
+      'Phosphor': 'PHOSPHOR-LICENSE.txt',
+      'Lucide': 'LUCIDE-LICENSE.txt',
+      'Solar': 'SOLAR-LICENSE.txt',
+    }.entries) {
+      yield LicenseEntryWithLineBreaks(
+        [entry.key],
+        '$iconNotice\n\n${await rootBundle.loadString('assets/licenses/${entry.value}')}',
+      );
+    }
     yield LicenseEntryWithLineBreaks([
       'Mornye extension runtime',
       'QuickJS and native extension dependencies',

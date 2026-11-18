@@ -197,7 +197,9 @@ class _NowPlayingState extends State<_NowPlaying> {
                                 GlassSurface(
                                   child: IconButton(
                                     tooltip: 'Show queue',
-                                    icon: const Icon(Icons.queue_music_rounded),
+                                    icon: const AppIcon(
+                                      Icons.queue_music_rounded,
+                                    ),
                                     onPressed: () => showGlassSheet<void>(
                                       context: context,
                                       pullFromList: true,
@@ -221,7 +223,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                     color: timer == null
                                         ? null
                                         : scheme.primary,
-                                    icon: const Icon(Icons.bedtime_outlined),
+                                    icon: const AppIcon(Icons.bedtime_outlined),
                                     onPressed: item == null
                                         ? null
                                         : () =>
@@ -233,7 +235,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                                   GlassSurface(
                                     child: IconButton(
                                       tooltip: 'Camera',
-                                      icon: const Icon(
+                                      icon: const AppIcon(
                                         Icons.photo_camera_outlined,
                                       ),
                                       onPressed: () =>
@@ -370,7 +372,7 @@ class _QueuePageState extends State<_QueuePage> {
                   ListTile(
                     title: Text('$speed×'),
                     trailing: playback.playbackState.value.speed == speed
-                        ? const Icon(Icons.check_rounded)
+                        ? const AppIcon(Icons.check_rounded)
                         : null,
                     onTap: () => Navigator.pop(context, speed),
                   ),
@@ -540,7 +542,10 @@ class _QueuePageState extends State<_QueuePage> {
                             IconButton(
                               tooltip: 'Close queue',
                               onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close_rounded, size: 20),
+                              icon: const AppIcon(
+                                Icons.close_rounded,
+                                size: 20,
+                              ),
                             ),
                           ],
                         ),
@@ -563,7 +568,7 @@ class _QueuePageState extends State<_QueuePage> {
                                       ? 'Turn shuffle off'
                                       : 'Shuffle queue',
                                   isSelected: shuffle,
-                                  icon: const Icon(Icons.shuffle_rounded),
+                                  icon: const AppIcon(Icons.shuffle_rounded),
                                   onPressed: busy
                                       ? null
                                       : () => playback.setShuffleMode(
@@ -581,7 +586,7 @@ class _QueuePageState extends State<_QueuePage> {
                                   isSelected:
                                       state.repeatMode !=
                                       AudioServiceRepeatMode.none,
-                                  icon: Icon(
+                                  icon: AppIcon(
                                     state.repeatMode ==
                                             AudioServiceRepeatMode.one
                                         ? Icons.repeat_one_rounded
@@ -601,7 +606,7 @@ class _QueuePageState extends State<_QueuePage> {
                                 ),
                                 GlassPopupMenuButton<String>(
                                   tooltip: 'Queue options',
-                                  icon: const Icon(Icons.more_horiz_rounded),
+                                  icon: const AppIcon(Icons.more_horiz_rounded),
                                   onSelected: _option,
                                   itemBuilder: (_) => [
                                     menuAction(
@@ -720,7 +725,7 @@ class _QueuePageState extends State<_QueuePage> {
                                   ),
                               GlassPopupMenuButton<String>(
                                 tooltip: 'Queue actions for ${next.title}',
-                                icon: const Icon(Icons.more_horiz_rounded),
+                                icon: const AppIcon(Icons.more_horiz_rounded),
                                 enabled: !busy,
                                 itemBuilder: (_) => [
                                   menuAction(
@@ -739,7 +744,7 @@ class _QueuePageState extends State<_QueuePage> {
                                     message: 'Drag to reorder',
                                     child: Padding(
                                       padding: EdgeInsets.all(10),
-                                      child: Icon(
+                                      child: AppIcon(
                                         Icons.drag_handle_rounded,
                                         size: 20,
                                       ),

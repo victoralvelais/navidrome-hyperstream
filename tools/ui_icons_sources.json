@@ -1,0 +1,22 @@
+{
+  "iconoir": {
+    "version": "1.2.12",
+    "url": "https://cdn.jsdelivr.net/npm/@iconify-json/iconoir@1.2.12/icons.json",
+    "sha256": "de804adb26ed7536624081381492d4b83d00d9534ef0a35f4b69097c9dc9641e"
+  },
+  "ph": {
+    "version": "1.2.2",
+    "url": "https://cdn.jsdelivr.net/npm/@iconify-json/ph@1.2.2/icons.json",
+    "sha256": "cf75b3541b06b3bb40f9e40880d4fb34a648c02c4bc8181f49b7db40e0f53d3c"
+  },
+  "lucide": {
+    "version": "1.2.156",
+    "url": "https://cdn.jsdelivr.net/npm/@iconify-json/lucide@1.2.156/icons.json",
+    "sha256": "01d03899e49f501bfce2e96a6b5f2ca48cf9a1fd3d164ce636bc7bbd701356ce"
+  },
+  "solar": {
+    "version": "1.2.16",
+    "url": "https://cdn.jsdelivr.net/npm/@iconify-json/solar@1.2.16/icons.json",
+    "sha256": "ec8f99128ac18b3eb6c48d0c6d86e1437fce5fc5b2f795aeec57aaba30acf0d9"
+  }
+}

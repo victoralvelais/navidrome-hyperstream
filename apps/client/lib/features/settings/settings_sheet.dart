@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/hyperstream_mark.dart';
 import '../../widgets/glass_overlays.dart';
 import '../../widgets/glass_surface.dart';
@@ -9,6 +11,7 @@ import '../../services/app_preferences.dart';
 import '../../services/playback_service.dart';
 import '../../widgets/pull_to_refresh.dart';
 import '../../widgets/floating_chrome.dart';
+import '../../widgets/icon_style_picker.dart';
 import '../connect/connection_screen.dart';
 import '../player/volume_controls.dart';
 import 'remote_folder_settings.dart';
@@ -35,10 +38,19 @@ class SettingsPageState extends State<SettingsPage> {
   String? _page;
   bool _confirmingDisconnect = false;
   String get pageTitle => _page ?? 'Home';
-  bool back() {
-    if (_page == null) return false;
+  String get backLabel =>
+      _page == 'Icon style' ? 'Back to appearance' : 'Back to home';
+
+  void showHome() {
+    if (_page == null) return;
     setState(() => _page = null);
     widget.onPageChanged?.call(false);
+  }
+
+  bool back() {
+    if (_page == null) return false;
+    setState(() => _page = _page == 'Icon style' ? 'Appearance' : null);
+    widget.onPageChanged?.call(_page != null);
     return true;
   }
 
@@ -143,7 +155,7 @@ class SettingsPageState extends State<SettingsPage> {
   }) => ListTile(
     title: Text(title),
     subtitle: Text(subtitle),
-    trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
+    trailing: trailing ?? const AppIcon(Icons.chevron_right_rounded),
     onTap: onTap,
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
   );
@@ -198,9 +210,9 @@ class SettingsPageState extends State<SettingsPage> {
             children: [
               if (_page != null && !PageChrome.present(context))
                 IconButton(
-                  tooltip: 'Back to home',
+                  tooltip: backLabel,
                   onPressed: back,
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  icon: const AppIcon(Icons.arrow_back_ios_new_rounded),
                 ),
               if (_page == null) ...[
                 const HyperstreamMark(size: 60),
@@ -231,7 +243,7 @@ class SettingsPageState extends State<SettingsPage> {
             _group([
               _row(
                 'Appearance',
-                'Theme and glass effects',
+                'Theme, icons, and glass effects',
                 onTap: () => _open('Appearance'),
               ),
             ]),
@@ -301,7 +313,27 @@ class SettingsPageState extends State<SettingsPage> {
                 value: preferences.glassEffects,
                 onChanged: preferences.setGlassEffects,
               ),
+              _row(
+                'Icon style',
+                preferences.iconStyle.label,
+                onTap: () => _open('Icon style'),
+              ),
             ]),
+          if (_page == 'Icon style') ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 20),
+              child: Text('Choose a style to try it throughout the app.'),
+            ),
+            GlassSurface(
+              radius: 24,
+              child: IconStylePicker(
+                value: preferences.iconStyle,
+                onChanged: preferences.setIconStyle,
+              ),
+            ),
+            if (preferences.notice case final String notice)
+              Padding(padding: const EdgeInsets.all(16), child: Text(notice)),
+          ],
           if (_page == 'Library sync')
             _group([
               Padding(
@@ -399,7 +431,7 @@ class SettingsPageState extends State<SettingsPage> {
                           beforeSwitch: widget.playback.suspendForAccountSwitch,
                         ),
                   trailing: server.id == session.activeServerId
-                      ? Icon(
+                      ? AppIcon(
                           Icons.check_circle_rounded,
                           color: Theme.of(context).colorScheme.primary,
                         )
@@ -408,11 +440,13 @@ class SettingsPageState extends State<SettingsPage> {
                           onPressed: session.busy
                               ? null
                               : () => _remove(server.id, server.displayName),
-                          icon: const Icon(Icons.remove_circle_outline_rounded),
+                          icon: const AppIcon(
+                            Icons.remove_circle_outline_rounded,
+                          ),
                         ),
                 ),
               ListTile(
-                leading: const Icon(Icons.add_rounded),
+                leading: const AppIcon(Icons.add_rounded),
                 title: const Text('Add connection'),
                 onTap: session.busy ? null : () => _open('Add connection'),
               ),
@@ -439,7 +473,7 @@ class SettingsPageState extends State<SettingsPage> {
                 _row(
                   'Connected to',
                   '${session.username ?? ''}\n${session.serverUrl ?? ''}',
-                  trailing: const Icon(Icons.check_circle_outline_rounded),
+                  trailing: const AppIcon(Icons.check_circle_outline_rounded),
                 ),
               if (widget.onDisconnect != null)
                 _row(

@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -53,7 +55,7 @@ class _CoverArtState extends State<CoverArt> {
     color: Theme.of(context).colorScheme.surfaceContainerHighest,
     child: LayoutBuilder(
       builder: (context, constraints) => Center(
-        child: Icon(Icons.album_outlined, size: constraints.maxWidth * .3),
+        child: AppIcon(Icons.album_outlined, size: constraints.maxWidth * .3),
       ),
     ),
   );

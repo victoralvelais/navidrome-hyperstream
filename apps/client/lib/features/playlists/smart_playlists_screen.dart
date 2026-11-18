@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import '../../widgets/glass_overlays.dart';
 
 import 'dart:async';
@@ -255,7 +257,7 @@ class SmartPlaylistScreenState extends State<SmartPlaylistScreen> {
             if (!PageChrome.present(context) && widget.collections != null)
               TextButton.icon(
                 onPressed: publish,
-                icon: const Icon(Icons.cloud_upload_outlined),
+                icon: const AppIcon(Icons.cloud_upload_outlined),
                 label: const Text('Publish to Navidrome'),
               ),
             SmartPlaylistResults(

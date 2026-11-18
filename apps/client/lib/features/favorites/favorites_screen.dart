@@ -1,3 +1,4 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 
@@ -66,7 +67,7 @@ class FavoritesScreen extends StatelessWidget {
                                 songs,
                                 0,
                               ),
-                        icon: const Icon(Icons.play_arrow_rounded),
+                        icon: const AppIcon(Icons.play_arrow_rounded),
                         label: const Text('Play favorite songs'),
                       ),
                       if (collections.favoritesLoading)

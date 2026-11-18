@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -210,7 +212,7 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
           _card([
             Row(
               children: [
-                Icon(
+                AppIcon(
                   _verified
                       ? Icons.check_circle_outline_rounded
                       : Icons.dns_outlined,
@@ -323,7 +325,7 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
                           onPressed: enabled
                               ? () => setState(() => _hidden = !_hidden)
                               : null,
-                          icon: Icon(
+                          icon: AppIcon(
                             _hidden
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
@@ -340,7 +342,7 @@ class _RemoteFolderSettingsState extends State<RemoteFolderSettings> {
                     const SizedBox(height: 20),
                     FilledButton.icon(
                       onPressed: enabled ? _checkConnection : null,
-                      icon: const Icon(Icons.lock_outline_rounded),
+                      icon: const AppIcon(Icons.lock_outline_rounded),
                       label: const Text('Check connection'),
                     ),
                     if (_loginMessage != null)

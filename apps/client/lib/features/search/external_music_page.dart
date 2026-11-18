@@ -1,3 +1,5 @@
+import 'package:hyperstream_client/widgets/app_icon.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -295,7 +297,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                       !tracks.any((track) => track.source!.available) || busy
                       ? null
                       : _play,
-                  icon: const Icon(Icons.play_arrow_rounded),
+                  icon: const AppIcon(Icons.play_arrow_rounded),
                   label: const Text('Play'),
                 ),
                 const SizedBox(width: 16),
@@ -348,7 +350,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: const AppIcon(Icons.chevron_right_rounded),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute<void>(
@@ -400,12 +402,12 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                   leading: IconButton(
                     tooltip: 'Back',
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                    icon: const AppIcon(Icons.arrow_back_ios_new_rounded),
                   ),
                   trailing: IconButton(
                     tooltip: 'Music sources',
                     onPressed: _settings,
-                    icon: const Icon(Icons.tune_rounded),
+                    icon: const AppIcon(Icons.tune_rounded),
                   ),
                 ),
                 ?_sourcePicker(),
@@ -427,7 +429,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                           hintText: sources.extensions?.selected != null
                               ? 'Search or paste a playlist link'
                               : 'Search Monochrome',
-                          prefixIcon: const Icon(Icons.search_rounded),
+                          prefixIcon: const AppIcon(Icons.search_rounded),
                           filled: false,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
