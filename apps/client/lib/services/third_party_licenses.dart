@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 void registerNativeLicenses() {
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Simple Icons source badges',
+    ], await rootBundle.loadString('assets/licenses/SOURCE-ICONS-NOTICE.txt'));
     final iconNotice = await rootBundle.loadString(
       'assets/licenses/UI-ICONS-NOTICE.txt',
     );

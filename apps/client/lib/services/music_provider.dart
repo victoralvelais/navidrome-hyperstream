@@ -40,7 +40,7 @@ class SourceSearch {
 abstract interface class MusicProvider {
   String get id;
   String get name;
-  Future<SourceSearch> search(String query);
+  Future<SourceSearch> search(String query, {Future<void>? abort});
   Future<List<Track>> album(SourceAlbum album);
   Uri streamUri(SourceReference track);
   Future<http.StreamedResponse> download(
@@ -73,9 +73,14 @@ class MonochromeProvider implements MusicProvider {
     queryParameters: query,
   );
 
-  Future<Map<String, dynamic>> _json(Uri uri) async {
+  Future<Map<String, dynamic>> _json(Uri uri, {Future<void>? cancelled}) async {
     final abort = Completer<void>();
-    final timer = Timer(const Duration(seconds: 20), abort.complete);
+    void cancel() {
+      if (!abort.isCompleted) abort.complete();
+    }
+
+    if (cancelled != null) unawaited(cancelled.then((_) => cancel()));
+    final timer = Timer(const Duration(seconds: 20), cancel);
     try {
       final request =
           http.AbortableRequest('GET', uri, abortTrigger: abort.future)
@@ -113,8 +118,11 @@ class MonochromeProvider implements MusicProvider {
   }
 
   @override
-  Future<SourceSearch> search(String query) async {
-    final data = await _json(_uri(['search'], {'q': query.trim()}));
+  Future<SourceSearch> search(String query, {Future<void>? abort}) async {
+    final data = await _json(
+      _uri(['search'], {'q': query.trim()}),
+      cancelled: abort,
+    );
     try {
       return SourceSearch(
         tracks: List.unmodifiable(

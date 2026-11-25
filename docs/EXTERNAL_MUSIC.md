@@ -1,4 +1,4 @@
-# External music in 0.59.0
+# External music in 0.60.0
 
 ## Use
 
@@ -6,7 +6,9 @@
    Tidal, Qobuz, YouTube Music or SoundCloud for audio, or use those sources directly for both. Packages are
    downloaded from pinned Mornye registry locations and checksum-verified.
 2. Choose the audio source for Spotify. When search, playback or an import needs
-   verification, its browser opens directly over the current screen. Complete
+   verification, its browser opens directly over the current screen. All-source
+   searches instead show a Verify action for each affected source, so successful
+   results remain usable without opening several verification flows. Complete
    verification to resume the action automatically. Concurrent requests share
    one browser; a cancelled or repeatedly rejected attempt does not reopen it.
    If the browser does not return automatically, copy the verification link/code,
@@ -20,16 +22,19 @@
    alongside library matches; tap again to hide only the online results. The
    icon and label are gray when off and accent-colored when on, with no pill,
    background, border or checkmark. Keyboard focus is shown with an underline.
-   Hold it to choose a source from an anchored menu (right-click or Shift+F10 on
+   Online searches all enabled sources by default. Hold it to choose All sources
+   or one source from an anchored menu (right-click or Shift+F10 on
    Windows; an accessible source-selection action is also available). There is
    no separate source-selection field in unified search. Switching sources only
-   refreshes online results. Online requests only run for a nonempty query while
+   refreshes online results. This device-local preference is saved securely and
+   is independent of the audio provider chosen for Spotify. Online requests only run for a nonempty query while
    Online is enabled. Discovery remains visible when the query is empty.
    All/Albums/Songs filters apply across the displayed library and online
    sections; artists currently come from the library. Combined All results show
    a library preview with Show all library matches for expansion and pagination.
    Search songs/albums/playlists or paste a public music link.
-   Spotify, Tidal and Qobuz links require their matching source. YouTube Music
+   In All sources mode, pasted links go only to the matching enabled source;
+   unrelated sources are not queried. Spotify, Tidal and Qobuz links require their matching source. YouTube Music
    accepts regular youtube.com/watch and youtu.be links, Shorts/live/embed video
    links, public playlist links and Music browse/album links. A video link with
    both `v` and `list` opens that video; a playlist link opens the collection.
@@ -45,6 +50,28 @@
 
 Monochrome remains available as an optional built-in source. If enabled, it can
 be selected alongside installed extensions in the Online source picker.
+
+### Combined search and source badges
+
+Songs and albums are each ranked across sources using title/artist matches,
+query-word coverage and a smaller contribution from the provider's result order.
+Exact matches rank ahead of loose matches; unavailable results are penalized.
+This is metadata relevance, not audio similarity. Results appear incrementally
+and can move as better matches arrive. At most three sources run concurrently,
+with a 25-second deadline per source request; some providers time out sooner.
+Changing the query, hiding Online or leaving search cancels outstanding work.
+
+A slow or failed source does not remove other results. Its inline Retry or Verify
+action reruns only that source. Verification browser time is excluded from the
+request deadline. Pasted collections retain the source's order when opened.
+
+Each result has a small source badge on its artwork, with the source name in its
+tooltip/accessibility label. Spotify, SoundCloud, YouTube and Tidal use bundled
+brand glyphs; Qobuz and Monochrome use letter marks. The badge identifies the
+catalog result: Spotify audio still resolves through the chosen audio provider.
+Playback and Send to folder retain the selected result's source identity.
+Duplicates within one provider are removed; copies across providers, remixes and
+different uploads remain separate so you can choose the version you want.
 
 ### SoundCloud
 

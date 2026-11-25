@@ -11,6 +11,11 @@ import 'mornye_sources.dart';
 import 'mornye_provider.dart';
 import 'source_stream_proxy.dart';
 
+class OnlineSource {
+  const OnlineSource(this.id, this.name);
+  final String id, name;
+}
+
 class MusicSources extends ChangeNotifier {
   MusicSources({
     Future<String?> Function()? read,
@@ -41,6 +46,21 @@ class MusicSources extends ChangeNotifier {
   String? get selectedProvider =>
       extensions?.selected ??
       (enabled ? sourceId : extensions?.enabled.firstOrNull?.id);
+  List<OnlineSource> get onlineSources => [
+    for (final extension in extensions?.enabled ?? <MornyeExtension>[])
+      OnlineSource('mornye:${extension.id}', extension.name),
+    if (enabled) OnlineSource(sourceId, 'Monochrome'),
+  ];
+  String? _searchSource;
+
+  /// Null means all enabled sources, including for existing installations.
+  String? get searchSource =>
+      onlineSources.any((e) => e.id == _searchSource) ? _searchSource : null;
+  String get searchLabel =>
+      onlineSources.where((e) => e.id == searchSource).firstOrNull?.name ??
+      'All sources';
+  String get searchSignature =>
+      '${searchSource ?? '*'}|${onlineSources.map((e) => e.id).join('|')}';
   Future<void>? _restoring;
   bool _loaded = false;
   bool busy = false;
@@ -83,6 +103,7 @@ class MusicSources extends ChangeNotifier {
         if (data['schema'] != 1) throw const FormatException();
         endpoint = parseEndpoint(data['endpoint'] as String).toString();
         enabled = data['enabled'] as bool;
+        _searchSource = data['searchSource'] as String?;
       }
       _loaded = true;
       error = null;
@@ -93,6 +114,25 @@ class MusicSources extends ChangeNotifier {
   }
 
   Future<void> save({required String endpoint, required bool enabled}) async {
+    await _save(
+      endpoint: endpoint,
+      enabled: enabled,
+      searchSource: _searchSource,
+    );
+  }
+
+  Future<void> chooseSearchSource(String? id) async {
+    if (id != null && !onlineSources.any((e) => e.id == id)) {
+      throw const SourceException('Enable this source first.');
+    }
+    await _save(endpoint: endpoint, enabled: enabled, searchSource: id);
+  }
+
+  Future<void> _save({
+    required String endpoint,
+    required bool enabled,
+    required String? searchSource,
+  }) async {
     if (busy) {
       throw const SourceException('Music source settings are still saving.');
     }
@@ -106,11 +146,13 @@ class MusicSources extends ChangeNotifier {
         'schema': 1,
         'endpoint': uri.toString(),
         'enabled': enabled,
+        'searchSource': searchSource,
       });
       await _write(value);
       if (await _read() != value) throw const FormatException();
       this.endpoint = uri.toString();
       this.enabled = enabled;
+      _searchSource = searchSource;
       _loaded = true;
     } on Object {
       error = 'Could not securely save the music source. Try again.';

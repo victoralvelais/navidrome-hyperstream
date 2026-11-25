@@ -179,6 +179,16 @@ void main() {
     await restored.restore();
     expect(restored.enabled, isTrue);
     expect(restored.sourceId, id);
+    expect(restored.searchSource, isNull);
+    await sources.chooseSearchSource(id);
+    await sources.save(endpoint: 'https://source.example/api/', enabled: true);
+    final scoped = MusicSources(read: () async => value);
+    addTearDown(scoped.dispose);
+    await scoped.restore();
+    expect(scoped.searchSource, id);
+    await sources.chooseSearchSource(null);
+    expect(sources.searchSource, isNull);
+    expect(jsonDecode(value!)['searchSource'], isNull);
     fail = true;
     await expectLater(
       sources.save(endpoint: 'https://other.example', enabled: false),
@@ -186,6 +196,11 @@ void main() {
     );
     expect(sources.sourceId, id);
     expect(sources.enabled, isTrue);
+    await expectLater(
+      sources.chooseSearchSource(id),
+      throwsA(isA<SourceException>()),
+    );
+    expect(sources.searchSource, isNull);
     expect(
       () => MusicSources.parseEndpoint('https://user:password@example.com'),
       throwsFormatException,

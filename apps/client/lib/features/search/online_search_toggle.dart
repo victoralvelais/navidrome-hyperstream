@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../services/music_sources.dart';
+import '../../widgets/music_source_icon.dart';
 import '../settings/music_source_settings.dart';
 
 /// A status indicator that also toggles online results. Source selection stays
@@ -26,6 +27,7 @@ class OnlineSearchToggle extends StatefulWidget {
 class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
   final _anchor = GlobalKey();
   static const _manage = '__manage_sources';
+  static const _all = '__all_sources';
   static const _sourceAction = CustomSemanticsAction(
     label: 'Choose music source',
   );
@@ -40,7 +42,7 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
     _menuOpen = true;
     try {
       final sources = widget.sources;
-      final enabled = sources.extensions?.enabled.toList() ?? [];
+      final enabled = sources.onlineSources;
       final colors = Theme.of(context).colorScheme;
       final selected = await showMenu<String>(
         context: context,
@@ -72,22 +74,21 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
         ),
         elevation: 12,
         items: [
+          PopupMenuItem(
+            key: const ValueKey('online-source-all'),
+            value: _all,
+            child: _sourceRow('All sources', sources.searchSource == null),
+          ),
           for (final source in enabled)
             PopupMenuItem(
-              key: ValueKey('online-source-${source.id}'),
+              key: ValueKey(
+                'online-source-${source.id.startsWith('mornye:') ? source.id.substring(7) : 'monochrome'}',
+              ),
               value: source.id,
               child: _sourceRow(
                 source.name,
-                source.id == sources.selectedProvider,
-              ),
-            ),
-          if (sources.enabled)
-            PopupMenuItem(
-              key: const ValueKey('online-source-monochrome'),
-              value: sources.sourceId,
-              child: _sourceRow(
-                'Monochrome',
-                sources.sourceId == sources.selectedProvider,
+                source.id == sources.searchSource,
+                sourceId: source.id,
               ),
             ),
           if (sources.hasProviders) const PopupMenuDivider(),
@@ -107,11 +108,8 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
             ),
           ),
         );
-      } else if (sources.extensions != null) {
-        await sources.extensions!.choose(
-          catalog: selected,
-          legacy: selected == sources.sourceId,
-        );
+      } else {
+        await sources.chooseSearchSource(selected == _all ? null : selected);
       }
     } on Object {
       if (mounted) {
@@ -126,8 +124,12 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
     }
   }
 
-  Widget _sourceRow(String name, bool selected) => Row(
+  Widget _sourceRow(String name, bool selected, {String? sourceId}) => Row(
     children: [
+      if (sourceId != null) ...[
+        MusicSourceIcon(sourceId: sourceId, name: name),
+        const SizedBox(width: 10),
+      ],
       Expanded(child: Text(name)),
       const SizedBox(width: 12),
       if (selected)
@@ -144,12 +146,7 @@ class _OnlineSearchToggleState extends State<OnlineSearchToggle> {
     listenable: widget.sources,
     builder: (context, _) {
       final colors = Theme.of(context).colorScheme;
-      final selected = widget.sources.selectedProvider;
-      final source = selected == widget.sources.sourceId
-          ? 'Monochrome'
-          : selected == null
-          ? 'No source selected'
-          : widget.sources.extensions?.name(selected) ?? '';
+      final source = widget.sources.searchLabel;
       return Semantics(
         label: 'Online results',
         value: source,

@@ -7,11 +7,13 @@ import 'package:flutter/material.dart';
 import '../../models/library.dart';
 import '../../services/music_provider.dart';
 import '../../services/music_sources.dart';
+import '../../services/online_search.dart';
 import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../../widgets/floating_chrome.dart';
 import '../../widgets/glass_surface.dart';
 import '../../widgets/pull_to_refresh.dart';
+import '../../widgets/music_source_icon.dart';
 import '../library/cover_art.dart';
 import '../player/player_controls.dart';
 import '../settings/music_source_settings.dart';
@@ -47,6 +49,8 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
   late final MusicSources sources = widget.sources ?? MusicSources.instance;
   final query = TextEditingController();
   MusicProvider? provider;
+  OnlineSearch? search;
+  String? sourceSignature;
   Timer? debounce;
   int revision = 0;
   bool busy = false;
@@ -74,11 +78,16 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
   }
 
   void _sourceChanged() {
+    final signature =
+        '${widget.album?.sourceId ?? ''}|${sources.searchSignature}';
+    if (sourceSignature == signature) return;
+    sourceSignature = signature;
     ++revision;
     debounce?.cancel();
+    _stopSearch();
     provider?.close();
     try {
-      provider = sources.hasProviders
+      provider = sources.hasProviders && widget.album != null
           ? sources.providerById(widget.album?.sourceId)
           : null;
     } on SourceException {
@@ -90,7 +99,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
       error = sources.error;
       busy = false;
     });
-    if (provider != null &&
+    if (sources.hasProviders &&
         (widget.album != null || query.text.trim().isNotEmpty)) {
       unawaited(_load());
     }
@@ -98,8 +107,9 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
 
   Future<void> _load() async {
     debounce?.cancel();
+    _stopSearch();
     final source = provider;
-    if (source == null) return;
+    if (!sources.hasProviders) return;
     final current = ++revision;
     final text = query.text.trim();
     if (widget.album == null && text.isEmpty) {
@@ -115,6 +125,20 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
       busy = true;
       error = null;
     });
+    if (widget.album == null) {
+      final session = OnlineSearch(sources, text);
+      search = session;
+      session.addListener(_searchUpdated);
+      await session.start();
+      return;
+    }
+    if (source == null) {
+      setState(() {
+        busy = false;
+        error = 'Enable this collection’s source in Music sources.';
+      });
+      return;
+    }
     try {
       final album = widget.album;
       Future<SourceSearch> load() async => album == null
@@ -147,6 +171,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
   void _changed(String _) {
     ++revision;
     debounce?.cancel();
+    _stopSearch();
     setState(() {
       tracks = [];
       albums = [];
@@ -156,11 +181,28 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
     debounce = Timer(const Duration(milliseconds: 350), _load);
   }
 
+  void _searchUpdated() {
+    if (!mounted || search == null) return;
+    setState(() {
+      tracks = search!.tracks;
+      albums = search!.albums;
+      busy = search!.busy;
+      error = search!.error;
+    });
+  }
+
+  void _stopSearch() {
+    search?.removeListener(_searchUpdated);
+    search?.dispose();
+    search = null;
+  }
+
   @override
   void dispose() {
     ++revision;
     sources.removeListener(_sourceChanged);
     debounce?.cancel();
+    _stopSearch();
     query.dispose();
     provider?.close();
     super.dispose();
@@ -204,28 +246,24 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
         ? Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: DropdownButtonFormField<String>(
-              key: ValueKey(sources.selectedProvider),
-              initialValue: sources.selectedProvider,
+              key: ValueKey(sources.searchSource),
+              initialValue: sources.searchSource ?? '__all',
               decoration: const InputDecoration(
                 labelText: 'Browse source',
                 isDense: true,
               ),
               items: [
-                for (final e in sources.extensions!.enabled)
+                const DropdownMenuItem(
+                  value: '__all',
+                  child: Text('All sources'),
+                ),
+                for (final e in sources.onlineSources)
                   DropdownMenuItem(value: e.id, child: Text(e.name)),
-                if (sources.enabled)
-                  DropdownMenuItem(
-                    value: sources.sourceId,
-                    child: const Text('Monochrome'),
-                  ),
               ],
               onChanged: (id) async {
                 if (id == null) return;
                 try {
-                  await sources.extensions!.choose(
-                    catalog: id,
-                    legacy: id == sources.sourceId,
-                  );
+                  await sources.chooseSearchSource(id == '__all' ? null : id);
                 } on Object {
                   if (mounted) {
                     setState(
@@ -239,6 +277,43 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
           )
         : null;
   }
+
+  String _sourceName(String id) =>
+      sources.onlineSources.where((s) => s.id == id).firstOrNull?.name ??
+      (id.startsWith('mornye:') ? id.substring(7) : 'Monochrome');
+
+  Widget _artwork(String sourceId, Uri? artwork, double size) =>
+      SizedBox.square(
+        dimension: size,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CoverArt(
+                client: widget.client,
+                id: null,
+                externalUri: artwork,
+                radius: 10,
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: MusicSourceIcon(
+                  sourceId: sourceId,
+                  name: _sourceName(sourceId),
+                  size: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 
   List<Widget> _results() => [
     if (!sources.hasProviders) ...[
@@ -312,15 +387,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
     for (final track in widget.showTracks ? tracks : <Track>[])
       ListTile(
         enabled: track.source!.available,
-        leading: SizedBox.square(
-          dimension: 48,
-          child: CoverArt(
-            client: widget.client,
-            id: null,
-            externalUri: track.source?.artwork,
-            radius: 10,
-          ),
-        ),
+        leading: _artwork(track.source!.sourceId, track.source?.artwork, 48),
         title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           track.source!.available
@@ -335,15 +402,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
     if (widget.showAlbums && albums.isNotEmpty) _heading('Albums'),
     for (final album in widget.showAlbums ? albums : <SourceAlbum>[])
       ListTile(
-        leading: SizedBox.square(
-          dimension: 56,
-          child: CoverArt(
-            client: widget.client,
-            id: null,
-            externalUri: album.artwork,
-            radius: 12,
-          ),
-        ),
+        leading: _artwork(album.sourceId, album.artwork, 56),
         title: Text(album.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           album.artist,
@@ -363,26 +422,59 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
           ),
         ),
       ),
+    if (search case final session?) ...[
+      if (session.pending.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Text(
+            'Searching ${session.pending.map((s) => s.name).join(', ')}…',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      for (final issue in session.issues)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              MusicSourceIcon(
+                sourceId: issue.source.id,
+                name: issue.source.name,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${issue.source.name} ${issue.verificationProvider == null ? 'could not load results' : 'needs verification'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                key: ValueKey('retry-source-${issue.source.id}'),
+                onPressed: () => session.retry(issue),
+                child: Text(
+                  issue.verificationProvider == null ? 'Retry' : 'Verify',
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
     if (!busy &&
         error == null &&
+        (search?.issues.isEmpty ?? true) &&
         sources.hasProviders &&
         query.text.trim().isNotEmpty &&
         (!widget.showTracks || tracks.isEmpty) &&
         (!widget.showAlbums || albums.isEmpty))
       const Padding(
         padding: EdgeInsets.all(24),
-        child: Text('No matches from this source.'),
+        child: Text('No online matches.'),
       ),
   ];
 
   Widget _embedded() => SliverMainAxisGroup(
     slivers: [
       if (widget.showTracks || widget.showAlbums) ...[
-        SliverToBoxAdapter(
-          child: _heading(
-            'Online${provider == null ? '' : ' · ${provider!.name}'}',
-          ),
-        ),
+        SliverToBoxAdapter(child: _heading('Online · ${sources.searchLabel}')),
         if (busy) const SliverToBoxAdapter(child: LinearProgressIndicator()),
         SliverList.list(children: _results()),
       ],
@@ -426,9 +518,7 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
                         autocorrect: false,
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: sources.extensions?.selected != null
-                              ? 'Search or paste a playlist link'
-                              : 'Search Monochrome',
+                          hintText: 'Search or paste a playlist link',
                           prefixIcon: const AppIcon(Icons.search_rounded),
                           filled: false,
                           border: InputBorder.none,

@@ -1,5 +1,18 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 25: combined online search, 0.60.0
+
+- Search all enabled online sources by default, publishing results as each source
+  responds. Rank songs and albums by title/artist relevance and provider order.
+- Show source badges on results and retain each source's exact recording identity
+  for playback and Send to folder. Different uploads and service versions stay
+  separate; duplicate records from the same source are removed.
+- Hold Online to narrow the search to one source or return to All sources. Save
+  that preference securely without changing Spotify's chosen audio provider.
+- Route pasted links only to their matching source. Bound concurrent requests,
+  cancel stale queries and isolate timeouts. Retry or verify individual failed
+  sources inline while keeping successful results and library matches usable.
+
 ## November 25: SoundCloud source, 0.59.0
 
 - Add reviewed, checksum-pinned SoundCloud 1.0.15 to Music sources and unified

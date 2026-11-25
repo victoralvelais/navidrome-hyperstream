@@ -180,7 +180,7 @@ void main() {
     'long press selects a source without toggling online or replacing library results',
     (tester) async {
       final catalogs = _SearchCatalogs();
-      final sources = MusicSources(extensions: catalogs);
+      final sources = _SearchMusicSources(catalogs);
       addTearDown(() {
         sources.dispose();
         catalogs.dispose();
@@ -204,7 +204,7 @@ void main() {
         find.byKey(const ValueKey('online-source-ytmusic-spotiflac')),
       );
       await tester.pumpAndSettle();
-      expect(catalogs.selected, 'ytmusic-spotiflac');
+      expect(sources.searchSource, 'mornye:ytmusic-spotiflac');
       expect(catalogs.queries, isEmpty);
       expect(find.text('Library song'), findsOneWidget);
       await tester.tap(toggle);
@@ -234,6 +234,16 @@ void main() {
       expect(find.text('Library song'), findsOneWidget);
       expect(catalogs.queries.last, 'soundcloud:remix');
       expect(libraryCalls, 1);
+      await tester.longPress(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('online-source-all')));
+      await tester.pumpAndSettle();
+      expect(sources.searchSource, isNull);
+      expect(find.text('Tidal song'), findsOneWidget);
+      expect(find.text('YouTube upload'), findsOneWidget);
+      expect(find.text('SoundCloud remix'), findsOneWidget);
+      expect(catalogs.queries, hasLength(6));
+      expect(libraryCalls, 1);
       await tester.tap(toggle);
       await tester.pumpAndSettle();
       expect(find.text('Tidal song'), findsNothing);
@@ -245,11 +255,62 @@ void main() {
   );
 
   testWidgets(
+    'all online sources publish independently with badges and one source retry',
+    (tester) async {
+      final held = Completer<dynamic>();
+      final catalogs = _SearchCatalogs()
+        ..held['tidal-web'] = held
+        ..failures.add('ytmusic-spotiflac');
+      final sources = _SearchMusicSources(catalogs, scope: null);
+      addTearDown(() {
+        sources.dispose();
+        catalogs.dispose();
+      });
+      var libraryCalls = 0;
+      await mount(tester, (_) async {
+        libraryCalls++;
+        return results(
+          songs: [
+            {'id': 'saved', 'title': 'Library song'},
+          ],
+        );
+      }, sources: sources);
+      await query(tester, 'remix');
+      await tester.tap(find.byKey(const ValueKey('search-online-toggle')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('SoundCloud remix'), findsOneWidget);
+      expect(find.byTooltip('Source: SoundCloud'), findsOneWidget);
+      expect(find.text('Library song'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(catalogs.queries, hasLength(3));
+      catalogs.failures.clear();
+      final retry = find.byKey(
+        const ValueKey('retry-source-mornye:ytmusic-spotiflac'),
+      );
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(catalogs.queries, hasLength(4));
+      expect(catalogs.queries.last, 'ytmusic-spotiflac:remix');
+      held.complete([
+        {'id': 'upload', 'name': 'Tidal song'},
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(libraryCalls, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'online failure leaves library matches usable and retry only requests online',
     (tester) async {
       var libraryCalls = 0;
       final catalogs = _SearchCatalogs()..fail = true;
-      final sources = MusicSources(extensions: catalogs);
+      final sources = _SearchMusicSources(catalogs);
       addTearDown(() {
         sources.dispose();
         catalogs.dispose();
@@ -281,7 +342,7 @@ void main() {
     'filters apply to both result groups without repeating their searches',
     (tester) async {
       final catalogs = _SearchCatalogs()..includeAlbum = true;
-      final sources = MusicSources(extensions: catalogs);
+      final sources = _SearchMusicSources(catalogs);
       addTearDown(() {
         sources.dispose();
         catalogs.dispose();
@@ -332,7 +393,7 @@ void main() {
     'online finishes independently while the library request is pending',
     (tester) async {
       final catalogs = _SearchCatalogs();
-      final sources = MusicSources(extensions: catalogs);
+      final sources = _SearchMusicSources(catalogs);
       addTearDown(() {
         sources.dispose();
         catalogs.dispose();
@@ -601,6 +662,8 @@ class _SearchCatalogs extends MornyeSources {
     selected = 'tidal-web';
   }
   final queries = <String>[];
+  final held = <String, Completer<dynamic>>{};
+  final failures = <String>{};
   bool fail = false;
   bool includeAlbum = false;
   @override
@@ -619,7 +682,8 @@ class _SearchCatalogs extends MornyeSources {
     Future<void>? abort,
   }) async {
     queries.add('${request['id']}:${request['args'][0]}');
-    if (fail) {
+    if (held[request['id']] case final pending?) return pending.future;
+    if (fail || failures.contains(request['id'])) {
       throw const SourceException('This source is unavailable. Try again.');
     }
     return [
@@ -640,5 +704,18 @@ class _SearchCatalogs extends MornyeSources {
         'artists': 'Artist',
       },
     ];
+  }
+}
+
+class _SearchMusicSources extends MusicSources {
+  _SearchMusicSources(MornyeSources catalogs, {this.scope = 'mornye:tidal-web'})
+    : super(extensions: catalogs);
+  String? scope;
+  @override
+  String? get searchSource => scope;
+  @override
+  Future<void> chooseSearchSource(String? id) async {
+    scope = id;
+    notifyListeners();
   }
 }

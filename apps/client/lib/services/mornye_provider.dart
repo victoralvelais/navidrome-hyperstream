@@ -21,15 +21,19 @@ class MornyeProvider implements MusicProvider {
   @override
   String get name => sources.name(extensionId);
 
-  Future<dynamic> _call(String method, List<dynamic> args) => sources.execute({
+  Future<dynamic> _call(
+    String method,
+    List<dynamic> args, {
+    Future<void>? abort,
+  }) => sources.execute({
     'op': 'call',
     'id': extensionId,
     'method': method,
     'args': args,
-  });
+  }, abort: abort);
 
   @override
-  Future<SourceSearch> search(String query) async {
+  Future<SourceSearch> search(String query, {Future<void>? abort}) async {
     final link = Uri.tryParse(query);
     if (link != null && link.hasScheme) {
       if (!acceptsLink(extensionId, link)) {
@@ -57,7 +61,7 @@ class MornyeProvider implements MusicProvider {
         query = soundcloudLink(link).toString();
       }
       final response = kind == null
-          ? await _call('handleUrl', [query])
+          ? await _call('handleUrl', [query], abort: abort)
           : await _call(
               switch (kind) {
                 'playlist' => 'getPlaylist',
@@ -65,6 +69,7 @@ class MornyeProvider implements MusicProvider {
                 _ => 'getTrack',
               },
               [collectionId],
+              abort: abort,
             );
       final result = kind == 'track' ? {'track': response} : response;
       if (result is! Map) {
@@ -112,7 +117,7 @@ class MornyeProvider implements MusicProvider {
     final response = await _call('customSearch', [
       query,
       {'limit': 30, 'type': 'all'},
-    ]);
+    ], abort: abort);
     return parseSearch(extensionId, response);
   }
 
