@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/music_sources.dart';
 import 'package:hyperstream_client/services/mornye_sources.dart';
+import 'package:hyperstream_client/services/mornye_provider.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/remote_folder.dart';
 import 'package:hyperstream_client/services/remote_transfer.dart';
@@ -180,6 +182,64 @@ void main() {
     expect(imports.completed, 2);
     imports.dispose();
   });
+  test(
+    'SoundCloud folder imports use the upload provider and clean staging',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'soundcloud-import-test-',
+      );
+      await Directory('${root.path}/downloads').create();
+      final extensions = _SoundCloudImports(root);
+      sources.dispose();
+      sources = MusicSources(extensions: extensions);
+      final uploads = [
+        for (final id in ['123', '456', '123'])
+          MornyeProvider.parseTrack('soundcloud', {
+            'id': id,
+            'name': 'Remix $id',
+            'artists': 'Uploader',
+            'duration_ms': 120000,
+            'is_playable': true,
+          }),
+      ];
+      final imports = SourceImports(
+        sources: sources,
+        remote: remote,
+        transfer: (_, track, provider, activity) async {
+          expect(provider.id, 'mornye:soundcloud');
+          expect(activity, false);
+          final audio = await provider.download(
+            track.source!,
+            Completer<void>().future,
+          );
+          expect(audio.headers['content-type'], 'audio/mp4');
+          expect(await audio.stream.toBytes(), [1, 2, 3]);
+          return success;
+        },
+      );
+      try {
+        final result = await imports.send(client, uploads);
+        expect(result.success, true);
+        expect(imports.completed, 2);
+        expect(extensions.downloads, ['123', '456']);
+        expect(await Directory('${root.path}/downloads').list().isEmpty, true);
+        expect(extensions.verification.value, isNull);
+        final blocked = MornyeProvider.parseTrack('soundcloud', {
+          'id': '789',
+          'name': 'Preview',
+          'is_playable': false,
+        });
+        expect((await imports.send(client, [blocked])).success, false);
+        expect(extensions.downloads, ['123', '456']);
+      } finally {
+        imports.dispose();
+        sources.dispose();
+        sources = MusicSources();
+        extensions.dispose();
+        await root.delete(recursive: true);
+      }
+    },
+  );
   test('uncertain publication stops the batch and disables retry', () async {
     var calls = 0;
     final imports = SourceImports(
@@ -221,4 +281,37 @@ void main() {
     expect(calls, 1);
     imports.dispose();
   });
+}
+
+class _SoundCloudImports extends MornyeSources {
+  _SoundCloudImports(Directory directory) {
+    root = directory;
+    extensions = [
+      MornyeExtension({
+        'id': 'soundcloud',
+        'display_name': 'SoundCloud',
+        'version': '1.0.15',
+        'download_url': 'https://example.test/package',
+        'sha256': 'synthetic',
+        'audio': true,
+        'installed': true,
+        'enabled': true,
+      }),
+    ];
+  }
+  final downloads = <String>[];
+  @override
+  Future<dynamic> execute(
+    Map<String, dynamic> request, {
+    Future<void>? abort,
+  }) async {
+    expect(request['op'], 'download');
+    expect(request['id'], 'soundcloud');
+    expect(request['method'], 'hyperstreamDownload');
+    expect(request['args'][1], 'aac_160');
+    downloads.add(request['args'][0] as String);
+    final path = request['args'][2] as String;
+    await File(path).writeAsBytes([1, 2, 3]);
+    return {'success': true, 'file_path': path};
+  }
 }

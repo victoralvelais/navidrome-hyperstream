@@ -5,12 +5,25 @@ Hyperstream embeds Mornye's Rust extension runtime at
 whose compatibility version is 5.3.1. This is independent of Hyperstream's app
 version. Runtime feature and minimum-version checks remain enabled.
 
-The four supported JavaScript packages are pinned in `assets/catalog.json` to
+The five supported JavaScript packages are pinned in `assets/catalog.json` to
 Mornye-Extension revision `e9d2499688f77d8cbc224c1c1a1fe2ccfdb94555`. Installation
 checks both the archive SHA-256 and manifest identity. The source archives are
 not modified. `rust/src/adapter.js` adds explicit streaming/download entry points
 when loading these particular package versions. Updates require reviewing their
 contracts and updating the pinned registry together with adapter tests.
+
+SoundCloud 1.0.15 uses its public web client bootstrap and direct SoundCloud media;
+it does not declare a signed gateway session or user configuration. The adapter
+retains exact upload IDs, adds playback-availability metadata, hydrates abbreviated
+playlist records in their original positions and fails incomplete collections.
+Playback refreshes track authorization and resolves progressive M4A/MP3, or uses
+the original downloader for full HLS preparation. That downloader rejects previews,
+checks HLS duration/end markers, supports byte ranges and initialization segments,
+and remuxes only local files through the existing FFmpeg command pump. Downloads
+request `aac_160` and use the actual returned M4A/MP3/Opus file extension before
+Hyperstream's separate MP3 320/SMB import. No provider session or stream URL is
+committed or stored in the playback queue. Long HLS-only sets can take longer to
+start because they require preparation; the existing operation limits still apply.
 
 YouTube Music 2.4.7 accepts regular YouTube video IDs as well as music searches.
 The adapter reads pasted-video metadata synchronously, preserves repeated playlist

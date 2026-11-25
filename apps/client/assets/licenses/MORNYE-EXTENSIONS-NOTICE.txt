@@ -1,0 +1,22 @@
+Mornye Extension
+Copyright 2026 zarzet
+
+This product includes software developed by zarzet.
+SPDX-License-Identifier: LGPL-3.0-only
+
+Hyperstream supports separately installed, unmodified Mornye JavaScript packages:
+Spotify Web 1.10.6, Qobuz Web 1.2.27, Tidal Web 1.2.14,
+YouTube Music 2.4.7 and SoundCloud 1.0.15.
+
+Corresponding source packages (including LICENSE, COPYING and NOTICE):
+https://github.com/mornyeapp/Mornye-Extension/tree/e9d2499688f77d8cbc224c1c1a1fe2ccfdb94555/extensions
+
+Pinned archive URLs and checksums:
+apps/client/packages/mornye_host/assets/catalog.json
+
+Hyperstream's open-source loading adapter adds streaming entry points and
+collection/availability handling without modifying installed source archives:
+https://github.com/victoralvelais/navidrome-hyperstream/tree/main/apps/client/packages/mornye_host
+
+The full LGPL v3 and GPL v3 texts accompany this notice in the app's
+Mornye extension runtime license entry and in each installed archive.

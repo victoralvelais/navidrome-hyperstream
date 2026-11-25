@@ -64,11 +64,13 @@ void main() {
             ('spotify-web', 'Spotify Web', false),
             ('tidal-web', 'Tidal', true),
             ('qobuz-web', 'Qobuz', true),
+            ('soundcloud', 'SoundCloud', true),
           ])
             MornyeExtension({
               'id': entry.$1,
               'display_name': entry.$2,
               'audio': entry.$3,
+              'configurable': entry.$1 != 'soundcloud',
               'version': '1.0.0',
               'download_url': 'https://example.test/package',
               'sha256': 'test',
@@ -99,6 +101,11 @@ void main() {
         );
         expect(find.text('Spotify Web'), findsOneWidget);
         expect(find.text('Verify'), findsNWidgets(2));
+        expect(find.text('Configure'), findsNWidgets(3));
+        expect(
+          find.textContaining('Public uploads, remixes and sets.'),
+          findsOneWidget,
+        );
         await tester.ensureVisible(find.text('Audio source for Spotify'));
         await tester.pump();
         expect(tester.takeException(), isNull);

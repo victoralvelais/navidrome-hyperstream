@@ -24,6 +24,15 @@
     "audio": true
   },
   {
+    "id": "soundcloud",
+    "display_name": "SoundCloud",
+    "version": "1.0.15",
+    "download_url": "https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/e9d2499688f77d8cbc224c1c1a1fe2ccfdb94555/extensions/soundcloud.sflx",
+    "sha256": "c720fccc7f1063606724ab7436d73ee7c6cc86e8028c4d38122fb02c6a7a0f98",
+    "audio": true,
+    "configurable": false
+  },
+  {
     "id": "ytmusic-spotiflac",
     "display_name": "YouTube Music",
     "version": "2.4.7",

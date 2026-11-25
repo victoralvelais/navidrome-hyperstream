@@ -87,6 +87,7 @@ void main() {
             extension('spotify-web', audio: false),
             extension('tidal-web'),
             extension('ytmusic-spotiflac'),
+            extension('soundcloud'),
           ];
         }
         if (r['op'] == 'ffmpeg_poll') return [];
@@ -101,6 +102,152 @@ void main() {
     await proxy.close();
     sources.dispose();
     await root.delete(recursive: true);
+  });
+
+  test(
+    'SoundCloud links use its own resolver and strip tracking tokens',
+    () async {
+      final requests = <Map<String, dynamic>>[];
+      operation = (r) async {
+        requests.add(r);
+        return {
+          'track': {
+            'id': '12345',
+            'name': 'Midnight remix',
+            'artists': 'Independent DJ',
+            'duration_ms': 240000,
+            'is_playable': true,
+          },
+        };
+      };
+      final provider = MornyeProvider(sources, 'soundcloud', proxy);
+      for (final link in [
+        'https://soundcloud.com/artist/track?utm_source=test',
+        'https://www.soundcloud.com/track/remix#t=3',
+        'https://m.soundcloud.com/artist/remix',
+        'https://on.soundcloud.com/example?si=tracking',
+      ]) {
+        final found = await provider.search(link);
+        final track = found.tracks.single;
+        expect(track.title, 'Midnight remix');
+        expect(track.source!.sourceId, 'mornye:soundcloud');
+        expect(track.source!.trackId, '12345');
+        expect(track.duration, const Duration(minutes: 4));
+      }
+      expect(requests.every((r) => r['method'] == 'handleUrl'), true);
+      expect(requests.map((r) => r['args'][0]), [
+        'https://soundcloud.com/artist/track',
+        'https://soundcloud.com/track/remix',
+        'https://soundcloud.com/artist/remix',
+        'https://on.soundcloud.com/example',
+      ]);
+      for (final link in [
+        'http://soundcloud.com/artist/track',
+        'https://soundcloud.com.evil.test/artist/track',
+        'https://user:secret@soundcloud.com/artist/track',
+        'https://soundcloud.com:9443/artist/track',
+        'https://soundcloud.com/artist',
+        'https://soundcloud.com/artist/likes',
+        'https://soundcloud.com/artist/track/private-token',
+        'https://on.soundcloud.com/artist/track',
+      ]) {
+        await expectLater(
+          provider.search(link),
+          throwsA(isA<SourceException>()),
+        );
+      }
+      expect(requests, hasLength(4));
+    },
+  );
+
+  test(
+    'SoundCloud set links retain repeats and expose unavailable entries',
+    () async {
+      operation = (r) async {
+        expect(r['method'], 'handleUrl');
+        expect(r['args'], ['https://soundcloud.com/artist/sets/practice']);
+        return {
+          'type': 'playlist',
+          'name': 'Practice',
+          'total_tracks': 3,
+          'tracks': [
+            for (final id in ['123', '456', '123'])
+              {'id': id, 'name': 'Upload $id', 'is_playable': id != '456'},
+          ],
+        };
+      };
+      final provider = MornyeProvider(sources, 'soundcloud', proxy);
+      final found = await provider.search(
+        'https://soundcloud.com/artist/sets/practice?si=tracking',
+      );
+      expect(
+        found.albums.single.id,
+        'link:https://soundcloud.com/artist/sets/practice',
+      );
+      final tracks = await provider.album(found.albums.single);
+      expect(tracks.map((t) => t.source!.trackId), ['123', '456', '123']);
+      expect(tracks[1].source!.available, false);
+    },
+  );
+
+  test(
+    'SoundCloud acquisition keeps the upload and uses its returned format',
+    () async {
+      await sources.choose(audio: 'tidal-web');
+      const ref = SourceReference(
+        sourceId: 'mornye:soundcloud',
+        trackId: '12345',
+      );
+      final calls = <String>[];
+      String? downloaded;
+      operation = (r) async {
+        calls.add(r['method'] as String);
+        expect(r['id'], 'soundcloud');
+        expect(r['args'][0], '12345');
+        expect(r['args'][1], 'aac_160');
+        if (r['method'] == 'hyperstreamResolve') return {'prepare': true};
+        downloaded = (r['args'][2] as String).replaceFirst('.m4a', '.mp3');
+        await File(downloaded!).writeAsBytes([1, 2, 3]);
+        return {'success': true, 'file_path': downloaded};
+      };
+      expect(
+        await MornyeAcquisition(sources).resolve(ref, Completer<void>().future),
+        {'prepare': true},
+      );
+      final response = await MornyeProvider(
+        sources,
+        'soundcloud',
+        proxy,
+      ).download(ref, Completer<void>().future);
+      expect(response.headers['content-type'], 'audio/mpeg');
+      expect(await response.stream.toBytes(), [1, 2, 3]);
+      expect(await File(downloaded!).exists(), false);
+      expect(calls, ['hyperstreamResolve', 'hyperstreamDownload']);
+    },
+  );
+
+  test('SoundCloud unavailable responses are actionable without exposing provider details', () async {
+    operation = (r) async => r['op'] == 'pending'
+        ? null
+        : {
+            'success': false,
+            'error_code': 'track_unavailable',
+            'error_message': 'https://example.test/?secret=hidden',
+          };
+    await expectLater(
+      MornyeAcquisition(sources).resolve(
+        const SourceReference(sourceId: 'mornye:soundcloud', trackId: '12345'),
+        Completer<void>().future,
+      ),
+      throwsA(
+        isA<SourceException>().having(
+          (e) => e.message,
+          'message',
+          'This SoundCloud upload does not offer a full playable stream. Try another upload.',
+        ),
+      ),
+    );
+    expect(sources.verification.value, isNull);
   });
 
   test(

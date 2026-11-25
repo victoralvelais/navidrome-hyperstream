@@ -13,7 +13,7 @@ Future<void> main() async {
     'key': base64Encode(List<int>.filled(32, 9)),
   });
   final catalog = await callMornye({'op': 'list'}) as List;
-  if (catalog.length != 3 || catalog.any((e) => e['installed'] != false)) {
+  if (catalog.length != 5 || catalog.any((e) => e['installed'] != false)) {
     throw StateError('Unexpected native provider catalog');
   }
   try {

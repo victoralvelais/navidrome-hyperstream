@@ -226,6 +226,14 @@ void main() {
       );
       expect(catalogs.queries, ['ytmusic-spotiflac:remix', 'tidal-web:remix']);
       expect(libraryCalls, 1);
+      await tester.longPress(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('online-source-soundcloud')));
+      await tester.pumpAndSettle();
+      expect(find.text('SoundCloud remix'), findsOneWidget);
+      expect(find.text('Library song'), findsOneWidget);
+      expect(catalogs.queries.last, 'soundcloud:remix');
+      expect(libraryCalls, 1);
       await tester.tap(toggle);
       await tester.pumpAndSettle();
       expect(find.text('Tidal song'), findsNothing);
@@ -577,6 +585,7 @@ class _SearchCatalogs extends MornyeSources {
       for (final entry in [
         ('tidal-web', 'Tidal'),
         ('ytmusic-spotiflac', 'YouTube Music'),
+        ('soundcloud', 'SoundCloud'),
       ])
         MornyeExtension({
           'id': entry.$1,
@@ -623,7 +632,11 @@ class _SearchCatalogs extends MornyeSources {
         },
       {
         'id': 'upload',
-        'name': request['id'] == 'tidal-web' ? 'Tidal song' : 'YouTube upload',
+        'name': switch (request['id']) {
+          'tidal-web' => 'Tidal song',
+          'soundcloud' => 'SoundCloud remix',
+          _ => 'YouTube upload',
+        },
         'artists': 'Artist',
       },
     ];

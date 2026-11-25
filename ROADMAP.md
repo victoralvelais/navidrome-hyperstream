@@ -1,5 +1,42 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 25: SoundCloud source, 0.59.0
+
+- Add reviewed, checksum-pinned SoundCloud 1.0.15 to Music sources and unified
+  online search. Support public track, album/set and shortened share links.
+- Keep exact upload identities in the shared player. Stream progressive audio
+  when available; otherwise prepare the extension's complete HLS audio privately.
+- Send individual uploads and collections through the existing MP3 320 conversion,
+  validation and saved remote-folder pipeline. Preserve playlist order and repeats
+  for playback, import each upload once, and reject incomplete collections.
+- Surface unavailable/preview-only uploads without starting gateway verification.
+  Source quality varies; MP3 320 output does not improve the upstream audio.
+- Native adapter tests and a live public search/link/HLS download/conversion check
+  pass. iPhone playback, background transfer and live SMB delivery need device
+  acceptance. IPA building/testing is delegated to Sol under [AGENTS.md](AGENTS.md).
+
+## Planned milestone: personalized remixes and online discovery
+
+Feed Discover and Play similar from one recommendation service, using favorites,
+recent listens and frequently played tracks as weighted seeds. This milestone is
+planned; the current implementation batch adds SoundCloud as its provider foundation.
+
+1. Add a "Your favorites, reimagined" shelf with bounded, rotating seed searches,
+   cached results and an explanation of each recommendation. Broaden YouTube
+   discovery beyond the existing YouTube Music catalog.
+2. Classify remixes/edits, mashups, similar songs and long DJ sets using available
+   metadata and tracklists. Preserve the exact upload instead of matching it to
+   an original studio recording. Deduplicate reuploads without merging distinct edits.
+3. Reuse candidates in Play similar with online inclusion, alternate-version
+   frequency and familiar/adventurous controls. Make long DJ sets a separate opt-in.
+4. Add more/less-like-this feedback, creator follows/hiding, diversity and freshness
+   ranking, and availability checks with lazy stream resolution. Keep search work
+   bounded rather than querying every song in a large library.
+5. Reuse the existing queue and explicit Send to folder action for supported
+   sources. Keep provider credentials private and make library-only operation
+   independent of online services. Metadata cannot reliably identify every track
+   inside a set; audio fingerprinting is not required for the first milestone.
+
 ## November 18: selectable icon styles, 0.58.0
 
 - Home > Appearance > Icon style previews and switches Iconoir, Cupertino,

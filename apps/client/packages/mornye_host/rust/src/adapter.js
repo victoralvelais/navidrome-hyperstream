@@ -1,4 +1,71 @@
 // Adapter for the exact packages in catalog.json. Archives stay unmodified.
+function hyperstreamSoundCloudCollection(id) {
+  var data = scGet('playlists/' + id + '?representation=full');
+  var info = formatPlaylistOrAlbum(data);
+  var entries = data && data.tracks;
+  if (!info || !Array.isArray(entries) || entries.length > 10000 ||
+      (typeof data.track_count === 'number' && data.track_count !== entries.length))
+    throw new Error('SoundCloud collection is incomplete');
+  var full = {}, missing = [];
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i];
+    if (!entry || !/^\d+$/.test(String(entry.id)))
+      throw new Error('SoundCloud collection contains an unavailable entry');
+    if (entry.title) full[entry.id] = entry;
+    else if (missing.indexOf(entry.id) < 0) missing.push(entry.id);
+  }
+  // Hydrate abbreviated records, then reconstruct the original positions.
+  // Never append the hydrated tail or silently swallow a missing batch.
+  for (var start = 0; start < missing.length; start += 50) {
+    var batch = scGet('tracks?ids=' + missing.slice(start, start + 50).join(','));
+    if (!Array.isArray(batch)) throw new Error('SoundCloud collection page unavailable');
+    for (var b = 0; b < batch.length; b++) {
+      if (batch[b] && batch[b].title) full[batch[b].id] = batch[b];
+    }
+  }
+  var tracks = entries.map(function(entry, index) {
+    var raw = full[entry.id];
+    if (!raw) throw new Error('SoundCloud collection contains an unavailable entry');
+    trackCacheSet(raw.id, raw);
+    var track = formatTrack(raw);
+    if (!track) throw new Error('SoundCloud collection contains an invalid entry');
+    track.track_number = index + 1;
+    if (info.item_type === 'album') {
+      track.album_id = String(data.id);
+      track.album_name = info.name;
+    }
+    return track;
+  });
+  info.total_tracks = tracks.length;
+  return {info:info, tracks:tracks};
+}
+
+function hyperstreamSoundCloudUnavailable() {
+  return {success:false, error_code:'track_unavailable'};
+}
+
+function hyperstreamSoundCloudResolve(id) {
+  // Refresh track authorization on each resolution, including expired-URL retry.
+  var track = scGet('tracks/' + id);
+  trackCacheSet(id, track);
+  if (!isFullPlayableTrack(track)) return hyperstreamSoundCloudUnavailable();
+  var candidates = rankTranscodings((track.media && track.media.transcodings) || [], 'aac');
+  if (!candidates.length) return hyperstreamSoundCloudUnavailable();
+  for (var i = 0; i < candidates.length; i++) {
+    var candidate = candidates[i], format = transcodingFormat(candidate);
+    if (candidate.format.protocol !== 'progressive' ||
+        (format !== 'm4a' && format !== 'mp3')) continue;
+    try {
+      var url = resolveStreamURL(candidate, track);
+      return {url:url, format:format, prepareOnFailure:true,
+        headers:{'User-Agent':userAgentForURL(url)}};
+    } catch (_) { /* The reviewed downloader can prepare another full stream. */ }
+  }
+  // The existing preparation path joins HLS locally, retaining duration checks,
+  // cancellation and file grants. Never pass a remote manifest to FFmpeg/player.
+  return {prepare:true};
+}
+
 function hyperstreamYouTubeCollection(id, playlist) {
   var browse = playlist && !/^(VL|RDCLAK5uy_)/.test(id) ? 'VL' + id : id;
   var data = fetchJSONSync('https://music.youtube.com/youtubei/v1/browse?alt=json', {
@@ -44,6 +111,22 @@ function hyperstreamYouTubeCollection(id, playlist) {
 }
 var hyperstreamRegister = registerExtension;
 registerExtension = function(extension) {
+  var soundcloud = typeof isFullPlayableTrack === 'function' &&
+    typeof rankTranscodings === 'function' && typeof fetchTrackData === 'function';
+  if (soundcloud) {
+    var originalFormatTrack = formatTrack;
+    formatTrack = function(raw) {
+      var formatted = originalFormatTrack(raw);
+      if (formatted) {
+        formatted.is_playable = isFullPlayableTrack(raw);
+        if (raw.media && Array.isArray(raw.media.transcodings) &&
+            !rankTranscodings(raw.media.transcodings, 'aac').length)
+          formatted.is_playable = false;
+      }
+      return formatted;
+    };
+    fetchPlaylistOrAlbum = hyperstreamSoundCloudCollection;
+  }
   if (typeof fetchVideoMetadataSync === 'function') {
     // handleUrl returns a temporary "Loading..." row while it fetches in the
     // background. Resolve pasted videos synchronously and retain upload metadata.
@@ -56,9 +139,12 @@ registerExtension = function(extension) {
   }
   extension.hyperstreamCompleteGrant = function() { return session.completeGrant(); };
   extension.hyperstreamDownload = function(id, quality, output) {
+    if (soundcloud && !isFullPlayableTrack(fetchTrackData(id)))
+      return hyperstreamSoundCloudUnavailable();
     return extension.download(id, quality, output, function() {}, {});
   };
   extension.hyperstreamResolve = function(id, quality) {
+    if (soundcloud) return hyperstreamSoundCloudResolve(id);
     if (typeof requestInnerTubeAudioDownload === 'function') {
       // Keep the chosen upload. M4A can stream through both native players;
       // Opus and failed direct URLs use the package's downloader/preparation.

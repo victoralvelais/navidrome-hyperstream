@@ -51,6 +51,106 @@ mod tests {
     fn call(method: &str, args: Value, id: &str) -> Value {
         json!({"op":"call","id":"tidal-web","method":method,"args":args,"request_id":id})
     }
+    fn soundcloud_fixture() -> (tempfile::TempDir, Host) {
+        let (root, host) = fixture();
+        let dir = host.directory("soundcloud").unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.json"),
+            json!({
+                "name":"soundcloud","version":"1.0.15","displayName":"SoundCloud test",
+                "description":"Synthetic test provider", "author":"Hyperstream tests",
+                "type":["metadata_provider","download_provider"],"minAppVersion":"4.9.1",
+                "permissions":{"network":["example.test"],"storage":true,"file":true}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        fs::write(
+            dir.join("index.js"),
+            include_str!("../tests/fixtures/soundcloud.js"),
+        )
+        .unwrap();
+        host.environment
+            .set_setting("soundcloud", "_hyperstream_enabled", json!(true))
+            .unwrap();
+        (root, host)
+    }
+    fn sc_call(method: &str, args: Value) -> Value {
+        json!({"op":"call","id":"soundcloud","method":method,"args":args,"request_id":"soundcloud-test"})
+    }
+    #[test]
+    fn soundcloud_preserves_interleaved_playlist_positions_and_repeated_uploads() {
+        let (_root, host) = soundcloud_fixture();
+        let result = host
+            .call(&sc_call("getPlaylist", json!(["complete"])))
+            .unwrap();
+        let tracks = result["tracks"].as_array().unwrap();
+        assert_eq!(result["total_tracks"], 4);
+        assert_eq!(
+            tracks
+                .iter()
+                .map(|t| t["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["102", "101", "102", "103"]
+        );
+        assert_eq!(
+            tracks
+                .iter()
+                .map(|t| t["track_number"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3, 4]
+        );
+        for id in ["missing", "failed", "count"] {
+            assert!(host.call(&sc_call("getPlaylist", json!([id]))).is_err());
+        }
+    }
+    #[test]
+    fn soundcloud_streams_progressive_audio_or_prepares_hls_and_rejects_previews() {
+        let (_root, host) = soundcloud_fixture();
+        let direct = host
+            .call(&sc_call("hyperstreamResolve", json!(["1", "aac_160"])))
+            .unwrap();
+        assert_eq!(direct["url"], "https://example.test/audio");
+        assert_eq!(direct["format"], "mp3");
+        assert_eq!(direct["prepareOnFailure"], true);
+        assert_eq!(
+            host.call(&sc_call("hyperstreamResolve", json!(["2", "aac_160"])))
+                .unwrap(),
+            json!({"prepare":true})
+        );
+        for id in ["3", "4", "5"] {
+            let track = host.call(&sc_call("getTrack", json!([id]))).unwrap();
+            assert_eq!(track["is_playable"], false);
+            let audio = host
+                .call(&sc_call("hyperstreamResolve", json!([id, "aac_160"])))
+                .unwrap();
+            assert_eq!(audio["error_code"], "track_unavailable");
+        }
+    }
+    #[test]
+    fn soundcloud_download_uses_existing_private_file_grant() {
+        let (root, host) = soundcloud_fixture();
+        let dir = root.path().join("downloads").join("soundcloud");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("source.m4a");
+        let result = host
+            .call(
+                &json!({"op":"download", "id":"soundcloud", "method":"hyperstreamDownload",
+            "args":["2", "aac_160", path], "directory":dir,"request_id":"soundcloud-download"}),
+            )
+            .unwrap();
+        assert_eq!(result["success"], true);
+        assert_eq!(fs::read_to_string(path).unwrap(), "synthetic audio 2");
+        assert_eq!(
+            host.call(&sc_call(
+                "hyperstreamDownload",
+                json!(["3", "aac_160", "unused"])
+            ))
+            .unwrap()["error_code"],
+            "track_unavailable"
+        );
+    }
     fn youtube_fixture() -> (tempfile::TempDir, Host) {
         let (root, host) = fixture();
         let dir = host.directory("ytmusic-spotiflac").unwrap();

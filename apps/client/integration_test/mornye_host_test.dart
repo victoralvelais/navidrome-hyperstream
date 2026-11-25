@@ -26,6 +26,7 @@ void main() {
         'tidal-web',
         'qobuz-web',
         'ytmusic-spotiflac',
+        'soundcloud',
       ]),
     );
     expect(catalog.every((e) => e['installed'] == false), true);

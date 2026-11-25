@@ -17,10 +17,15 @@ void registerNativeLicenses() {
         '$iconNotice\n\n${await rootBundle.loadString('assets/licenses/${entry.value}')}',
       );
     }
-    yield LicenseEntryWithLineBreaks([
-      'Mornye extension runtime',
-      'QuickJS and native extension dependencies',
-    ], await rootBundle.loadString('assets/licenses/MORNYE-NOTICES.txt'));
+    yield LicenseEntryWithLineBreaks(
+      [
+        'Mornye extension runtime',
+        'Mornye music extensions (including SoundCloud)',
+        'QuickJS and native extension dependencies',
+      ],
+      '${await rootBundle.loadString('assets/licenses/MORNYE-EXTENSIONS-NOTICE.txt')}\n\n'
+      '${await rootBundle.loadString('assets/licenses/MORNYE-NOTICES.txt')}',
+    );
     yield LicenseEntryWithLineBreaks([
       'FFmpegKit audio',
       'FFmpeg',

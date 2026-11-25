@@ -49,6 +49,13 @@ class MornyeProvider implements MusicProvider {
         kind = target.$1;
         collectionId = target.$2;
       }
+      // SoundCloud uses creator/slugs, including slugs named "track" or
+      // "album". Resolve them through its own URL handler, never as numeric IDs.
+      if (extensionId == 'soundcloud') {
+        kind = null;
+        collectionId = null;
+        query = soundcloudLink(link).toString();
+      }
       final response = kind == null
           ? await _call('handleUrl', [query])
           : await _call(
@@ -125,6 +132,14 @@ class MornyeProvider implements MusicProvider {
         'open.qobuz.com',
         'play.qobuz.com',
       ].contains(host),
+      'soundcloud' =>
+        [
+              'soundcloud.com',
+              'www.soundcloud.com',
+              'm.soundcloud.com',
+              'on.soundcloud.com',
+            ].contains(host) &&
+            (!uri.hasPort || uri.port == 443),
       'ytmusic-spotiflac' => [
         'youtube.com',
         'www.youtube.com',
@@ -134,6 +149,37 @@ class MornyeProvider implements MusicProvider {
       ].contains(host),
       _ => false,
     };
+  }
+
+  static Uri soundcloudLink(Uri link) {
+    final path = link.pathSegments.where((p) => p.isNotEmpty).toList();
+    final short = link.host.toLowerCase() == 'on.soundcloud.com';
+    const profileSections = {
+      'sets',
+      'albums',
+      'tracks',
+      'likes',
+      'followers',
+      'following',
+      'reposts',
+      'playlists',
+      'popular-tracks',
+    };
+    final valid = short
+        ? path.length == 1
+        : (path.length == 2 && !profileSections.contains(path[1])) ||
+              (path.length == 3 && path[1] == 'sets');
+    if (!valid) {
+      throw const SourceException(
+        'Paste a public SoundCloud song, album or playlist link.',
+      );
+    }
+    // Discard tracking/private-link tokens; saved queues use public identities.
+    return Uri(
+      scheme: 'https',
+      host: short ? 'on.soundcloud.com' : 'soundcloud.com',
+      pathSegments: path,
+    );
   }
 
   static (String, String) youtubeTarget(Uri link) {
@@ -164,6 +210,9 @@ class MornyeProvider implements MusicProvider {
 
   @override
   Future<List<Track>> album(SourceAlbum album) async {
+    if (album.sourceId != id) {
+      throw const SourceException('This collection belongs to another source.');
+    }
     final fromLink = album.id.startsWith('link:');
     final playlist = album.id.startsWith('playlist:');
     final result = await _call(
@@ -188,7 +237,8 @@ class MornyeProvider implements MusicProvider {
       throw const SourceException('This collection did not return its songs.');
     }
     final expected = _count(result['total_tracks']) ?? album.trackCount;
-    if (expected != null && raw.length != expected) {
+    if ((expected != null && raw.length != expected) ||
+        raw.any((entry) => entry is! Map)) {
       throw const SourceException(
         'This source returned an incomplete collection. Try again before downloading it.',
       );
@@ -357,6 +407,11 @@ class MornyeAcquisition {
     SourceReference track,
     Future<void> abort,
   ) async {
+    if (!track.available) {
+      throw const SourceException(
+        'This recording is unavailable from its source.',
+      );
+    }
     final catalog = track.sourceId.replaceFirst('mornye:', '');
     if (!sources.has(catalog)) {
       throw const SourceException(
@@ -413,7 +468,9 @@ class MornyeAcquisition {
       'method': 'hyperstreamResolve',
       'args': [
         trackId,
-        id == 'ytmusic-spotiflac'
+        id == 'soundcloud'
+            ? 'aac_160'
+            : id == 'ytmusic-spotiflac'
             ? 'best'
             : id == 'tidal-web'
             ? 'HIGH'
@@ -446,8 +503,12 @@ class MornyeAcquisition {
         'directory': directory.path,
         'args': [
           trackId,
-          id == 'ytmusic-spotiflac' ? 'best' : 'LOSSLESS',
-          '${directory.path}/source.${id == 'ytmusic-spotiflac' ? 'm4a' : 'flac'}',
+          id == 'soundcloud'
+              ? 'aac_160'
+              : id == 'ytmusic-spotiflac'
+              ? 'best'
+              : 'LOSSLESS',
+          '${directory.path}/source.${['ytmusic-spotiflac', 'soundcloud'].contains(id) ? 'm4a' : 'flac'}',
         ],
       }, abort: abort);
       if (cancelled) throw const SourceException('Import cancelled.');

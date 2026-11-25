@@ -133,6 +133,13 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                               ),
                             ),
                     ),
+                    if (extension.id == 'soundcloud')
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Public uploads, remixes and sets. Imports use your saved folder and MP3 320; source quality varies.',
+                        ),
+                      ),
                     if (extension.installed && extension.enabled)
                       Wrap(
                         spacing: 12,
@@ -177,16 +184,17 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                               icon: const AppIcon(Icons.content_paste_rounded),
                               label: const Text('Paste verification'),
                             ),
-                          TextButton.icon(
-                            onPressed: disabled
-                                ? null
-                                : () => _run(
-                                    extension.id,
-                                    () => _settings(extension),
-                                  ),
-                            icon: const AppIcon(Icons.tune_rounded),
-                            label: const Text('Configure'),
-                          ),
+                          if (extension.configurable)
+                            TextButton.icon(
+                              onPressed: disabled
+                                  ? null
+                                  : () => _run(
+                                      extension.id,
+                                      () => _settings(extension),
+                                    ),
+                              icon: const AppIcon(Icons.tune_rounded),
+                              label: const Text('Configure'),
+                            ),
                         ],
                       ),
                   ],

@@ -27,11 +27,12 @@ class MornyeExtension {
       url = Uri.parse(value['download_url'] as String),
       checksum = value['sha256'] as String,
       audio = value['audio'] == true,
+      configurable = value['configurable'] != false,
       installed = value['installed'] == true,
       enabled = value['installed'] == true && value['enabled'] == true;
   final String id, name, version, checksum;
   final Uri url;
-  final bool audio, installed, enabled;
+  final bool audio, configurable, installed, enabled;
   bool get requiresVerification => ['qobuz-web', 'tidal-web'].contains(id);
 }
 
@@ -268,6 +269,12 @@ class MornyeSources extends ChangeNotifier {
           (result['success'] == false ||
               result['needs_verification'] == true)) {
         await _checkVerification(request['id'] as String?);
+        if (request['id'] == 'soundcloud' &&
+            result['error_code'] == 'track_unavailable') {
+          throw const SourceException(
+            'This SoundCloud upload does not offer a full playable stream. Try another upload.',
+          );
+        }
         throw const SourceException(
           'This provider could not supply the requested music. Try another source.',
         );

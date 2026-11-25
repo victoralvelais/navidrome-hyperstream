@@ -1,9 +1,9 @@
-# External music in 0.57.2
+# External music in 0.59.0
 
 ## Use
 
 1. Open Home > Music sources. Install Spotify Web for catalog search and either
-   Tidal, Qobuz or YouTube Music for audio, or use those sources directly for both. Packages are
+   Tidal, Qobuz, YouTube Music or SoundCloud for audio, or use those sources directly for both. Packages are
    downloaded from pinned Mornye registry locations and checksum-verified.
 2. Choose the audio source for Spotify. When search, playback or an import needs
    verification, its browser opens directly over the current screen. Complete
@@ -33,7 +33,10 @@
    accepts regular youtube.com/watch and youtu.be links, Shorts/live/embed video
    links, public playlist links and Music browse/album links. A video link with
    both `v` and `list` opens that video; a playlist link opens the collection.
-   Private playlists and other providers' shortened share links are unsupported.
+   SoundCloud supports public upload and `/creator/sets/name` album/playlist
+   links, including mobile and `on.soundcloud.com` short links. Tracking query
+   parameters are discarded. Profiles and private playlists are unsupported.
+   Other providers' shortened share links remain unsupported.
 4. Open the collection and play it through the shared queue. Playlist order and
    repeat entries are retained. Each song has its own download control; the
    collection download imports one copy of each distinct recording.
@@ -42,6 +45,34 @@
 
 Monochrome remains available as an optional built-in source. If enabled, it can
 be selected alongside installed extensions in the Online source picker.
+
+### SoundCloud
+
+Install SoundCloud in Home > Music sources, then hold Online in Search and choose
+SoundCloud. Search uploads, remixes, albums and playlists, or paste a public link.
+Use the shared player and the same song/collection download controls to send
+audio to your saved Remote folder. No new server or gateway verification is
+required by this pinned extension, and it has no account configuration fields.
+
+Native playback streams a full progressive M4A/MP3 when available. HLS-only
+uploads are downloaded and remuxed privately before playback; long DJ sets may
+take longer to start and remain subject to execution/transfer time limits. Opus
+fallbacks use the existing temporary AAC playback conversion. The import path
+uses original downloaded audio for MP3 320 conversion. SoundCloud audio is often
+lossy AAC/MP3; output bitrate is not a promise of original 320 kbps quality.
+
+Preview-only, blocked and nonstreamable uploads are marked unavailable when the
+provider exposes that status and rechecked at acquisition. A set with missing
+records fails rather than silently importing a shortened or reordered playlist.
+Repeated entries remain in playback and are imported once per upload. Provider
+availability can change; the extension uses SoundCloud's web interfaces, not a
+Hyperstream-hosted official API application.
+
+Validation: live search, public-link identity, complete AAC HLS download, duration
+and local MP3 320 conversion passed on Windows. Automated tests cover ordering,
+missing records, playback resolution, unavailable uploads and import routing.
+Verify iPhone playback/seek/lock-screen behavior and an actual Send to folder on
+your device; the automated checks do not access personal remote destinations.
 
 Songs download into a private temporary directory, convert with LAME to stereo
 44.1 kHz MP3 at 320 kbps, and undergo codec, bitrate and duration validation.
@@ -71,7 +102,7 @@ Navidrome scrobbling, favorites and server-playlist actions apply to library tra
 ## Extension runtime and playback
 
 The supported packages are Spotify Web 1.10.6, Tidal Web 1.2.14,
-Qobuz Web 1.2.27 and YouTube Music 2.4.7. This is a reviewed subset of the Mornye JavaScript ecosystem;
+Qobuz Web 1.2.27, YouTube Music 2.4.7 and SoundCloud 1.0.15. This is a reviewed subset of the Mornye JavaScript ecosystem;
 arbitrary extension installation and automatic package updates are not exposed.
 The native host is pinned to Mornye 5.3.1's runtime and retains its feature gates,
 network permissions, encrypted extension storage, signed sessions, cancellation
