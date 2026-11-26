@@ -6,11 +6,39 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/playback_store.dart';
-import 'package:hyperstream_client/models/library.dart';
+import 'package:hyperstream_client/services/song_playback_store.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _SongSettingsStorage extends Fake implements SharedPreferencesAsync {
+  _SongSettingsStorage(Directory directory)
+    : _file = File('${directory.path}/song-settings.json');
+
+  final File _file;
+
+  @override
+  Future<String?> getString(String key) async =>
+      await _file.exists() ? _file.readAsString() : null;
+
+  @override
+  Future<void> setString(String key, String value) async {
+    await _file.writeAsString(value, flush: true);
+  }
+}
+
+Future<PlaybackService> _initializePlayback(
+  FilePlaybackStore Function(NavidromeClient) store,
+  Directory directory,
+) async => PlaybackService.initialize(
+  playbackStore: store,
+  songPlaybackStore: await SongPlaybackStore.load(
+    storage: _SongSettingsStorage(directory),
+  ),
+);
 
 // Silent PCM audio exercises the real native decoder without a music download.
 Uint8List silentWav() {
@@ -114,7 +142,7 @@ void main() {
         speed: 1.25,
       ),
     );
-    final playback = await PlaybackService.initialize(playbackStore: store);
+    var playback = await _initializePlayback(store, directory);
     addTearDown(() async {
       await playback.dispose();
       client.close();
@@ -137,14 +165,26 @@ void main() {
       AudioServiceShuffleMode.all,
     );
     expect(playback.playbackState.value.repeatMode, AudioServiceRepeatMode.all);
-    expect(playback.playbackState.value.speed, 1.25);
+    expect(playback.playbackState.value.speed, 1);
     expect(playback.upcomingIndices, [0]);
+    await playback.setSpeed(1.25);
+    expect(playback.settingsError.value, isNull);
     await playback.seek(const Duration(seconds: 62));
     await playback.savePlayback();
     final saved = await store(client).read();
     expect(saved!.position, const Duration(seconds: 62));
     expect(saved.shuffleOrder, [1, 2, 0]);
     expect(streamRequests, 0);
+    await playback.dispose();
+    playback = await _initializePlayback(store, directory);
+    await playback.attachAccount(client, remember: true);
+    expect(playback.playbackState.value.queueIndex, 2);
+    expect(playback.playbackState.value.speed, 1.25);
+    expect(playback.position, const Duration(seconds: 62));
+    expect(streamRequests, 0);
+    await playback.skipToQueueItem(1);
+    expect(playback.playbackState.value.queueIndex, 1);
+    expect(playback.playbackState.value.speed, 1);
     await playback.reset();
     expect(await store(client).read(), isNull);
   });
@@ -231,7 +271,7 @@ void main() {
     );
     FilePlaybackStore store(NavidromeClient account) =>
         FilePlaybackStore(account, directory: () async => savedDirectory);
-    var playback = await PlaybackService.initialize(playbackStore: store);
+    var playback = await _initializePlayback(store, savedDirectory);
     addTearDown(() async {
       await playback.dispose();
       client.close();
@@ -337,7 +377,7 @@ void main() {
     final current = playback.playbackState.value.queueIndex;
     final beforeRestoreRequests = streamRequests;
     await playback.dispose();
-    playback = await PlaybackService.initialize(playbackStore: store);
+    playback = await _initializePlayback(store, savedDirectory);
     await playback.attachAccount(client, remember: true);
     expect(playback.error.value, isNull);
     expect(playback.continuityNotice.value, isNull);
