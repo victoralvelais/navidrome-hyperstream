@@ -1,5 +1,18 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 25: pitch mode in the tempo popover, 0.61.0
+
+- Add a saved Keep pitch toggle alongside the shared tempo presets and slider.
+  On retains the original pitch; off lets pitch rise/fall with playback speed.
+- iOS/iPadOS use native spectral time stretching or varispeed, including queue
+  transitions, repeats, restored sessions and recovery after playback errors.
+- Record pitch-mode changes in camera takes and preserve them in performance
+  exports. Original-tempo exports return to original pitch; older saved takes
+  default to pitch preservation.
+- Windows retains its current native playback behavior with an unavailable
+  pitch-control explanation. Its WinRT adapter needs a separate audio-processing
+  implementation before it can offer this switch.
+
 ## November 25: playback recovery without restarting, 0.60.2
 
 - After a playback error, release the native player before reloading the queue.

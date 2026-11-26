@@ -7,14 +7,31 @@ struct CameraAudioSegment: Codable, Equatable {
     let sourceKey: String?
     let sourceStart: Double
     let rate: Double
+    let preservesPitch: Bool
 
     init(hostStart: Double, hostEnd: Double, sourceKey: String? = nil,
-         sourceStart: Double = 0, rate: Double = 1) {
+         sourceStart: Double = 0, rate: Double = 1, preservesPitch: Bool = true) {
         self.hostStart = hostStart
         self.hostEnd = hostEnd
         self.sourceKey = sourceKey
         self.sourceStart = sourceStart
         self.rate = rate
+        self.preservesPitch = preservesPitch
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case hostStart, hostEnd, sourceKey, sourceStart, rate, preservesPitch
+    }
+
+    init(from decoder: Decoder) throws {
+        let data = try decoder.container(keyedBy: CodingKeys.self)
+        hostStart = try data.decode(Double.self, forKey: .hostStart)
+        hostEnd = try data.decode(Double.self, forKey: .hostEnd)
+        sourceKey = try data.decodeIfPresent(String.self, forKey: .sourceKey)
+        sourceStart = try data.decode(Double.self, forKey: .sourceStart)
+        rate = try data.decode(Double.self, forKey: .rate)
+        // Takes recorded before pitch control always preserved pitch.
+        preservesPitch = try data.decodeIfPresent(Bool.self, forKey: .preservesPitch) ?? true
     }
 }
 
@@ -55,7 +72,8 @@ enum CameraTimeline {
             let sourceStart = segment.sourceKey == nil ? 0 :
                 segment.sourceStart + (start - segment.hostStart) * rate
             result.append(CameraAudioSegment(hostStart: start, hostEnd: last,
-                                             sourceKey: segment.sourceKey, sourceStart: sourceStart, rate: rate))
+                                             sourceKey: segment.sourceKey, sourceStart: sourceStart, rate: rate,
+                                             preservesPitch: segment.preservesPitch))
             cursor = last
         }
         if cursor < end { result.append(CameraAudioSegment(hostStart: cursor, hostEnd: end)) }

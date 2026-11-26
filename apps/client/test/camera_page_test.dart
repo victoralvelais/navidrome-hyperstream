@@ -65,7 +65,7 @@ void main() {
     testWidgets(
       'camera preserves the current queue and tempo when paused=$paused',
       (tester) async {
-        final player = FakePlayer();
+        final player = FakePlayer()..supportsPitchControl = true;
         final playback = PlaybackService(
           player: player,
           configureSession: (_) async {},
@@ -156,6 +156,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(ChoiceChip, '1.25×'));
         await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('keep-pitch-toggle')));
+        await tester.pumpAndSettle();
+        expect(player.preservesPitch, isFalse);
+        expect(playback.preferences.keepPitch, isFalse);
         expect(player.speed, 1.25);
         expect(camera.recording, isTrue);
         expect(player.position, const Duration(seconds: 45));

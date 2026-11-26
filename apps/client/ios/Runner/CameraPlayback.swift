@@ -10,6 +10,7 @@ final class CameraPlayback {
         let source: String?
         let position: Double
         let rate: Double
+        var preservesPitch: Bool = true
         var sourceEnd: Double? = nil
         var occurrence: ObjectIdentifier? = nil
         var changedAt: Double? = nil
@@ -89,12 +90,14 @@ final class CameraPlayback {
                             occurrence: ObjectIdentifier(item), changedAt: point.changedAt)
         }
         let rate = min(2, max(0.5, point.rate))
+        let preservesPitch = item.audioTimePitchAlgorithm != .varispeed
         // File, HTTP and authenticated proxy sources all retain the request
         // used by just_audio. The original player continues owning playback.
         let request = (item as? IndexedPlayerItem)?.hyperstreamSourceRequest
             ?? (item.asset as? AVURLAsset).map { URLRequest(url: $0.url) }
         guard let request, let url = request.url else {
-            return Snapshot(host: point.host, source: unavailableSource, position: point.position, rate: rate)
+            return Snapshot(host: point.host, source: unavailableSource, position: point.position, rate: rate,
+                            preservesPitch: preservesPitch)
         }
         let identity = url.absoluteString
         let key = sourceKeys[identity] ?? UUID().uuidString
@@ -103,6 +106,7 @@ final class CameraPlayback {
         if downloads[key] == nil { downloads[key] = download(key: key, request: request) }
         let duration = item.duration.seconds
         return Snapshot(host: point.host, source: key, position: point.position, rate: rate,
+                        preservesPitch: preservesPitch,
                         sourceEnd: duration.isFinite && duration > 0 ? duration : nil,
                         occurrence: ObjectIdentifier(item), changedAt: point.changedAt)
     }
@@ -115,7 +119,8 @@ final class CameraPlayback {
            value.source != anchor.source || abs(value.rate - anchor.rate) > 0.0001 || forceBoundary {
             value = Snapshot(host: change, source: value.source,
                 position: value.source == nil ? 0 : max(0, value.position - (value.host - change) * value.rate),
-                rate: value.rate, sourceEnd: value.sourceEnd, occurrence: value.occurrence, changedAt: change)
+                rate: value.rate, preservesPitch: value.preservesPitch,
+                sourceEnd: value.sourceEnd, occurrence: value.occurrence, changedAt: change)
         }
         if anchor.occurrence != nil, value.occurrence != nil, value.occurrence != anchor.occurrence,
            value.position < 0.25 * value.rate {
@@ -124,12 +129,13 @@ final class CameraPlayback {
             let start = value.host - value.position / value.rate
             if start >= anchor.host {
                 value = Snapshot(host: start, source: value.source, position: 0, rate: value.rate,
+                                 preservesPitch: value.preservesPitch,
                                  sourceEnd: value.sourceEnd, occurrence: value.occurrence)
             }
         }
         let expected = anchor.position + (value.host - anchor.host) * anchor.rate
         let jumped = value.source != nil && abs(value.position - expected) > 0.06
-        if forceBoundary || value.occurrence != anchor.occurrence || value.source != anchor.source || abs(value.rate - anchor.rate) > 0.0001 || jumped {
+        if forceBoundary || value.occurrence != anchor.occurrence || value.source != anchor.source || abs(value.rate - anchor.rate) > 0.0001 || value.preservesPitch != anchor.preservesPitch || jumped {
             append(until: value.host)
             self.anchor = value
         }
@@ -140,7 +146,8 @@ final class CameraPlayback {
         let end = anchor.sourceEnd.map { min(host, max(anchor.host, anchor.host + ($0 - anchor.position) / anchor.rate)) } ?? host
         if end > anchor.host {
             segments.append(CameraAudioSegment(hostStart: anchor.host, hostEnd: end,
-                sourceKey: anchor.source, sourceStart: anchor.position, rate: anchor.rate))
+                sourceKey: anchor.source, sourceStart: anchor.position, rate: anchor.rate,
+                preservesPitch: anchor.preservesPitch))
         }
         if host > end { segments.append(CameraAudioSegment(hostStart: end, hostEnd: host)) }
     }

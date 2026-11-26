@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/features/player/player_controls.dart';
+import 'package:hyperstream_client/services/app_preferences.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -14,9 +15,10 @@ import 'support/account_fakes.dart';
 import 'support/fake_player.dart';
 
 class _Recovery {
-  _Recovery({FakePlayer? player, this.resetSourcePlayback})
+  _Recovery({FakePlayer? player, this.resetSourcePlayback, this.preferences})
     : player = player ?? FakePlayer();
   final FakePlayer player;
+  final AppPreferences? preferences;
   final Future<void> Function()? resetSourcePlayback;
   final client = AccountClient(
     serverUrl: 'https://example.test',
@@ -27,6 +29,7 @@ class _Recovery {
     ..value = savedQueue(index: 2, order: [1, 2, 0]);
   late final playback = PlaybackService(
     player: player,
+    preferences: preferences,
     playbackStore: (_) => store,
     artworkLoader: (_, _) async => null,
     resetSourcePlayback: resetSourcePlayback,
@@ -96,11 +99,12 @@ void main() {
     testWidgets('$action rebuilds a failed native player and source session', (
       tester,
     ) async {
-      final player = _StickyPlayer();
+      final player = _StickyPlayer()..supportsPitchControl = true;
       var sourceResets = 0;
       final brokenAtSourceReset = <bool>[];
       final f = _Recovery(
         player: player,
+        preferences: AppPreferences()..restore('{"keepPitch":false}'),
         resetSourcePlayback: () async {
           brokenAtSourceReset.add(player.broken);
           sourceResets++;
@@ -108,6 +112,8 @@ void main() {
       );
       await f.playback.attachAccount(f.client, remember: true);
       await f.playback.play();
+      expect(player.pitchAtLoad, isNotEmpty);
+      expect(player.pitchAtLoad, everyElement(false));
       player.position = const Duration(seconds: 62);
       await player.setVolume(.4);
       await player.setSpeed(.75);
@@ -132,6 +138,8 @@ void main() {
       expect(f.playback.error.value, isNull);
       expect(player.volume, .4);
       expect(player.speed, .75);
+      expect(player.pitchAtLoad.last, isFalse);
+      expect(player.preservesPitch, isFalse);
       if (action != 'another song') {
         expect(player.currentIndex, 2);
         expect(player.position, const Duration(seconds: 62));
@@ -405,6 +413,7 @@ class _StickyPlayer extends FakePlayer {
   Future<void> stop() async {
     stops++;
     broken = false;
+    preservesPitch = true;
     await super.stop();
   }
 }

@@ -47,6 +47,7 @@
     BOOL _useLazyPreparation;
     BOOL _playing;
     float _speed;
+    BOOL _preservesPitch;
     float _volume;
     BOOL _justAdvanced;
     BOOL _enqueuedAll;
@@ -109,6 +110,7 @@
         _loadControl.preferredPeakBitRate = (NSNumber *)[NSNull null];
     }
     _speed = 1.0f;
+    _preservesPitch = YES;
     _volume = 1.0f;
     _justAdvanced = NO;
     _enqueuedAll = NO;
@@ -142,6 +144,9 @@
             result(@{});
         } else if ([@"setSpeed" isEqualToString:call.method]) {
             [self setSpeed:(float)[request[@"speed"] doubleValue]];
+            result(@{});
+        } else if ([@"setPreservesPitch" isEqualToString:call.method]) {
+            [self setPreservesPitch:[request[@"enabled"] boolValue]];
             result(@{});
         } else if ([@"setLoopMode" isEqualToString:call.method]) {
             [self setLoopMode:[request[@"loopMode"] intValue]];
@@ -407,6 +412,9 @@
 }
 
 - (void)addItemObservers:(AVPlayerItem *)playerItem {
+    // Every new queue or loop item must inherit the selected pitch mode.
+    playerItem.audioTimePitchAlgorithm = _preservesPitch
+        ? AVAudioTimePitchAlgorithmSpectral : AVAudioTimePitchAlgorithmVarispeed;
     // Get notified when the item is loaded or had an error loading
     [playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];
     // Get notified of the buffer state
@@ -1086,6 +1094,18 @@
     if (_player) {
         [_player setVolume:volume];
     }
+}
+
+- (void)setPreservesPitch:(BOOL)enabled {
+    _preservesPitch = enabled;
+    AVAudioTimePitchAlgorithm algorithm = enabled
+        ? AVAudioTimePitchAlgorithmSpectral : AVAudioTimePitchAlgorithmVarispeed;
+    for (IndexedAudioSource *source in _indexedAudioSources) {
+        source.playerItem.audioTimePitchAlgorithm = algorithm;
+        source.playerItem2.audioTimePitchAlgorithm = algorithm;
+    }
+    // Also cover any retained current item during a native queue transition.
+    for (AVPlayerItem *item in _player.items) item.audioTimePitchAlgorithm = algorithm;
 }
 
 - (void)setSpeed:(float)speed {

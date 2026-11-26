@@ -85,7 +85,9 @@ enum CameraExport {
             let composition = AVMutableComposition()
             guard let baseline = composition.addMutableTrack(withMediaType: .audio,
                                                              preferredTrackID: kCMPersistentTrackID_Invalid),
-                  let music = composition.addMutableTrack(withMediaType: .audio,
+                  let preservedMusic = composition.addMutableTrack(withMediaType: .audio,
+                                                          preferredTrackID: kCMPersistentTrackID_Invalid),
+                  let shiftedMusic = composition.addMutableTrack(withMediaType: .audio,
                                                           preferredTrackID: kCMPersistentTrackID_Invalid) else {
                 throw CameraExportError("The soundtrack exporter is unavailable.")
             }
@@ -141,14 +143,19 @@ enum CameraExport {
                 let audibleStart = cursor + (clippedStart - start) / playbackRate
                 let audibleDuration = (clippedEnd - clippedStart) / playbackRate
                 stage = "inserting a source song interval"
+                // The algorithm applies to an entire composition track. Keep
+                // modes on separate tracks so a toggle during a take survives.
+                let music = restoreTempo || segment.preservesPitch ? preservedMusic : shiftedMusic
                 try music.insertTimeRange(sourceRange, of: track, at: time(audibleStart))
                 music.scaleTimeRange(CMTimeRange(start: time(audibleStart), duration: sourceRange.duration),
                                      toDuration: time(audibleDuration))
             }
-            let parameters = AVMutableAudioMixInputParameters(track: music)
-            parameters.audioTimePitchAlgorithm = .timeDomain
+            let preserved = AVMutableAudioMixInputParameters(track: preservedMusic)
+            preserved.audioTimePitchAlgorithm = .spectral
+            let shifted = AVMutableAudioMixInputParameters(track: shiftedMusic)
+            shifted.audioTimePitchAlgorithm = .varispeed
             let mix = AVMutableAudioMix()
-            mix.inputParameters = [parameters]
+            mix.inputParameters = [preserved, shifted]
             stage = "encoding the AAC soundtrack"
             try await encodeAudio(composition, mix: mix, duration: duration, to: destination)
         } catch { throw failure(stage, error: error) }

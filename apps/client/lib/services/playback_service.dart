@@ -89,6 +89,9 @@ class PlaybackService extends BaseAudioHandler {
       );
       onStage?.call(StartupStage.volume);
       await handler._player.setVolume(handler.preferences.volume);
+      if (handler.supportsPitchControl) {
+        await handler._player.setPreservesPitch(handler.preferences.keepPitch);
+      }
     } on Object {
       await handler.dispose();
       rethrow;
@@ -121,6 +124,7 @@ class PlaybackService extends BaseAudioHandler {
   bool _disposed = false;
   Future<void> _settingsPending = Future.value();
   bool get supportsMixing => Platform.isIOS;
+  bool get supportsPitchControl => _player.supportsPitchControl;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final ValueNotifier<String?> error = ValueNotifier(null);
   Future<void> _pending = Future.value();
@@ -387,6 +391,14 @@ class PlaybackService extends BaseAudioHandler {
     _publishState();
   });
 
+  Future<void> setKeepPitch(bool enabled) => _changeSetting(() async {
+    if (!supportsPitchControl) {
+      throw UnsupportedError('Pitch control is unavailable.');
+    }
+    await _player.setPreservesPitch(enabled);
+    unawaited(preferences.setKeepPitch(enabled));
+  });
+
   Stream<Duration> get positionStream => _player.positionStream;
   Duration get position => _player.position;
 
@@ -512,6 +524,12 @@ class PlaybackService extends BaseAudioHandler {
         } else {
           await _player.pause();
         }
+        if (revision != _revision) return;
+        await _changeSetting(() async {
+          if (supportsPitchControl) {
+            await _player.setPreservesPitch(preferences.keepPitch);
+          }
+        });
         if (revision != _revision) return;
         await _player.setShuffleModeEnabled(false);
         if (revision != _revision) return;

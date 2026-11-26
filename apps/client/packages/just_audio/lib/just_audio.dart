@@ -146,6 +146,7 @@ class AudioPlayer {
   final _volumeSubject = BehaviorSubject.seeded(1.0);
   final _speedSubject = BehaviorSubject.seeded(1.0);
   final _pitchSubject = BehaviorSubject.seeded(1.0);
+  bool _preservesPitch = true;
   final _skipSilenceEnabledSubject = BehaviorSubject.seeded(false);
 
   final _positionDiscontinuitySubject =
@@ -506,6 +507,12 @@ class AudioPlayer {
 
   /// The current pitch factor of the player.
   double get pitch => _pitchSubject.nvalue!;
+
+  /// Whether this backend can choose between time stretching and varispeed.
+  /// Hyperstream's WinRT backend currently has no pitch algorithm control.
+  bool get supportsPitchControl => _isDarwin();
+
+  bool get preservesPitch => _preservesPitch;
 
   /// A stream of current pitch factor values.
   Stream<double> get pitchStream => _pitchSubject.stream;
@@ -1226,6 +1233,43 @@ class AudioPlayer {
     await (await _platform).setPitch(SetPitchRequest(pitch: pitch));
   }
 
+  /// Selects pitch-preserving time stretching or pitch that follows speed.
+  /// Retained while idle and reapplied before loading each new native player.
+  Future<void> setPreservesPitch(bool enabled) async {
+    if (_disposed) return;
+    if (!supportsPitchControl) {
+      throw UnsupportedError('Pitch algorithm control is unavailable.');
+    }
+    final previous = _preservesPitch;
+    if (enabled == previous) return;
+    _preservesPitch = enabled;
+    try {
+      if (_active) {
+        final platform = await _platform;
+        await _lock.synchronized(() async {
+          // A stop/recovery may retire the player while activation completes.
+          // Retain the choice for the next activation instead of calling a
+          // disposed channel. The lock also excludes disposal during the call.
+          if (_active &&
+              !_disposed &&
+              identical(platform, _platformValue) &&
+              platform is! _IdleAudioPlayer) {
+            await _setPlatformPreservesPitch(platform, enabled);
+          }
+        });
+      }
+    } catch (_) {
+      _preservesPitch = previous;
+      rethrow;
+    }
+  }
+
+  Future<void> _setPlatformPreservesPitch(
+      AudioPlayerPlatform platform, bool enabled) async {
+    await MethodChannel('com.ryanheise.just_audio.methods.${platform.id}')
+        .invokeMethod<void>('setPreservesPitch', {'enabled': enabled});
+  }
+
   /// Sets the [LoopMode]. Looping will be gapless on Android, iOS and macOS. On
   /// web, there will be a slight gap at the loop point.
   Future<void> setLoopMode(LoopMode mode) async {
@@ -1703,6 +1747,10 @@ class AudioPlayer {
         if (checkInterruption()) return inactiveResult(platform);
         await platform.setSpeed(SetSpeedRequest(speed: speed));
         if (checkInterruption()) return inactiveResult(platform);
+        if (supportsPitchControl) {
+          await _setPlatformPreservesPitch(platform, _preservesPitch);
+          if (checkInterruption()) return inactiveResult(platform);
+        }
         try {
           await platform.setPitch(SetPitchRequest(pitch: pitch));
         } catch (e) {

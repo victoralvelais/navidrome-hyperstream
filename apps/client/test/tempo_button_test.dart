@@ -1,10 +1,13 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/app_theme.dart';
 import 'package:hyperstream_client/features/player/playback_settings_group.dart';
 import 'package:hyperstream_client/features/player/player_controls.dart';
+import 'package:hyperstream_client/features/player/tempo_button.dart';
 import 'package:hyperstream_client/models/library.dart';
+import 'package:hyperstream_client/services/app_preferences.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 
@@ -38,9 +41,11 @@ void main() {
             null,
           ),
         );
-        final player = _SpeedPlayer();
+        final player = _SpeedPlayer()..supportsPitchControl = true;
+        final saves = <String>[];
         final playback = PlaybackService(
           player: player,
+          preferences: AppPreferences(save: (json) async => saves.add(json)),
           configureSession: (_) async {},
         );
         final client = NavidromeClient(
@@ -111,6 +116,39 @@ void main() {
         expect(player.position, const Duration(seconds: 45));
         expect(player.playCalls, calls);
         expect(player.playing, isFalse);
+        final pitch = find.byKey(const ValueKey('keep-pitch-toggle'));
+        expect(find.text('Original pitch at every speed'), findsOneWidget);
+        await tester.tap(pitch);
+        await tester.pumpAndSettle();
+        expect(find.text('Pitch changes with speed'), findsOneWidget);
+        expect(player.preservesPitch, isFalse);
+        expect(playback.preferences.keepPitch, isFalse);
+        final savesBeforeFailure = saves.length;
+        expect(savesBeforeFailure, greaterThan(0));
+        player.failPitch = true;
+        await tester.tap(pitch);
+        await tester.pumpAndSettle();
+        expect(find.text('Pitch changes with speed'), findsOneWidget);
+        expect(player.preservesPitch, isFalse);
+        expect(playback.preferences.keepPitch, isFalse);
+        expect(saves, hasLength(savesBeforeFailure));
+        expect(find.textContaining('private native pitch error'), findsNothing);
+        expect(
+          find
+              .text('Could not change the audio setting. Try again.')
+              .hitTestable(),
+          findsOneWidget,
+        );
+        player.failPitch = false;
+        await tester.tap(pitch);
+        await tester.pumpAndSettle();
+        expect(find.text('Original pitch at every speed'), findsOneWidget);
+        expect(playback.preferences.keepPitch, isTrue);
+        expect(player.preservesPitch, isTrue);
+        expect(player.speed, .77);
+        expect(player.position, const Duration(seconds: 45));
+        expect(player.playCalls, calls);
+        expect(player.playing, isFalse);
         player.failSpeed = true;
         await tester.tap(find.widgetWithText(ChoiceChip, '1.50×'));
         await tester.pumpAndSettle();
@@ -139,4 +177,36 @@ void main() {
       variant: TargetPlatformVariant({TargetPlatform.iOS}),
     );
   }
+
+  testWidgets('Windows explains why the pitch switch is disabled', (
+    tester,
+  ) async {
+    final player = FakePlayer();
+    final playback = PlaybackService(player: player);
+    playback.mediaItem.add(const MediaItem(id: 'one', title: 'Coastline'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TempoButton(playback: playback)),
+      ),
+    );
+    await tester.tap(find.byTooltip('Playback tempo'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Pitch control is not available on Windows yet'),
+      findsOneWidget,
+    );
+    final pitchSwitch = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('keep-pitch-toggle')),
+    );
+    expect(pitchSwitch.onChanged, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    var closed = false;
+    final closing = playback.dispose().whenComplete(() => closed = true);
+    for (var i = 0; i < 20 && !closed; i++) {
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    }
+    expect(closed, isTrue);
+    await closing;
+  }, variant: TargetPlatformVariant({TargetPlatform.windows}));
 }

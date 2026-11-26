@@ -44,6 +44,18 @@ class FakePlayer extends Fake implements AudioPlayer {
   @override
   double speed = 1;
   @override
+  bool supportsPitchControl = false;
+  @override
+  bool preservesPitch = true;
+  bool failPitch = false;
+  final pitchAtLoad = <bool>[];
+  @override
+  Future<void> setPreservesPitch(bool value) async {
+    if (failPitch) throw StateError('private native pitch error');
+    preservesPitch = value;
+  }
+
+  @override
   bool shuffleModeEnabled = false;
   @override
   LoopMode loopMode = LoopMode.off;
@@ -112,6 +124,7 @@ class FakePlayer extends Fake implements AudioPlayer {
     ShuffleOrder? shuffleOrder,
   }) async {
     loaded.add(audioSources);
+    pitchAtLoad.add(preservesPitch);
     preloads.add(preload);
     if (loadGate != null) await loadGate!.future;
     if (failNextLoad) {

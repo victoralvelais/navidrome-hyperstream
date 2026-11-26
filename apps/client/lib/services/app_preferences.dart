@@ -18,6 +18,7 @@ class AppPreferences extends ChangeNotifier {
   double volume = 1;
   double audibleVolume = 1;
   bool mixWithOthers = false;
+  bool keepPitch = true;
   bool glassEffects = true;
   bool reportListens = true;
   int catalogBatchSize = defaultCatalogBatchSize;
@@ -57,6 +58,7 @@ class AppPreferences extends ChangeNotifier {
     audibleVolume = level(data['audibleVolume'], 1);
     if (audibleVolume == 0) audibleVolume = 1;
     mixWithOthers = data['mixWithOthers'] == true;
+    keepPitch = data['keepPitch'] != false;
     glassEffects = data['glassEffects'] != false;
     reportListens = data['reportListens'] != false;
     final batchSize = data['catalogBatchSize'];
@@ -78,6 +80,11 @@ class AppPreferences extends ChangeNotifier {
 
   Future<void> setMixWithOthers(bool value) {
     mixWithOthers = value;
+    return _persist();
+  }
+
+  Future<void> setKeepPitch(bool value) {
+    keepPitch = value;
     return _persist();
   }
 
@@ -118,6 +125,7 @@ class AppPreferences extends ChangeNotifier {
       'volume': volume,
       'audibleVolume': audibleVolume,
       'mixWithOthers': mixWithOthers,
+      'keepPitch': keepPitch,
       'glassEffects': glassEffects,
       'reportListens': reportListens,
       'catalogBatchSize': catalogBatchSize,

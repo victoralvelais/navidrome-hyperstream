@@ -131,6 +131,27 @@ class _TempoControls extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [Text('0.50×'), Text('2.00×')],
             ),
+            ListenableBuilder(
+              listenable: playback.preferences,
+              builder: (context, _) => SwitchListTile.adaptive(
+                key: const ValueKey('keep-pitch-toggle'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Keep pitch'),
+                subtitle: Text(
+                  !playback.supportsPitchControl
+                      ? 'Pitch control is not available on Windows yet'
+                      : playback.preferences.keepPitch
+                      ? 'Original pitch at every speed'
+                      : 'Pitch changes with speed',
+                ),
+                value:
+                    !playback.supportsPitchControl ||
+                    playback.preferences.keepPitch,
+                onChanged: enabled && playback.supportsPitchControl
+                    ? playback.setKeepPitch
+                    : null,
+              ),
+            ),
             ValueListenableBuilder<String?>(
               valueListenable: playback.settingsError,
               builder: (context, error, _) => error == null

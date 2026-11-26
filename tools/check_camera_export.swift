@@ -19,18 +19,24 @@ struct CameraExportCheck {
         try await video(to: raw)
         let segments = [
             CameraAudioSegment(hostStart: 99.5, hostEnd: 102, sourceKey: "a", sourceStart: 1, rate: 0.75),
-            CameraAudioSegment(hostStart: 102.5, hostEnd: 104, sourceKey: "a", sourceStart: 5, rate: 1.5),
+            CameraAudioSegment(hostStart: 102.5, hostEnd: 104, sourceKey: "a", sourceStart: 5,
+                               rate: 1.5, preservesPitch: false),
             CameraAudioSegment(hostStart: 104, hostEnd: 105.5, sourceKey: "b", sourceStart: 1),
         ]
         let clipped = try CameraTimeline.clip(segments, videoStart: 100, duration: 6)
         precondition(clipped.count == 5, "Pause and trailing silence must be explicit")
         precondition(abs(clipped[0].sourceStart - 1.375) < 0.000001, "A clipped head advances source time at playback rate")
+        precondition(clipped[0].preservesPitch && !clipped[2].preservesPitch)
         precondition(clipped[1].sourceKey == nil && clipped[4].sourceKey == nil)
         precondition(abs(CameraTimeline.duration(clipped, restoreTempo: false) - 6) < 0.000001)
         precondition(abs(CameraTimeline.duration(clipped, restoreTempo: true) - 6.25) < 0.000001)
         let encoded = try JSONEncoder().encode(segments)
         let decoded = try JSONDecoder().decode([CameraAudioSegment].self, from: encoded)
         precondition(decoded == segments)
+        let legacy = Data(#"{"hostStart":100,"hostEnd":102,"sourceKey":"a","sourceStart":1,"rate":0.75}"#.utf8)
+        let legacySegment = try JSONDecoder().decode(CameraAudioSegment.self, from: legacy)
+        precondition(legacySegment == CameraAudioSegment(hostStart: 100, hostEnd: 102, sourceKey: "a",
+                                                         sourceStart: 1, rate: 0.75))
         try timelineFailures()
 
         for original in [false, true] {
@@ -50,11 +56,21 @@ struct CameraExportCheck {
             precondition(abs(display.height) > abs(display.width), "Portrait orientation must survive export")
             let samples = try await decode(target)
             try assertTone(samples, at: 0.2, frequency: 330)
-            try assertTone(samples, at: original ? 2.2 : 2.7, frequency: 770)
+            try assertTone(samples, at: original ? 2.2 : 2.7, frequency: original ? 770 : 1155)
             try assertTone(samples, at: original ? 4.6 : 4.35, frequency: 400)
             precondition(rms(samples, at: original ? 1.65 : 2.15) < 0.002, "Paused audio must stay silent")
             precondition(rms(samples, at: original ? 5.9 : 5.65) < 0.002, "Trailing pause must stay silent")
         }
+        let shiftedSlow = root.appendingPathComponent("shifted-slow.mp4")
+        progress("Exporting slowed music with pitch shifting")
+        let shiftedSegments = [
+            CameraAudioSegment(hostStart: 99.5, hostEnd: 102, sourceKey: "a", sourceStart: 1,
+                               rate: 0.75, preservesPitch: false),
+        ]
+        _ = try await CameraExport.save(video: raw, segments: shiftedSegments, sources: ["a": songA],
+                                        videoStart: 100, restoreTempo: false, to: shiftedSlow)
+        let shiftedSamples = try await decode(shiftedSlow)
+        try assertTone(shiftedSamples, at: 0.2, frequency: 247.5)
         let silent = root.appendingPathComponent("paused.mp4")
         progress("Exporting all-paused fixture")
         _ = try await CameraExport.save(video: raw, segments: [], sources: [:], videoStart: 100,
