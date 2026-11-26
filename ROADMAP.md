@@ -1,5 +1,15 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 25: YouTube creator-upload search fix, 0.60.1
+
+- Combine YouTube Music's general and Videos search categories. Its general
+  results alone can omit a mashup even when Videos returns that exact upload first.
+- Retain creator names and upload IDs, remove duplicate IDs across categories,
+  preserve different uploads and catalog albums, and keep the existing shared
+  relevance ranking, playback and Send to folder paths.
+- Native regression checks cover category failures and bounded results. Live
+  search reproduced the missing upload and verifies it appears after enrichment.
+
 ## November 25: combined online search, 0.60.0
 
 - Search all enabled online sources by default, publishing results as each source

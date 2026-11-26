@@ -83,6 +83,22 @@ void main() {
         greaterThan(score('night drive remix', 'Night Drive', 'Artist', 0)),
       );
       expect(
+        score(
+          'First Artist x Second Artist',
+          'First Artist x Second Artist Mashup',
+          'Independent Creator',
+          20,
+        ),
+        greaterThan(
+          score(
+            'First Artist x Second Artist',
+            'Catalog song',
+            'First Artist',
+            0,
+          ),
+        ),
+      );
+      expect(
         score('東京 夜', '東京・夜', 'Artist', 1),
         greaterThan(score('東京 夜', 'Other', 'Artist', 0)),
       );

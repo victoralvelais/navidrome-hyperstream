@@ -1,4 +1,4 @@
-# External music in 0.60.0
+# External music in 0.60.1
 
 ## Use
 
@@ -154,8 +154,13 @@ response. Segmented responses use the extension downloader and may wait for
 media preparation before playback begins. Prepared audio is temporary; app-side
 stream resolution is not a persistent offline library.
 
-YouTube searches use YouTube Music's catalog; this is not general YouTube video
-search. Pasted videos keep their exact upload ID, uploader, title and available
+YouTube searches merge YouTube Music's general and Videos categories. General
+results alone can omit creator mashups and edits that lead the Videos category.
+The adapter interleaves the two bounded result sets, removes duplicate upload IDs
+and retains distinct uploads and albums; the shared search then ranks by relevance.
+Creator names need not match the artists named in a mashup's title. Search still
+uses YouTube Music's index rather than unrestricted YouTube video search.
+Pasted videos keep their exact upload ID, uploader, title and available
 thumbnail/duration. Native playback prefers M4A and forwards only the resolver's
 public User-Agent, Origin and Referer headers. If a direct link remains blocked,
 the package downloader tries its supported paths. Opus/WebM/Ogg playback copies

@@ -66,6 +66,35 @@ function hyperstreamSoundCloudResolve(id) {
   return {prepare:true};
 }
 
+function hyperstreamYouTubeSearch(search, query, options) {
+  // WEB_REMIX's general search is a short selection, not the union of its
+  // categories. Creator uploads can be absent there but lead Videos results.
+  // Keep explicit category requests intact (including extension-internal use).
+  var filter = options && options.filter;
+  if (filter && filter !== 'all') return search(query, options);
+  var general, videos, failure;
+  try { general = search(query, options); } catch (e) { failure = e; }
+  try { videos = search(query, {filter:'videos'}); } catch (e) { failure = e; }
+  if (!Array.isArray(general) && !Array.isArray(videos))
+    throw failure || new Error('YouTube search unavailable');
+  general = Array.isArray(general) ? general : [];
+  videos = Array.isArray(videos) ? videos : [];
+  var results = [], seen = Object.create(null);
+  var limit = Math.min(60, Math.max(1, Math.floor(Number(options && options.limit) || 30)));
+  function add(row) {
+    if (!row || !row.id || results.length >= limit) return;
+    var key = (row.item_type || 'track') + ':' + row.id;
+    if (!seen[key]) { seen[key] = true; results.push(row); }
+  }
+  // Give both categories room before the bound. The app then ranks the merged
+  // records by query relevance, preserving the exact upload ID and creator.
+  for (var i = 0; i < Math.max(general.length, videos.length) && results.length < limit; i++) {
+    add(general[i]);
+    add(videos[i]);
+  }
+  return results;
+}
+
 function hyperstreamYouTubeCollection(id, playlist) {
   var browse = playlist && !/^(VL|RDCLAK5uy_)/.test(id) ? 'VL' + id : id;
   var data = fetchJSONSync('https://music.youtube.com/youtubei/v1/browse?alt=json', {
@@ -128,6 +157,12 @@ registerExtension = function(extension) {
     fetchPlaylistOrAlbum = hyperstreamSoundCloudCollection;
   }
   if (typeof fetchVideoMetadataSync === 'function') {
+    var youtubeSearch = extension.customSearch;
+    if (typeof youtubeSearch === 'function') {
+      extension.customSearch = function(query, options) {
+        return hyperstreamYouTubeSearch(youtubeSearch, query, options);
+      };
+    }
     // handleUrl returns a temporary "Loading..." row while it fetches in the
     // background. Resolve pasted videos synchronously and retain upload metadata.
     extension.getTrack = function(id) {

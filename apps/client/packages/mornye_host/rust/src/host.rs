@@ -178,12 +178,70 @@ mod tests {
             function parseContinuationResponse() { return {tracks:[{id:'a'},{id:'c'}], continuationToken:fixtureMode === 'VLloop' ? 'page2' : null}; }
             function parseItemExtended(t) { return t; }
             function applyBrowseCollectionMetadata() {}
-            registerExtension({getTrack:function() { return {title:'Loading...'}; }});
+            function searchFixture(query, options) {
+                var videos = options && options.filter === 'videos';
+                if (query === 'both-fail' || (query === 'general-fails' && !videos) || (query === 'videos-fail' && videos))
+                    throw new Error('Synthetic category failure');
+                return videos ? [
+                    {id:'creator-upload', name:'First Artist x Second Artist Mashup', artists:'Independent Creator', item_type:'track'},
+                    {id:'shared', name:'Same upload', item_type:'track'},
+                    {id:'different-upload', name:'First Artist x Second Artist Mashup', item_type:'track'}
+                ] : [
+                    {id:'studio', name:'Catalog song', artists:'First Artist', item_type:'track'},
+                    {id:'shared', name:'Same upload', item_type:'track'},
+                    {id:'album', name:'Catalog album', item_type:'album'}
+                ];
+            }
+            registerExtension({getTrack:function() { return {title:'Loading...'}; }, customSearch:searchFixture});
         "#).unwrap();
         host.environment
             .set_setting("ytmusic-spotiflac", "_hyperstream_enabled", json!(true))
             .unwrap();
         (root, host)
+    }
+    #[test]
+    fn youtube_search_merges_creator_videos_with_catalog_results_without_duplicate_uploads() {
+        let (_root, host) = youtube_fixture();
+        let request = |query, options| json!({"op":"call","id":"ytmusic-spotiflac","method":"customSearch", "args":[query, options],"request_id":"search"});
+        let results = host
+            .call(&request("mashup", json!({"type":"all","limit":30})))
+            .unwrap();
+        let rows = results.as_array().unwrap();
+        let ids: Vec<_> = rows.iter().map(|t| t["id"].as_str().unwrap()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "studio",
+                "creator-upload",
+                "shared",
+                "album",
+                "different-upload"
+            ]
+        );
+        assert_eq!(rows[1]["artists"], "Independent Creator");
+        assert_eq!(rows[3]["item_type"], "album");
+        let bounded = host.call(&request("mashup", json!({"limit":2}))).unwrap();
+        assert_eq!(bounded.as_array().unwrap().len(), 2);
+        assert_eq!(bounded[1]["id"], "creator-upload");
+        let filtered = host
+            .call(&request("mashup", json!({"filter":"videos"})))
+            .unwrap();
+        assert_eq!(filtered.as_array().unwrap().len(), 3);
+        assert_eq!(filtered[0]["id"], "creator-upload");
+    }
+    #[test]
+    fn youtube_search_keeps_the_successful_category_when_the_other_fails() {
+        let (_root, host) = youtube_fixture();
+        let request = |query| json!({"op":"call","id":"ytmusic-spotiflac","method":"customSearch", "args":[query, {"limit":30}],"request_id":"search"});
+        assert_eq!(
+            host.call(&request("general-fails")).unwrap()[0]["id"],
+            "creator-upload"
+        );
+        assert_eq!(
+            host.call(&request("videos-fail")).unwrap()[0]["id"],
+            "studio"
+        );
+        assert!(host.call(&request("both-fail")).is_err());
     }
     #[test]
     fn youtube_stream_uses_m4a_with_request_context_or_prepares_audio() {

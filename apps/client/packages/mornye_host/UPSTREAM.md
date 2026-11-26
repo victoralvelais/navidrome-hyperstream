@@ -26,6 +26,10 @@ committed or stored in the playback queue. Long HLS-only sets can take longer to
 start because they require preparation; the existing operation limits still apply.
 
 YouTube Music 2.4.7 accepts regular YouTube video IDs as well as music searches.
+General searches combine its general and Videos categories because creator
+uploads may be omitted from the general response. The adapter retains creator
+metadata and exact upload IDs, deduplicates category overlap, bounds the merged
+list, and preserves explicit category requests. The app supplies relevance ranking.
 The adapter reads pasted-video metadata synchronously, preserves repeated playlist
 entries across continuation pages, and rejects interrupted pagination. Native
 playback prefers direct M4A with the resolver's public request headers. Opus or
