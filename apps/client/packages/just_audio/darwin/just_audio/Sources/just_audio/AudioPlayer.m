@@ -1362,6 +1362,17 @@
 }
 
 - (void)dispose:(BOOL)calledFromDealloc {
+    // An error event can arrive without completing the pending load (e.g. when
+    // AVQueuePlayer skips a failed item). Release commands awaiting activation
+    // before removing the method channel. Do not emit a second playback error.
+    if (_loadResult) {
+        FlutterResult pendingLoad = _loadResult;
+        _loadResult = nil;
+        if (!calledFromDealloc) {
+            pendingLoad([FlutterError errorWithCode:[@(ERROR_ABORT) stringValue]
+                message:@"Connection aborted" details:nil]);
+        }
+    }
     if (!_player) return;
     if (_processingState != psIdle) {
         [_player pause];

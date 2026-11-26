@@ -63,9 +63,10 @@ class _Recovery {
 
 void main() {
   testWidgets(
-    'native error releases a stuck load so Play can recover before it finishes',
+    'Play recovers while the failed load and an audio setting are pending',
     (tester) async {
-      final f = _Recovery();
+      final player = _SpeedGatedPlayer()..supportsPitchControl = true;
+      final f = _Recovery(player: player);
       final stuck = Completer<void>();
       f.player.loadGate = stuck;
       var finished = false;
@@ -74,6 +75,9 @@ void main() {
           .whenComplete(() => finished = true);
       await tester.pump();
       expect(finished, false);
+      final speedChange = f.playback.setSpeed(.75);
+      await tester.pump();
+      expect(player.speedChangeStarted, isTrue);
       f.player.errors.add(PlayerException(1, 'private native failure', 1));
       await tester.pumpAndSettle();
       expect(
@@ -84,11 +88,17 @@ void main() {
       await loading;
       expect(f.playback.canRetryPlayback, true);
       f.player.loadGate = null;
-      await f.playback.play();
+      var recovered = false;
+      final retry = f.playback.play().whenComplete(() => recovered = true);
+      await tester.pumpAndSettle();
+      expect(recovered, isTrue);
+      await retry;
       expect(f.player.playing, true);
       expect(f.player.currentIndex, 1);
       expect(f.playback.error.value, isNull);
       stuck.completeError(PlayerException(1, 'late old failure', 1));
+      player.speedChangeGate.complete();
+      await speedChange;
       await tester.pumpAndSettle();
       expect(f.playback.error.value, isNull);
       expect(f.player.playing, true);
@@ -386,6 +396,20 @@ void main() {
   });
 }
 
+class _SpeedGatedPlayer extends FakePlayer {
+  final speedChangeGate = Completer<void>();
+  bool speedChangeStarted = false;
+
+  @override
+  Future<void> setSpeed(double value) async {
+    if (!speedChangeStarted && value == .75) {
+      speedChangeStarted = true;
+      await speedChangeGate.future;
+    }
+    await super.setSpeed(value);
+  }
+}
+
 class _StickyPlayer extends FakePlayer {
   bool broken = false;
   int stops = 0;
@@ -413,7 +437,6 @@ class _StickyPlayer extends FakePlayer {
   Future<void> stop() async {
     stops++;
     broken = false;
-    preservesPitch = true;
     await super.stop();
   }
 }

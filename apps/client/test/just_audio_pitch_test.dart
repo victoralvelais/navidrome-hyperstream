@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -20,9 +22,17 @@ void main() {
   final instances = <String>[];
   final mockedChannels = <MethodChannel>[];
   var rejectPitch = false;
+  Completer<void>? pendingLoad;
+  Completer<void>? loadStarted;
+  String? pendingPlayer;
 
   setUp(() {
     messenger.setMockMethodCallHandler(control, (call) async {
+      if (call.method == 'disposePlayer' &&
+          call.arguments['id'] == pendingPlayer) {
+        pendingLoad!.completeError(PlatformException(code: 'abort'));
+        pendingPlayer = null;
+      }
       if (call.method == 'init') {
         final id = call.arguments['id'] as String;
         instances.add(id);
@@ -38,6 +48,11 @@ void main() {
             throw PlatformException(code: 'pitch-not-applied');
           }
           if (call.method == 'load') {
+            if (pendingLoad != null) {
+              pendingPlayer = id;
+              loadStarted!.complete();
+              await pendingLoad!.future;
+            }
             await messenger.handlePlatformMessage(
               events.name,
               codec.encodeSuccessEnvelope({
@@ -68,6 +83,9 @@ void main() {
     nativeCalls.clear();
     instances.clear();
     rejectPitch = false;
+    pendingLoad = null;
+    loadStarted = null;
+    pendingPlayer = null;
   });
 
   const song = 'https://music.example.com/one.mp3';
@@ -122,5 +140,34 @@ void main() {
     await expectLater(player.setPreservesPitch(false), throwsUnsupportedError);
     expect(loadAndPitchCalls(instances.single).single.method, 'load');
     expect(player.preservesPitch, isTrue);
+  });
+
+  test('stop releases a pitch change waiting for the retired load', () async {
+    final player = _TestAudioPlayer(supportsPitchControl: true);
+    addTearDown(player.dispose);
+    pendingLoad = Completer<void>();
+    loadStarted = Completer<void>();
+    final loading = expectLater(
+      player.setUrl(song),
+      throwsA(isA<PlayerInterruptedException>()),
+    );
+    await loadStarted!.future;
+    final retired = instances.single;
+    final pitchChange = player.setPreservesPitch(false);
+
+    await player.stop();
+    await loading;
+    await pitchChange;
+    expect(loadAndPitchCalls(retired).map((call) => call.method), [
+      'setPreservesPitch',
+      'load',
+    ]);
+    expect(player.preservesPitch, isFalse);
+
+    pendingLoad = null;
+    await player.setUrl(song);
+    final replacement = instances.last;
+    expect(replacement, isNot(retired));
+    expect(loadAndPitchCalls(replacement).first.arguments, {'enabled': false});
   });
 }

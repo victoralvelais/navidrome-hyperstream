@@ -91,6 +91,7 @@ class PlaybackService extends BaseAudioHandler {
       await handler._player.setVolume(handler.preferences.volume);
       if (handler.supportsPitchControl) {
         await handler._player.setPreservesPitch(handler.preferences.keepPitch);
+        handler._pitchPreferenceInitialized = true;
       }
     } on Object {
       await handler.dispose();
@@ -125,6 +126,7 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> _settingsPending = Future.value();
   bool get supportsMixing => Platform.isIOS;
   bool get supportsPitchControl => _player.supportsPitchControl;
+  bool _pitchPreferenceInitialized = false;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final ValueNotifier<String?> error = ValueNotifier(null);
   Future<void> _pending = Future.value();
@@ -396,6 +398,7 @@ class PlaybackService extends BaseAudioHandler {
       throw UnsupportedError('Pitch control is unavailable.');
     }
     await _player.setPreservesPitch(enabled);
+    _pitchPreferenceInitialized = true;
     unawaited(preferences.setKeepPitch(enabled));
   });
 
@@ -525,11 +528,12 @@ class PlaybackService extends BaseAudioHandler {
           await _player.pause();
         }
         if (revision != _revision) return;
-        await _changeSetting(() async {
-          if (supportsPitchControl) {
-            await _player.setPreservesPitch(preferences.keepPitch);
-          }
-        });
+        // Initialize once; AudioPlayer retains this choice across native resets.
+        // Recovery must not await an older setting blocked on a failed load.
+        if (supportsPitchControl && !_pitchPreferenceInitialized) {
+          await _player.setPreservesPitch(preferences.keepPitch);
+          _pitchPreferenceInitialized = true;
+        }
         if (revision != _revision) return;
         await _player.setShuffleModeEnabled(false);
         if (revision != _revision) return;

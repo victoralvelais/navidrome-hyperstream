@@ -6,6 +6,8 @@
   On retains the original pitch; off lets pitch rise/fall with playback speed.
 - iOS/iPadOS use native spectral time stretching or varispeed, including queue
   transitions, repeats, restored sessions and recovery after playback errors.
+- Disposing a failed native player completes its pending load, and recovery does
+  not wait on settings queued behind that load.
 - Record pitch-mode changes in camera takes and preserve them in performance
   exports. Original-tempo exports return to original pitch; older saved takes
   default to pitch preservation.
