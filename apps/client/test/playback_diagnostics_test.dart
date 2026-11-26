@@ -68,4 +68,58 @@ void main() {
     expect(events.last['reasons'], ['unclassified-error']);
     expect(report, isNot(contains('private-')));
   });
+
+  test(
+    'report bounds nested provider failures and strips private metadata',
+    () {
+      final diagnostics = PlaybackDiagnostics();
+      const source = 'mornye:qobuz-web';
+      final recording = diagnostics.recording(source, 'private-track-id');
+      final otherRecording = diagnostics.recording(source, 'private-other-id');
+      expect(diagnostics.recording(source, 'private-track-id'), recording);
+      expect(otherRecording, isNot(recording));
+      diagnostics.record(
+        stage: PlaybackStage.match,
+        outcome: PlaybackOutcome.ready,
+        sourceId: 'mornye:spotify-web',
+        recording: otherRecording,
+        matchedRecording: recording,
+      );
+      diagnostics.record(
+        stage: PlaybackStage.resolve,
+        outcome: PlaybackOutcome.failed,
+        sourceId: source,
+        recording: recording,
+        method: 'private-method',
+        privateProviderFailures: [
+          {
+            'candidate': 99,
+            'quality': 'private-quality',
+            'code': 'private-code',
+            'retry_mode': 'private-retry',
+            'message': 'Ticket expired at https://private-host/?sig=secret',
+            'provider_id': 'private-provider',
+          },
+          for (var i = 2; i <= 14; i++) {'candidate': i, 'message': 'HTTP 429'},
+        ],
+      );
+      final report = diagnostics.report();
+      final events = _events(report);
+      expect(events.first['matched_recording'], events.last['recording']);
+      expect(events.last['method'], isNull);
+      final failures = events.last['provider_failures'] as List;
+      expect(failures, hasLength(12));
+      expect(failures.first, {
+        'code': 'UNRECOGNIZED',
+        'reasons': ['ticket-rejected'],
+      });
+      expect(failures.last, {
+        'candidate': 12,
+        'reasons': ['rate-limited'],
+        'http_status': [429],
+      });
+      expect(report, isNot(contains('private-')));
+      expect(report, isNot(contains('sig=secret')));
+    },
+  );
 }

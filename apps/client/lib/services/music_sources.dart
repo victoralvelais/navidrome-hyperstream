@@ -231,6 +231,9 @@ class MusicSources extends ChangeNotifier {
     if (_playbackInitialized) await _proxy!.restart();
   }
 
+  SourceException? playbackFailure(SourceReference track) =>
+      _proxy?.failureFor(track);
+
   bool needsPlaybackVerification(SourceReference track) {
     if (!track.sourceId.startsWith('mornye:') || extensions == null) {
       return false;

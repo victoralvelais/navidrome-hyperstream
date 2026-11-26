@@ -44,6 +44,37 @@ function hyperstreamSoundCloudUnavailable() {
   return {success:false, error_code:'track_unavailable'};
 }
 
+function hyperstreamQobuzResolve(id, quality) {
+  // The package's aggregate error keeps only e.message, losing the signed
+  // service's code/retryMode. Preserve those facts for Dart's allowlist without
+  // changing provider selection, tickets, authentication or internal retries.
+  var original = fetchProviderDownloadInfo, failures = [];
+  fetchProviderDownloadInfo = function(provider, trackID, qualityCode) {
+    try {
+      return original(provider, trackID, qualityCode);
+    } catch (e) {
+      if (failures.length < 12) failures.push({
+        candidate: failures.length + 1,
+        quality: String(qualityCode),
+        message: String(e && e.message ? e.message : e),
+        code: String(e && e.code || ''),
+        retry_mode: String(e && e.retryMode || '')
+      });
+      throw e;
+    }
+  };
+  try {
+    var info = resolveDownloadInfo(id, quality || 'LOSSLESS', {});
+    return {url:info.directURL, format:'flac'};
+  } catch (e) {
+    if (typeof isVerificationRequiredError === 'function' && isVerificationRequiredError(e)) throw e;
+    return {success:false, error_message:String(e && e.message ? e.message : e),
+      provider_failures:failures};
+  } finally {
+    fetchProviderDownloadInfo = original;
+  }
+}
+
 function hyperstreamSoundCloudResolve(id) {
   // Refresh track authorization on each resolution, including expired-URL retry.
   var track = scGet('tracks/' + id);
@@ -208,8 +239,7 @@ registerExtension = function(extension) {
       return {prepare:true};
     }
     if (typeof resolveDownloadInfo === 'function') {
-      var q = resolveDownloadInfo(id, quality || 'LOSSLESS', {});
-      return {url:q.directURL, format:'flac'};
+      return hyperstreamQobuzResolve(id, quality);
     }
     if (typeof fetchDownloadInfo === 'function') {
       var t = fetchDownloadInfo(id, quality || 'HIGH', {});

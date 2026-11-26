@@ -1,5 +1,21 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 26: provider failure recovery and diagnostic context, 0.65.1
+
+- Stop automatic player retries when the extension has exhausted its audio
+  providers, or reports an unavailable recording, throttling or rejected access.
+  Keep manual Play and transient connection recovery available.
+- Keep proxy failures per recording so another queue item's preload cannot
+  replace the active error or suppress recovery. Retire errors on fresh playback;
+  a late failed range request cannot overwrite a later successful response.
+- Preserve Qobuz's terminal candidate error codes and retry instructions before
+  its aggregate message discards them. Export only fixed categories, known codes,
+  quality levels and ordinals; keep unknown codes unrecognized and omit raw text.
+- Add operation numbers, known method names and temporary recording numbers to
+  reports. Link Spotify catalog matching to its resolved recording without
+  exporting track IDs. This diagnoses availability differences; it does not
+  establish or repair a provider-side failure without its next report.
+
 ## November 26: playback diagnostics and Now Playing source quality, 0.65.0
 
 - Add Playback details to playback errors and Queue > Player info. Keep a bounded

@@ -10,6 +10,7 @@ import 'music_provider.dart';
 import 'source_stream_proxy.dart';
 import 'remote_transfer_background.dart';
 import 'source_audio_preparation.dart';
+import 'playback_diagnostics.dart';
 
 class MornyeProvider implements MusicProvider {
   MornyeProvider(this.sources, this.extensionId, this.proxy);
@@ -460,6 +461,16 @@ class MornyeAcquisition {
         'No matching recording was found on your audio source. Try another source.',
       );
     }
+    sources.diagnostics.record(
+      stage: PlaybackStage.match,
+      outcome: PlaybackOutcome.ready,
+      sourceId: 'mornye:$audio',
+      recording: sources.diagnostics.recording(track.sourceId, track.trackId),
+      matchedRecording: sources.diagnostics.recording(
+        'mornye:$audio',
+        result['track_id'].toString(),
+      ),
+    );
     return (audio, result['track_id'].toString());
   }
 

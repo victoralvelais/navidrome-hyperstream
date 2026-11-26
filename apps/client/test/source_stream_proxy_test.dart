@@ -33,6 +33,97 @@ void main() {
   });
   tearDown(() => sources.dispose());
   test(
+    'a late failed range cannot replace the same recording’s ready state',
+    () async {
+      final firstStarted = Completer<void>();
+      final allowFirstFailure = Completer<void>();
+      final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      upstream.listen((request) async {
+        if (request.headers.value('Range') == 'bytes=1-') {
+          firstStarted.complete();
+          await allowFirstFailure.future;
+          request.response.statusCode = 503;
+        } else {
+          request.response.add([1, 2, 3]);
+        }
+        await request.response.close();
+      });
+      var resolves = 0;
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (_) async {
+          resolves++;
+          return SourceStreamMedia(
+            uri: Uri.parse('http://127.0.0.1:${upstream.port}/audio'),
+          );
+        },
+      );
+      addTearDown(() async {
+        if (!allowFirstFailure.isCompleted) allowFirstFailure.complete();
+        await proxy.close();
+        await upstream.close(force: true);
+      });
+      await proxy.start();
+      final url = proxy.uri(track);
+      final stale = http.get(url, headers: {'Range': 'bytes=1-'});
+      await firstStarted.future.timeout(const Duration(seconds: 2));
+      expect((await http.get(url)).bodyBytes, [1, 2, 3]);
+      allowFirstFailure.complete();
+      expect((await stale).statusCode, 502);
+      expect(proxy.failureFor(track), isNull);
+      expect((await http.get(url)).bodyBytes, [1, 2, 3]);
+      expect(resolves, 1);
+    },
+  );
+  test(
+    'failures are isolated by recording and expire with the proxy session',
+    () async {
+      const otherTrack = SourceReference(
+        sourceId: 'mornye:tidal-web',
+        trackId: 'tidal:456',
+      );
+      const exhausted = SourceException(
+        'Providers exhausted',
+        retryable: false,
+      );
+      const transient = SourceException('Try again');
+      final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      upstream.listen((request) async {
+        request.response.add([1, 2, 3]);
+        await request.response.close();
+      });
+      var firstTrackAttempts = 0;
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (reference) async {
+          if (reference.identity == otherTrack.identity) throw transient;
+          if (++firstTrackAttempts == 1) throw exhausted;
+          return SourceStreamMedia(
+            uri: Uri.parse('http://127.0.0.1:${upstream.port}/fresh'),
+          );
+        },
+      );
+      addTearDown(() async {
+        await proxy.close();
+        await upstream.close(force: true);
+      });
+      await proxy.start();
+      final firstUrl = proxy.uri(track);
+      expect((await http.get(firstUrl)).statusCode, 502);
+      expect(proxy.failureFor(track)?.retryable, isFalse);
+      expect(proxy.failureFor(otherTrack), isNull);
+      expect((await http.get(proxy.uri(otherTrack))).statusCode, 502);
+      expect(proxy.failureFor(otherTrack)?.retryable, isTrue);
+      expect(proxy.failureFor(track)?.retryable, isFalse);
+      expect((await http.get(firstUrl)).bodyBytes, [1, 2, 3]);
+      expect(proxy.failureFor(track), isNull);
+      expect(proxy.failureFor(otherTrack)?.retryable, isTrue);
+      await proxy.restart();
+      expect(proxy.failureFor(otherTrack), isNull);
+    },
+  );
+
+  test(
     'an abandoned range read keeps prepared audio for the next seek',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -150,6 +241,7 @@ void main() {
       await oldRequest;
       await Future<void>.delayed(Duration.zero);
       expect(sources.issue.value, isNull);
+      expect(proxy.failureFor(track), isNull);
       expect((await http.get(url)).statusCode, 200);
       expect(
         resolves,

@@ -8,11 +8,13 @@ import 'package:http/testing.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/models/source_reference.dart';
+import 'package:hyperstream_client/services/mornye_sources.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/playback_store.dart';
 import 'package:hyperstream_client/services/recent_radio_service.dart';
 import 'package:hyperstream_client/services/music_sources.dart';
+import 'package:hyperstream_client/services/music_provider.dart';
 
 import 'support/fake_player.dart';
 
@@ -138,6 +140,74 @@ void main() {
     expect(player.playCalls, 1);
     await playback.pause();
   });
+
+  for (final failureBelongsToSelection in [true, false]) {
+    testWidgets(
+      failureBelongsToSelection
+          ? 'exhausted providers stop automatic retries but allow manual Play'
+          : 'a preloaded recording failure does not suppress active recovery',
+      (tester) async {
+        const preloaded = Track(
+          id: 'external:mornye:tidal-web:two',
+          title: 'Other recording',
+          artist: 'Artist',
+          album: 'Album',
+          duration: Duration(minutes: 3),
+          source: SourceReference(sourceId: 'mornye:tidal-web', trackId: 'two'),
+        );
+        final client = NavidromeClient(
+          serverUrl: 'https://library.example',
+          username: 'test',
+          password: 'test',
+        );
+        final player = FakePlayer()..failNextLoad = true;
+        SourceException? blockingFailure = const SourceException(
+          'Audio providers could not supply this recording.',
+          retryable: false,
+        );
+        final failureTrack = failureBelongsToSelection
+            ? externalSong
+            : preloaded;
+        final playback = PlaybackService(
+          player: player,
+          configureSession: (_) async {},
+          sourceStreamUri: (source) =>
+              Uri.parse('http://127.0.0.1/${source.trackId}'),
+          sourceFailure: (source) =>
+              source.identity == failureTrack.source!.identity
+              ? blockingFailure
+              : null,
+          timerClock: tester.binding.clock.now,
+        );
+        addTearDown(() async {
+          client.close();
+          final disposing = playback.dispose();
+          await tester.pump();
+          await disposing;
+        });
+
+        await playback.playAlbum(client, const [externalSong, preloaded], 0);
+        expect(player.loaded, hasLength(1));
+        expect(playback.reconnecting, !failureBelongsToSelection);
+        if (failureBelongsToSelection) {
+          expect(playback.canRetryPlayback, isTrue);
+          await tester.pump(const Duration(minutes: 1));
+          expect(player.loaded, hasLength(1));
+          expect(player.playing, isFalse);
+          blockingFailure = null;
+          await playback.play();
+        } else {
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpAndSettle();
+        }
+        expect(player.loaded, hasLength(2));
+        expect(player.playing, isTrue);
+        expect(playback.mediaItem.value?.id, externalSong.id);
+        expect(playback.error.value, isNull);
+        await playback.pause();
+      },
+    );
+  }
 
   testWidgets(
     'current track label follows provider updates during and after load',
@@ -286,6 +356,9 @@ void main() {
       final playback = PlaybackService(
         player: player,
         sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+        sourceFailure: (_) => sources.verification.value == 'tidal-web'
+            ? ProviderVerificationRequired('tidal-web', name: 'Tidal')
+            : null,
         verifySource: (_) {
           prompts++;
           return verification.future;
@@ -341,6 +414,9 @@ void main() {
       final playback = PlaybackService(
         player: player,
         sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+        sourceFailure: (_) => sources.verification.value == 'tidal-web'
+            ? ProviderVerificationRequired('tidal-web', name: 'Tidal')
+            : null,
         verifySource: (_) {
           prompts++;
           return verification.future;

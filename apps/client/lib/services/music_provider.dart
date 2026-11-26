@@ -6,10 +6,13 @@ import 'package:http/http.dart' as http;
 
 import '../models/library.dart';
 import '../models/source_reference.dart';
+import 'playback_diagnostics.dart';
 
 class SourceException implements Exception {
-  const SourceException(this.message);
+  const SourceException(this.message, {this.retryable = true, this.facts});
   final String message;
+  final bool retryable;
+  final PlaybackFailureFacts? facts;
   @override
   String toString() => message;
 }

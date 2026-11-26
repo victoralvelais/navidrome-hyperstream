@@ -95,6 +95,22 @@ text. Nothing is automatically uploaded. Release builds include the app version.
 An unclassified error needs further investigation; this report does not claim an
 upstream service has been fixed or bypass verification.
 
+Reports also include operation numbers and known method names, plus temporary
+recording numbers assigned in memory. A `match` event links Spotify's catalog
+recording to `matched_recording` on its audio provider. Compare these numbers to
+tell whether direct and matched selections resolve the same recording; the
+numbers have no meaning outside that app session. The bounded identity map may
+assign a fresh number to an old entry after 512 distinct recordings.
+
+Qobuz resolution failures include sanitized `provider_failures` entries with
+candidate ordinals, quality codes, recognized service codes and retry modes.
+Unknown codes are reported as `UNRECOGNIZED`, never copied as arbitrary text.
+An exhausted provider chain stops automatic player retries; manual Play remains
+available. Network interruptions can still recover automatically. Errors are
+scoped to their recording, so a different queued song's preload cannot overwrite
+the current error. Selecting Spotify can match a different edition on the chosen
+audio provider; success there does not guarantee that every direct result works.
+
 ### SoundCloud
 
 Install SoundCloud in Home > Music sources, then hold Online in Search and choose

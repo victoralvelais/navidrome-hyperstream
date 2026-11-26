@@ -43,6 +43,7 @@ class PlaybackService extends BaseAudioHandler {
     Uri Function(SourceReference)? sourceStreamUri,
     Future<bool> Function(SourceReference)? verifySource,
     Future<void> Function()? resetSourcePlayback,
+    SourceException? Function(SourceReference)? sourceFailure,
     ValueListenable<Map<String, SourcePlaybackInfo>>? sourcePlaybackInfo,
     PlaybackDiagnostics? diagnostics,
     this.sourceLoadTimeout = const Duration(seconds: 90),
@@ -55,6 +56,7 @@ class PlaybackService extends BaseAudioHandler {
        _timerClock = timerClock ?? DateTime.now,
        _random = random ?? Random() {
     _sourceStreamUri = sourceStreamUri ?? MusicSources.instance.streamUri;
+    _sourceFailure = sourceFailure ?? MusicSources.instance.playbackFailure;
     _verifySource = verifySource ?? MusicSources.instance.verifyPlayback;
     _resetSourcePlayback =
         resetSourcePlayback ?? MusicSources.instance.resetPlayback;
@@ -113,6 +115,7 @@ class PlaybackService extends BaseAudioHandler {
   final AudioPlayer _player;
   final PlaybackDiagnostics diagnostics;
   final Duration sourceLoadTimeout;
+  late final SourceException? Function(SourceReference) _sourceFailure;
   late final Uri Function(SourceReference) _sourceStreamUri;
   late final Future<bool> Function(SourceReference) _verifySource;
   late final Future<void> Function() _resetSourcePlayback;
@@ -644,6 +647,12 @@ class PlaybackService extends BaseAudioHandler {
       stage: PlaybackStage.player,
       outcome: PlaybackOutcome.started,
       sourceId: tracks[index].source?.sourceId,
+      recording: tracks[index].source == null
+          ? null
+          : diagnostics.recording(
+              tracks[index].source!.sourceId,
+              tracks[index].source!.trackId,
+            ),
     );
     _abandonLoad();
     _cancelReconnect(resetBudget: !automaticRecovery);
@@ -823,6 +832,12 @@ class PlaybackService extends BaseAudioHandler {
           stage: PlaybackStage.player,
           outcome: PlaybackOutcome.ready,
           sourceId: _playbackSource(tracks[index]),
+          recording: tracks[index].source == null
+              ? null
+              : diagnostics.recording(
+                  tracks[index].source!.sourceId,
+                  tracks[index].source!.trackId,
+                ),
           elapsedMs: watch.elapsedMilliseconds,
         );
         if (_playWhenReady) {
@@ -1080,16 +1095,26 @@ class PlaybackService extends BaseAudioHandler {
     final failedTrack = snapshot == null
         ? trackAt(_player.currentIndex ?? -1)
         : snapshot.tracks[snapshot.index];
+    // A queue can preload another provider while this track is playing. Read
+    // only this recording's failure, never the last global provider message.
+    final sourceFailure = failedTrack?.source == null
+        ? null
+        : _sourceFailure(failedTrack!.source!);
     diagnostics.record(
       stage: PlaybackStage.player,
       outcome: PlaybackOutcome.failed,
       sourceId: failedTrack == null ? 'unknown' : _playbackSource(failedTrack),
       nativeCode: failure is PlayerException ? failure.code : null,
       privateError: failure?.toString(),
+      facts: sourceFailure?.facts,
+      recording: failedTrack?.source == null
+          ? null
+          : diagnostics.recording(
+              failedTrack!.source!.sourceId,
+              failedTrack.source!.trackId,
+            ),
     );
-    final sourceIssue = failedTrack?.source != null
-        ? MusicSources.instance.extensions?.issue.value
-        : null;
+    final sourceIssue = sourceFailure?.message;
     final needsVerification =
         sourceIssue != null &&
         failedTrack?.source != null &&
@@ -1106,7 +1131,9 @@ class PlaybackService extends BaseAudioHandler {
     _reconnectWanted =
         (_reconnectWanted || _playWhenReady) &&
         canRetryPlayback &&
-        !needsVerification;
+        !needsVerification &&
+        sourceFailure?.retryable != false;
+    if (sourceFailure?.retryable == false) _cancelReconnect(resetBudget: false);
     _playWhenReady = false;
     error.value =
         sourceIssue ??

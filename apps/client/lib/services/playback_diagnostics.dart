@@ -4,6 +4,7 @@ import '../models/source_reference.dart';
 
 enum PlaybackStage {
   player,
+  match,
   resolve,
   download,
   provider,
@@ -46,6 +47,16 @@ class PlaybackFailureFacts {
           text.contains('deadline exceeded'))
         'timeout',
       if (statuses.any((code) => code >= 500)) 'upstream-service-error',
+      if (text.contains('provider_unavailable')) 'provider-unavailable',
+      if (text.contains('request_auth_invalid')) 'request-auth-invalid',
+      if (text.contains('session_invalid')) 'session-invalid',
+      if (text.contains('ticket resource mismatch') ||
+          text.contains('ticket expired') ||
+          text.contains('ticket already consumed'))
+        'ticket-rejected',
+      if (text.contains('no active accounts') ||
+          text.contains('no available accounts'))
+        'provider-account-unavailable',
       if (statuses.contains(401) || statuses.contains(403)) 'access-rejected',
       if (statuses.contains(404) ||
           text.contains('track_unavailable') ||
@@ -90,6 +101,25 @@ class PlaybackFailureFacts {
     'reasons': reasons,
     if (httpStatuses.isNotEmpty) 'http_status': httpStatuses,
   };
+
+  /// These failures already exhausted extension retries or need user action.
+  /// Retrying from the native player would repeat the whole provider chain.
+  bool get retryable => !reasons.any(
+    const {
+      'all-audio-providers-failed',
+      'recording-unavailable',
+      'preview-only',
+      'rate-limited',
+      'access-rejected',
+      'request-auth-invalid',
+      'session-invalid',
+      'ticket-rejected',
+      'provider-account-unavailable',
+      'provider-unavailable',
+      'verification-required',
+      'cancelled',
+    }.contains,
+  );
 }
 
 /// A small, session-only diagnostic timeline. Nothing is uploaded or persisted.
@@ -97,7 +127,21 @@ class PlaybackFailureFacts {
 class PlaybackDiagnostics {
   static final instance = PlaybackDiagnostics();
   final _events = <Map<String, Object>>[];
+  final _recordings = <String, int>{};
   int _sequence = 0;
+  int _nextRecording = 0;
+  int _operation = 0;
+
+  int beginOperation() => ++_operation;
+
+  /// Session-local numbers allow comparing resolutions without exporting IDs.
+  int recording(String sourceId, String privateTrackId) {
+    final key = jsonEncode([sourceId, privateTrackId]);
+    final existing = _recordings[key];
+    if (existing != null) return existing;
+    if (_recordings.length >= 512) _recordings.remove(_recordings.keys.first);
+    return _recordings[key] = ++_nextRecording;
+  }
 
   void record({
     required PlaybackStage stage,
@@ -108,6 +152,12 @@ class PlaybackDiagnostics {
     int? nativeCode,
     int? httpStatus,
     String? privateError,
+    PlaybackFailureFacts? facts,
+    int? operation,
+    int? recording,
+    int? matchedRecording,
+    String? method,
+    Object? privateProviderFailures,
   }) {
     final source = sourceId == null || sourceId == 'navidrome'
         ? 'Navidrome'
@@ -118,6 +168,21 @@ class PlaybackDiagnostics {
       'source': source,
       'stage': stage.name,
       'outcome': outcome.name,
+      if (operation != null && operation > 0) 'operation': operation,
+      if (recording != null && recording > 0) 'recording': recording,
+      if (matchedRecording != null && matchedRecording > 0)
+        'matched_recording': matchedRecording,
+      if (const {
+        'customSearch',
+        'getTrack',
+        'getAlbum',
+        'getPlaylist',
+        'handleUrl',
+        'checkAvailability',
+        'hyperstreamResolve',
+        'hyperstreamDownload',
+      }.contains(method))
+        'method': method!,
       if (extensionVersion != null &&
           RegExp(r'^\d{1,4}\.\d{1,4}\.\d{1,4}$').hasMatch(extensionVersion))
         'extension_version': extensionVersion,
@@ -125,10 +190,53 @@ class PlaybackDiagnostics {
       'native_code': ?nativeCode,
       if (httpStatus != null && httpStatus >= 100 && httpStatus <= 599)
         'http_status': [httpStatus],
-      if (privateError != null)
+      if (facts != null)
+        ...facts.toJson()
+      else if (privateError != null)
         ...PlaybackFailureFacts.read(privateError).toJson(),
+      if (privateProviderFailures is List && privateProviderFailures.isNotEmpty)
+        'provider_failures': [
+          for (final entry in privateProviderFailures.take(12).whereType<Map>())
+            _providerFacts(entry),
+        ],
     });
     if (_events.length > 80) _events.removeAt(0);
+  }
+
+  static Map<String, Object> _providerFacts(Map entry) {
+    final code = entry['code'] is String
+        ? (entry['code'] as String).toUpperCase()
+        : '';
+    return {
+      if (entry['candidate'] is int &&
+          entry['candidate'] >= 1 &&
+          entry['candidate'] <= 12)
+        'candidate': entry['candidate'] as int,
+      if (const ['6', '7', '27'].contains(entry['quality']))
+        'quality': entry['quality'] as String,
+      if (const {
+        'PROVIDER_UNAVAILABLE',
+        'REQUEST_AUTH_INVALID',
+        'SESSION_INVALID',
+        'VERIFY_REQUIRED',
+      }.contains(code))
+        'code': code
+      else if (code.isNotEmpty)
+        'code': 'UNRECOGNIZED',
+      if (const {
+        'none',
+        'same_operation',
+        'new_ticket',
+        'poll_existing',
+      }.contains(entry['retry_mode']))
+        'retry_mode': entry['retry_mode'] as String,
+      ...PlaybackFailureFacts.read(
+        [
+          if (entry['message'] is String) entry['message'] as String,
+          code,
+        ].join(' '),
+      ).toJson(),
+    };
   }
 
   String report({String? appVersion, String? platform}) =>

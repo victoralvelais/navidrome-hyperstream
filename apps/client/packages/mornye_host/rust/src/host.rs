@@ -156,6 +156,101 @@ mod tests {
             "track_unavailable"
         );
     }
+    fn qobuz_fixture() -> (tempfile::TempDir, Host) {
+        let (root, host) = fixture();
+        let dir = host.directory("qobuz-web").unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.json"),
+            json!({
+                "name":"qobuz-web","version":"1.2.27","displayName":"Qobuz test",
+                "description":"Synthetic test provider","author":"Hyperstream tests",
+                "type":["metadata_provider","download_provider"],"minAppVersion":"5.3.0",
+                "permissions":{"network":["example.test"],"storage":true,"file":true}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        fs::write(
+            dir.join("index.js"),
+            include_str!("../tests/fixtures/qobuz.js"),
+        )
+        .unwrap();
+        host.environment
+            .set_setting("qobuz-web", "_hyperstream_enabled", json!(true))
+            .unwrap();
+        (root, host)
+    }
+    fn qobuz_call(method: &str, args: Value) -> Value {
+        json!({"op":"call","id":"qobuz-web","method":method,"args":args,"request_id":"qobuz-test"})
+    }
+    #[test]
+    fn qobuz_reports_each_failed_candidate_and_restores_fetch() {
+        let (_root, host) = qobuz_fixture();
+        let failed = host
+            .call(&qobuz_call(
+                "hyperstreamResolve",
+                json!(["unavailable", "27"]),
+            ))
+            .unwrap();
+        assert_eq!(failed["success"], false);
+        assert_eq!(
+            failed["error_message"],
+            "All audio providers failed: Candidate timed out"
+        );
+        assert_eq!(
+            failed["provider_failures"],
+            json!([
+                {"candidate":1,"quality":"27","message":"Candidate unavailable","code":"fixture_unavailable","retry_mode":"none"},
+                {"candidate":2,"quality":"27","message":"Candidate timed out","code":"fixture_timeout","retry_mode":"retry"}
+            ])
+        );
+        let state = host
+            .call(&qobuz_call("getTrack", json!(["state"])))
+            .unwrap();
+        assert_eq!(state["fetchRestored"], true);
+        assert_eq!(
+            state["attempts"],
+            json!([
+                {"provider":"first","id":"unavailable","quality":"27"},
+                {"provider":"second","id":"unavailable","quality":"27"}
+            ])
+        );
+
+        let audio = host
+            .call(&qobuz_call("hyperstreamResolve", json!(["selected", "6"])))
+            .unwrap();
+        assert_eq!(
+            audio,
+            json!({"url":"https://example.test/selected.flac","format":"flac"})
+        );
+        let state = host
+            .call(&qobuz_call("getTrack", json!(["state"])))
+            .unwrap();
+        assert_eq!(state["fetchRestored"], true);
+        assert_eq!(
+            &state["attempts"].as_array().unwrap()[2..],
+            &[
+                json!({"provider":"first","id":"selected","quality":"6"}),
+                json!({"provider":"second","id":"selected","quality":"6"})
+            ]
+        );
+    }
+    #[test]
+    fn qobuz_propagates_verification_and_resolves_on_the_next_call() {
+        let (_root, host) = qobuz_fixture();
+        let verification = host
+            .call(&qobuz_call("hyperstreamResolve", json!(["verify", "7"])))
+            .unwrap_err();
+        assert!(verification.contains("E_SESSION_VERIFICATION_REQUIRED"));
+        let audio = host
+            .call(&qobuz_call("hyperstreamResolve", json!(["selected", "7"])))
+            .unwrap();
+        assert_eq!(
+            audio,
+            json!({"url":"https://example.test/selected.flac","format":"flac"})
+        );
+    }
     fn youtube_fixture() -> (tempfile::TempDir, Host) {
         let (root, host) = fixture();
         let dir = host.directory("ytmusic-spotiflac").unwrap();

@@ -58,10 +58,14 @@ void main() {
             'Synthetic failure with private/path and secret=session',
           );
         }
-        if (request['op'] == 'resolve' && providerFailure != null) {
+        if (request['method'] == 'hyperstreamResolve' &&
+            providerFailure != null) {
           throw MornyeHostException(providerFailure!);
         }
-        if (request['method'] == 'hyperstreamDownload') {
+        if (const {
+          'hyperstreamResolve',
+          'hyperstreamDownload',
+        }.contains(request['method'])) {
           return structuredFailure;
         }
         if (request['op'] == 'pending' && rejectPending) {
@@ -160,6 +164,11 @@ void main() {
               .having((error) => error.message, 'provider', contains('Qobuz'))
               .having((error) => error.message, 'reason', contains(message))
               .having(
+                (error) => error.retryable,
+                'automatic retry',
+                !['HTTP 429', 'HTTP 403', 'HTTP 404'].contains(detail),
+              )
+              .having(
                 (error) => error.message,
                 'sanitized text',
                 allOf(
@@ -180,6 +189,95 @@ void main() {
       expect(report, isNot(contains('example.test')));
     });
   }
+
+  test('exhausted Qobuz audio providers stop automatic retries', () async {
+    providerFailure =
+        'All Qobuz download providers failed: HTTP 503; '
+        'HTTP 429 https://example.test/audio?token=synthetic';
+    await expectLater(
+      sources.execute({
+        'op': 'call',
+        'id': 'qobuz-web',
+        'method': 'hyperstreamResolve',
+      }),
+      throwsA(
+        isA<SourceException>()
+            .having((error) => error.retryable, 'automatic retry', isFalse)
+            .having(
+              (error) => error.facts?.reasons,
+              'facts',
+              contains('all-audio-providers-failed'),
+            )
+            .having((error) => error.facts?.httpStatuses, 'HTTP statuses', [
+              429,
+              503,
+            ]),
+      ),
+    );
+    expect(diagnostics.report(), isNot(contains('token=synthetic')));
+  });
+
+  test(
+    'native Qobuz response correlates and classifies provider attempts',
+    () async {
+      const trackId = 'synthetic-private-track-id';
+      structuredFailure = {
+        'success': false,
+        'error_message': 'All Qobuz download providers failed',
+        'provider_failures': [
+          {
+            'candidate': 1,
+            'quality': '6',
+            'message': 'HTTP 503 for https://example.test/?token=synthetic',
+            'code': 'PROVIDER_UNAVAILABLE',
+            'retry_mode': 'new_ticket',
+          },
+        ],
+      };
+      await expectLater(
+        sources.execute({
+          'op': 'call',
+          'id': 'qobuz-web',
+          'method': 'hyperstreamResolve',
+          'args': [trackId, 'LOSSLESS'],
+        }),
+        throwsA(
+          isA<SourceException>()
+              .having((error) => error.retryable, 'automatic retry', isFalse)
+              .having(
+                (error) => error.facts?.reasons,
+                'facts',
+                contains('provider-unavailable'),
+              ),
+        ),
+      );
+      final report = diagnostics.report();
+      final events =
+          (jsonDecode(report) as Map<String, dynamic>)['events'] as List;
+      final started = events.first as Map;
+      final failed = events.last as Map;
+      expect(started['outcome'], 'started');
+      expect(failed['outcome'], 'failed');
+      expect(failed['recording'], isA<int>());
+      expect(failed['operation'], isA<int>());
+      expect(started['recording'], failed['recording']);
+      expect(started['operation'], failed['operation']);
+      expect(failed['method'], 'hyperstreamResolve');
+      expect(failed['provider_failures'], [
+        {
+          'candidate': 1,
+          'quality': '6',
+          'code': 'PROVIDER_UNAVAILABLE',
+          'retry_mode': 'new_ticket',
+          'reasons': ['upstream-service-error', 'provider-unavailable'],
+          'http_status': [503],
+        },
+      ]);
+      for (final value in [trackId, 'example.test', 'token=synthetic']) {
+        expect(report, isNot(contains(value)));
+      }
+    },
+  );
 
   test(
     'structured download failure supplies safe facts to diagnostics',

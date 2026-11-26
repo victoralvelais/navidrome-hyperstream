@@ -254,12 +254,24 @@ class MornyeSources extends ChangeNotifier {
     final requestId = nonce();
     final watch = Stopwatch()..start();
     final providerId = request['id'] as String?;
+    final operation = diagnostics.beginOperation();
+    final args = request['args'];
+    final recording =
+        const {
+              'getTrack',
+              'hyperstreamResolve',
+              'hyperstreamDownload',
+            }.contains(request['method']) &&
+            args is List &&
+            args.isNotEmpty
+        ? diagnostics.recording('mornye:$providerId', '${args.first}')
+        : null;
     final stage = switch (request['method']) {
       'hyperstreamResolve' => PlaybackStage.resolve,
       'hyperstreamDownload' => PlaybackStage.download,
       _ => PlaybackStage.provider,
     };
-    void record(PlaybackOutcome outcome, [String? detail]) =>
+    void record(PlaybackOutcome outcome, [String? detail, Object? failures]) =>
         diagnostics.record(
           stage: stage,
           outcome: outcome,
@@ -270,6 +282,10 @@ class MornyeSources extends ChangeNotifier {
               ?.version,
           elapsedMs: watch.elapsedMilliseconds,
           privateError: detail,
+          operation: operation,
+          recording: recording,
+          method: request['method'] as String?,
+          privateProviderFailures: failures,
         );
     record(PlaybackOutcome.started);
     var finished = false;
@@ -303,16 +319,24 @@ class MornyeSources extends ChangeNotifier {
             'error_type',
           ])
             if (result[key] is String) result[key] as String,
+          if (result['provider_failures'] is List)
+            for (final failure
+                in (result['provider_failures'] as List)
+                    .take(12)
+                    .whereType<Map>())
+              for (final key in ['message', 'code'])
+                if (failure[key] is String) failure[key] as String,
         ].join(' ');
-        record(PlaybackOutcome.failed, detail);
+        record(PlaybackOutcome.failed, detail, result['provider_failures']);
         await _checkVerification(request['id'] as String?);
         if (request['id'] == 'soundcloud' &&
             result['error_code'] == 'track_unavailable') {
           throw const SourceException(
             'This SoundCloud upload does not offer a full playable stream. Try another upload.',
+            retryable: false,
           );
         }
-        throw SourceException(_providerFailure(providerId, detail));
+        throw _providerException(providerId, detail);
       }
       if (request['op'] == 'save_settings') {
         revision++;
@@ -323,9 +347,7 @@ class MornyeSources extends ChangeNotifier {
     } on MornyeHostException catch (failure) {
       record(PlaybackOutcome.failed, failure.detail);
       await _checkVerification(request['id'] as String?);
-      throw SourceException(
-        _providerFailure(request['id'] as String?, failure.detail),
-      );
+      throw _providerException(providerId, failure.detail);
     } finally {
       finished = true;
       _operations--;
@@ -334,6 +356,15 @@ class MornyeSources extends ChangeNotifier {
         _pump = null;
       }
     }
+  }
+
+  SourceException _providerException(String? id, String detail) {
+    final facts = PlaybackFailureFacts.read(detail);
+    return SourceException(
+      _providerFailure(id, detail),
+      retryable: facts.retryable,
+      facts: facts,
+    );
   }
 
   String _providerFailure(String? id, String detail) {
@@ -347,10 +378,15 @@ class MornyeSources extends ChangeNotifier {
     if (reasons.contains('timeout')) {
       return '$provider took too long to return audio. Try again or choose another source.';
     }
-    if (reasons.contains('upstream-service-error')) {
+    if (reasons.contains('upstream-service-error') ||
+        reasons.contains('provider-unavailable') ||
+        reasons.contains('provider-account-unavailable')) {
       return '$provider’s audio service is temporarily unavailable. Try again later or choose another source.';
     }
-    if (reasons.contains('access-rejected')) {
+    if (reasons.contains('access-rejected') ||
+        reasons.contains('request-auth-invalid') ||
+        reasons.contains('session-invalid') ||
+        reasons.contains('ticket-rejected')) {
       return '$provider rejected access to this request. Try again or choose another source.';
     }
     if (reasons.contains('recording-unavailable')) {

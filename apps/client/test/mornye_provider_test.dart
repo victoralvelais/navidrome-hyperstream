@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/mornye_provider.dart';
 import 'package:hyperstream_client/services/mornye_sources.dart';
 import 'package:hyperstream_client/services/music_provider.dart';
+import 'package:hyperstream_client/services/playback_diagnostics.dart';
 import 'package:hyperstream_client/services/source_stream_proxy.dart';
 import 'package:mornye_host/mornye_host.dart';
 
@@ -72,6 +74,7 @@ void main() {
     store = {};
     operation = (r) async => null;
     sources = MornyeSources(
+      diagnostics: PlaybackDiagnostics(),
       directory: () async => root,
       read: (k) async => store[k],
       write: (k, v) async {
@@ -423,13 +426,13 @@ void main() {
     },
   );
   test(
-    'Spotify matching passes ISRC and duration to chosen audio provider',
+    'Spotify matching passes ISRC and duration and links the playback report',
     () async {
       await sources.choose(audio: 'tidal-web');
       operation = (r) async {
         if (r['method'] == 'getTrack') {
           return {
-            'id': 's',
+            'id': 'private-spotify-recording',
             'name': 'Song',
             'artists': 'Artist',
             'isrc': 'SYNTHETICISRC',
@@ -437,15 +440,38 @@ void main() {
           };
         }
         expect(r['id'], 'tidal-web');
+        if (r['method'] == 'hyperstreamResolve') {
+          expect(r['args'][0], 'private-tidal-recording');
+          return {'url': 'https://private-media.example/audio?token=secret'};
+        }
         expect(r['args'][0], 'SYNTHETICISRC');
         expect(r['args'][3]['duration_ms'], 120000);
-        return {'available': true, 'track_id': 'matched'};
+        return {'available': true, 'track_id': 'private-tidal-recording'};
       };
-      final match = await MornyeAcquisition(sources).match(
-        const SourceReference(sourceId: 'mornye:spotify-web', trackId: 's'),
-        Completer<void>().future,
+      final acquisition = MornyeAcquisition(sources);
+      final abort = Completer<void>().future;
+      final resolved = await acquisition.resolve(
+        const SourceReference(
+          sourceId: 'mornye:spotify-web',
+          trackId: 'private-spotify-recording',
+        ),
+        abort,
       );
-      expect(match, ('tidal-web', 'matched'));
+      expect(resolved['sourceId'], 'mornye:tidal-web');
+      final report = sources.diagnostics.report();
+      final events = (jsonDecode(report) as Map)['events'] as List;
+      final match = events.singleWhere((event) => event['stage'] == 'match');
+      final resolve = events.last;
+      final catalog = events.firstWhere(
+        (event) => event['method'] == 'getTrack',
+      );
+      expect(catalog['recording'], match['recording']);
+      expect(match['matched_recording'], resolve['recording']);
+      expect(match['recording'], isNot(match['matched_recording']));
+      expect(resolve['method'], 'hyperstreamResolve');
+      expect(resolve['outcome'], 'ready');
+      expect(report, isNot(contains('private-')));
+      expect(report, isNot(contains('token=secret')));
     },
   );
   test('verification failure surfaces a provider action without leaking native URLs', () async {

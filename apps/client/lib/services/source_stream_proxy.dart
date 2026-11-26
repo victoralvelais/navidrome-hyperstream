@@ -26,6 +26,11 @@ class SourceStreamProxy {
   HttpServer? _server;
   var _token = MornyeSources.nonce();
   final _tracks = <String, SourceReference>{};
+  final _failures = <String, SourceException>{};
+  var _readyVersions = <String, int>{};
+  int _readySequence = 0;
+  SourceException? failureFor(SourceReference track) =>
+      _failures[track.identity];
   var _media = <String, Future<SourceStreamMedia>>{};
   var _clients = <HttpClient>{};
   var _closed = Completer<void>();
@@ -135,9 +140,16 @@ class SourceStreamProxy {
     String? id;
     SourceStreamMedia? usedMedia;
     SourceReference? activeTrack;
+    final readyVersions = _readyVersions;
+    int? readyVersionAtStart;
     final watch = Stopwatch()..start();
     var stage = PlaybackStage.resolve;
     var servingAudio = false;
+    bool currentFailure() =>
+        !closed.isCompleted &&
+        !servingAudio &&
+        (activeTrack == null ||
+            readyVersions[activeTrack.identity] == readyVersionAtStart);
     void ready() {
       servingAudio = true;
       if (!closed.isCompleted) {
@@ -145,6 +157,8 @@ class SourceStreamProxy {
         final track = _tracks[request.uri.pathSegments[1]];
         final media = usedMedia;
         if (track != null && media != null) {
+          _failures.remove(track.identity);
+          readyVersions[track.identity] = ++_readySequence;
           final sourceId =
               media.file?.sourceId ?? media.sourceId ?? track.sourceId;
           onMedia?.call(
@@ -193,6 +207,7 @@ class SourceStreamProxy {
         return;
       }
       activeTrack = track;
+      readyVersionAtStart = readyVersions[track.identity];
       id = '${parts[1]}@${sources.revision}';
       if (!sources.has(track.sourceId.replaceFirst('mornye:', ''))) {
         throw const SourceException('Enable this provider in Music sources.');
@@ -280,13 +295,15 @@ class SourceStreamProxy {
     } on Object catch (error) {
       // Do not keep a bad URL, missing prepared file or failed transport around
       // for the next native retry. Successful cached seeks are unaffected.
-      if (!servingAudio && id != null && usedMedia != null) {
+      if (currentFailure() && id != null && usedMedia != null) {
         final cached = cache[id];
         if (cached != null) {
           unawaited(() async {
             try {
               final media = await cached;
-              if (identical(media, usedMedia) && identical(cache[id], cached)) {
+              if (currentFailure() &&
+                  identical(media, usedMedia) &&
+                  identical(cache[id], cached)) {
                 cache.remove(id);
                 await media.file?.dispose();
               }
@@ -300,17 +317,31 @@ class SourceStreamProxy {
       // Once valid audio is flowing, do not turn that into a resolver failure
       // or discard a successfully prepared file. Genuine playback failures
       // still reach the player's error stream and trigger a fresh session.
-      if (!closed.isCompleted && !servingAudio) {
+      if (currentFailure()) {
+        final failure = error is SourceException
+            ? error
+            : const SourceException(
+                'Playback could not reach this music source. Try again.',
+              );
+        if (activeTrack != null) {
+          _failures[activeTrack.identity] = failure;
+          if (_failures.length > 512) _failures.remove(_failures.keys.first);
+        }
         sources.diagnostics.record(
           stage: stage,
           outcome: PlaybackOutcome.failed,
           sourceId: activeTrack?.sourceId ?? 'unknown',
           elapsedMs: watch.elapsedMilliseconds,
           privateError: error.toString(),
+          facts: failure.facts,
+          recording: activeTrack == null
+              ? null
+              : sources.diagnostics.recording(
+                  activeTrack.sourceId,
+                  activeTrack.trackId,
+                ),
         );
-        sources.issue.value = error is SourceException
-            ? error.message
-            : 'Playback could not reach this music source. Try again.';
+        sources.issue.value = failure.message;
       }
       try {
         request.response.statusCode = HttpStatus.badGateway;
@@ -458,6 +489,8 @@ class SourceStreamProxy {
     }
     _clients = {};
     _tracks.clear();
+    _failures.clear();
+    _readyVersions = {};
     _token = MornyeSources.nonce();
     return (
       closing,
