@@ -26,46 +26,67 @@ const externalSong = Track(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('current track label follows the resolved playback provider', (
-    tester,
-  ) async {
-    const song = Track(
-      id: 'external:spotify',
-      title: 'Song',
-      artist: 'Artist',
-      album: 'Album',
-      duration: Duration(minutes: 2),
-      source: SourceReference(sourceId: 'mornye:spotify-web', trackId: 'one'),
-    );
-    final info = ValueNotifier<Map<String, SourcePlaybackInfo>>({});
-    final client = NavidromeClient(
-      serverUrl: 'https://library.example',
-      username: 'test',
-      password: 'test',
-    );
-    final playback = PlaybackService(
-      player: FakePlayer(),
-      sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
-      sourcePlaybackInfo: info,
-    );
-    addTearDown(() async {
-      final disposing = playback.dispose();
+  testWidgets(
+    'current track label follows provider updates during and after load',
+    (tester) async {
+      const song = Track(
+        id: 'external:spotify',
+        title: 'Song',
+        artist: 'Artist',
+        album: 'Album',
+        duration: Duration(minutes: 2),
+        source: SourceReference(sourceId: 'mornye:spotify-web', trackId: 'one'),
+      );
+      final info = ValueNotifier<Map<String, SourcePlaybackInfo>>({});
+      final client = NavidromeClient(
+        serverUrl: 'https://library.example',
+        username: 'test',
+        password: 'test',
+      );
+      final loadGate = Completer<void>();
+      final player = FakePlayer()..loadGate = loadGate;
+      final playback = PlaybackService(
+        player: player,
+        sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+        sourcePlaybackInfo: info,
+      );
+      addTearDown(() async {
+        final disposing = playback.dispose();
+        await tester.pump();
+        await disposing;
+        info.dispose();
+        client.close();
+      });
+      final loading = playback.playAlbum(client, const [song], 0);
       await tester.pump();
-      await disposing;
-      info.dispose();
-      client.close();
-    });
-    await playback.playAlbum(client, const [song], 0);
-    expect(playback.queue.value.single.extras?['audioDetails'], 'Spotify');
-    info.value = {
-      song.source!.identity: const SourcePlaybackInfo(
-        sourceId: 'mornye:qobuz-web',
-        format: 'flac',
-      ),
-    };
-    expect(playback.queue.value.single.extras?['audioDetails'], 'Qobuz · FLAC');
-    expect(playback.mediaItem.value?.extras?['audioDetails'], 'Qobuz · FLAC');
-  });
+      expect(player.loaded, hasLength(1));
+      info.value = {
+        song.source!.identity: const SourcePlaybackInfo(
+          sourceId: 'mornye:qobuz-web',
+          format: 'flac',
+        ),
+      };
+      loadGate.complete();
+      await loading;
+      expect(
+        playback.queue.value.single.extras?['audioDetails'],
+        'Qobuz · FLAC',
+      );
+      expect(playback.mediaItem.value?.extras?['audioDetails'], 'Qobuz · FLAC');
+
+      info.value = {
+        song.source!.identity: const SourcePlaybackInfo(
+          sourceId: 'mornye:tidal-web',
+          format: 'aac',
+        ),
+      };
+      expect(
+        playback.queue.value.single.extras?['audioDetails'],
+        'Tidal · AAC',
+      );
+      expect(playback.mediaItem.value?.extras?['audioDetails'], 'Tidal · AAC');
+    },
+  );
   testWidgets('a pending Qobuz challenge does not block SoundCloud recovery', (
     tester,
   ) async {

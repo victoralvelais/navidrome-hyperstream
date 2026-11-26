@@ -773,7 +773,14 @@ class PlaybackService extends BaseAudioHandler {
         _listeningClient = client;
         _listeningTracks = List.unmodifiable(tracks);
         _retrySnapshot = null;
-        _publishItem();
+        // The resolver can finish while the native queue is still loading and
+        // trackAt is not yet available. Reconcile its cached facts now as well
+        // as on later resolver notifications.
+        if (tracks.any((track) => track.source != null)) {
+          _publishSourceInfo();
+        } else {
+          _publishItem();
+        }
         _publishState();
         _scheduleCheckpoint();
         if (_playWhenReady) {
