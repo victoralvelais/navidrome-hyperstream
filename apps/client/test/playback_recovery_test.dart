@@ -59,6 +59,39 @@ class _Recovery {
 }
 
 void main() {
+  testWidgets(
+    'native error releases a stuck load so Play can recover before it finishes',
+    (tester) async {
+      final f = _Recovery();
+      final stuck = Completer<void>();
+      f.player.loadGate = stuck;
+      var finished = false;
+      final loading = f.playback
+          .playAlbum(f.client, continuityTracks, 1)
+          .whenComplete(() => finished = true);
+      await tester.pump();
+      expect(finished, false);
+      f.player.errors.add(PlayerException(1, 'private native failure', 1));
+      await tester.pumpAndSettle();
+      expect(
+        finished,
+        true,
+        reason: 'Recovery must not queue behind an abandoned native load.',
+      );
+      await loading;
+      expect(f.playback.canRetryPlayback, true);
+      f.player.loadGate = null;
+      await f.playback.play();
+      expect(f.player.playing, true);
+      expect(f.player.currentIndex, 1);
+      expect(f.playback.error.value, isNull);
+      stuck.completeError(PlayerException(1, 'late old failure', 1));
+      await tester.pumpAndSettle();
+      expect(f.playback.error.value, isNull);
+      expect(f.player.playing, true);
+      await f.close(tester);
+    },
+  );
   for (final action in ['Play', 'automatic retry', 'another song']) {
     testWidgets('$action rebuilds a failed native player and source session', (
       tester,

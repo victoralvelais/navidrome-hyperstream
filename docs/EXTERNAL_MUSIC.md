@@ -132,6 +132,8 @@ After a playback error, Play, automatic recovery or choosing another song releas
 the native player and renews the local external-stream session before loading.
 Retries preserve the queue, selected song, position, shuffle order, repeat,
 volume and tempo. Pause or changing the queue still wins over pending recovery.
+A native error releases an unfinished load immediately, so the serialized retry
+can reach its reset even if the original native load never finishes.
 The old listener's requests are canceled; late resolutions cannot evict new
 streams or overwrite their status, and late prepared files are cleaned up.
 Bad stream URLs are evicted, while normal native seek/preload cancellations

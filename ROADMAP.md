@@ -5,6 +5,8 @@
 - After a playback error, release the native player before reloading the queue.
   Manual Play, automatic retries and choosing another song all take this path.
   Keep queue position, shuffle order, repeat, tempo and volume on a retry.
+- A native error also releases an unfinished queue load so retries cannot remain
+  blocked behind it. Late native load results cannot resume the failed attempt.
 - Restart the external stream listener and discard its cached stream/preparation
   state. Cancel old requests without blocking on a stuck resolver; isolate late
   errors and clean up late prepared files without affecting the new session.

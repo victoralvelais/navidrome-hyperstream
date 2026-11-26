@@ -102,6 +102,7 @@ class PlaybackService extends BaseAudioHandler {
   late final Future<void> Function() _resetSourcePlayback;
   bool _needsPlaybackReset = false;
   bool _resettingPlayback = false;
+  Completer<Duration?>? _loadFailure;
   int? _sourceVerificationEpoch;
   int? _verificationRecoveryRevision;
   final _sourceArtwork = SystemArtwork();
@@ -544,23 +545,34 @@ class PlaybackService extends BaseAudioHandler {
             .toList();
         queue.add(items);
         mediaItem.add(items[index]);
-        await _player.setAudioSources(
-          tracks.indexed
-              .map(
-                (entry) => AudioSource.uri(
-                  entry.$2.source == null
-                      ? client.streamUri(entry.$2.id)
-                      : _sourceStreamUri(entry.$2.source!),
-                  tag: items[entry.$1],
-                ),
-              )
-              .toList(),
-          initialIndex: index,
-          initialPosition: restored?.safePosition ?? Duration.zero,
-          // Show a restored queue immediately without fetching audio until Play.
-          preload: restored == null || autoplay,
-          shuffleOrder: _restoredOrder,
-        );
+        final loadFailure = Completer<Duration?>();
+        _loadFailure = loadFailure;
+        try {
+          await Future.any<Duration?>([
+            loadFailure.future,
+            Future<Duration?>.sync(
+              () => _player.setAudioSources(
+                tracks.indexed
+                    .map(
+                      (entry) => AudioSource.uri(
+                        entry.$2.source == null
+                            ? client.streamUri(entry.$2.id)
+                            : _sourceStreamUri(entry.$2.source!),
+                        tag: items[entry.$1],
+                      ),
+                    )
+                    .toList(),
+                initialIndex: index,
+                initialPosition: restored?.safePosition ?? Duration.zero,
+                // Show a restored queue immediately without fetching audio until Play.
+                preload: restored == null || autoplay,
+                shuffleOrder: _restoredOrder,
+              ),
+            ),
+          ]);
+        } finally {
+          if (identical(_loadFailure, loadFailure)) _loadFailure = null;
+        }
         if (revision != _revision) return;
         if (restored != null) {
           // With preload:false, just_audio defers initial seek values until
@@ -807,6 +819,13 @@ class PlaybackService extends BaseAudioHandler {
   void _reportFailure() {
     if (_disposed || _resettingPlayback) return;
     _needsPlaybackReset = true;
+    // Some native failures arrive on the error stream before (or without)
+    // completing the load call. Free the serialized queue so a retry can reach
+    // stop/reset; a late native result is observed but cannot resume this load.
+    final loadFailure = _loadFailure;
+    if (loadFailure != null && !loadFailure.isCompleted) {
+      loadFailure.completeError(StateError('Playback load failed'));
+    }
     _retrySnapshot ??= _snapshot();
     // A failed initial load has no listening tracks or native current index.
     // The intended queue still identifies the source whose resolver failed.
