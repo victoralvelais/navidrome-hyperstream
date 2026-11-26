@@ -45,10 +45,12 @@ class SourceImportStatus {
 class SourceImportReceipts {
   SourceImportReceipts({this.read, this.write});
   factory SourceImportReceipts.persistent() {
-    final storage = SharedPreferencesAsync();
+    // Optional history must not prevent the player from opening when platform
+    // preferences are unavailable. Construct the backend inside load's guarded
+    // read so that failure retains the same session-only behavior as bad data.
     return SourceImportReceipts(
-      read: () => storage.getString(storageKey),
-      write: (value) => storage.setString(storageKey, value),
+      read: () => SharedPreferencesAsync().getString(storageKey),
+      write: (value) => SharedPreferencesAsync().setString(storageKey, value),
     );
   }
   static const storageKey = 'hyperstream.source-import-receipts.v1';

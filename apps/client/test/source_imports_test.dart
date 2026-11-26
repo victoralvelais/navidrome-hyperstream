@@ -16,6 +16,7 @@ import 'package:hyperstream_client/services/remote_transfer.dart';
 import 'package:hyperstream_client/services/remote_transfer_background.dart';
 import 'package:hyperstream_client/services/source_imports.dart';
 import 'package:hyperstream_client/services/source_import_status.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'remote_folder_test.dart' show MemoryRemoteStore, destination;
 import 'remote_send_action_test.dart' show FakeBackground;
@@ -27,6 +28,23 @@ void main() {
   late NavidromeClient client;
   late List<Track> tracks;
   const success = RemoteTransferResult(success: true, message: 'Sent');
+  test(
+    'missing platform preferences keep remote save receipts in memory',
+    () async {
+      final platform = SharedPreferencesAsyncPlatform.instance;
+      addTearDown(() => SharedPreferencesAsyncPlatform.instance = platform);
+      SharedPreferencesAsyncPlatform.instance = null;
+
+      final receipts = SourceImportReceipts.persistent();
+      await receipts.load();
+      expect(receipts.values, isEmpty);
+
+      final key = List.filled(64, 'a').join();
+      final savedAt = DateTime.utc(2026, 11, 26);
+      await receipts.record(key, savedAt);
+      expect(receipts.values, {key: savedAt});
+    },
+  );
   test(
     'album retains its activity grant and propagates expiration between songs',
     () async {
