@@ -42,6 +42,7 @@ class MusicSources extends ChangeNotifier {
   final http.Client Function()? httpClient;
   final MornyeSources? extensions;
   SourceStreamProxy? _proxy;
+  bool _playbackInitialized = false;
   bool get hasProviders => enabled || extensions?.enabled.isNotEmpty == true;
   String? get selectedProvider =>
       extensions?.selected ??
@@ -95,6 +96,7 @@ class MusicSources extends ChangeNotifier {
     if (extensions != null) {
       await extensions!.restore();
       await _proxy!.start();
+      _playbackInitialized = true;
     }
     try {
       final raw = await _read().timeout(const Duration(seconds: 10));
@@ -209,7 +211,12 @@ class MusicSources extends ChangeNotifier {
     }
   }
 
-  Future<bool> verifyPlayback(SourceReference track) async {
+  Future<void> resetPlayback() async {
+    extensions?.issue.value = null;
+    if (_playbackInitialized) await _proxy!.restart();
+  }
+
+  bool needsPlaybackVerification(SourceReference track) {
     if (!track.sourceId.startsWith('mornye:') || extensions == null) {
       return false;
     }
@@ -217,7 +224,11 @@ class MusicSources extends ChangeNotifier {
     final audio = catalog == 'spotify-web'
         ? extensions!.audioProvider
         : catalog;
-    if (audio == null || extensions!.verification.value != audio) return false;
-    return extensions!.requestVerification(audio);
+    return audio != null && extensions!.verification.value == audio;
+  }
+
+  Future<bool> verifyPlayback(SourceReference track) async {
+    if (!needsPlaybackVerification(track)) return false;
+    return extensions!.requestVerification(extensions!.verification.value!);
   }
 }

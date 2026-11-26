@@ -15,10 +15,12 @@ class SourceStreamProxy {
   final Future<SourceStreamMedia> Function(SourceReference)? resolve;
   final MornyeSources sources;
   HttpServer? _server;
-  final _token = MornyeSources.nonce();
+  var _token = MornyeSources.nonce();
   final _tracks = <String, SourceReference>{};
-  final _media = <String, Future<SourceStreamMedia>>{};
+  var _media = <String, Future<SourceStreamMedia>>{};
+  var _clients = <HttpClient>{};
   var _closed = Completer<void>();
+  bool get started => _server != null;
   Future<void> start() async {
     if (_server != null) return;
     if (_closed.isCompleted) _closed = Completer<void>();
@@ -48,11 +50,13 @@ class SourceStreamProxy {
 
   Future<SourceStreamMedia> _resolve(
     String id,
-    SourceReference track, {
+    SourceReference track,
+    Map<String, Future<SourceStreamMedia>> cache,
+    Future<void> abort, {
     bool refresh = false,
   }) async {
     if (refresh) {
-      final old = _media.remove(id);
+      final old = cache.remove(id);
       if (old != null) {
         try {
           await (await old).file?.dispose();
@@ -61,44 +65,62 @@ class SourceStreamProxy {
         }
       }
     }
-    return _media.putIfAbsent(id, () async {
-      try {
-        if (resolve != null) return await resolve!(track);
-        final acquisition = MornyeAcquisition(sources);
-        final abort = _closed.future;
-        Future<PreparedSourceAudio> prepare() =>
-            acquisition.download(track, abort, forPlayback: true);
-        final result = await acquisition.resolve(track, abort);
-        if (result['prepare'] == true) {
-          return SourceStreamMedia(file: await prepare());
-        }
-        final uri = Uri.tryParse(result['url'] as String? ?? '');
-        if (uri == null ||
-            uri.scheme != 'https' ||
-            uri.host.isEmpty ||
-            uri.userInfo.isNotEmpty ||
-            InternetAddress.tryParse(uri.host) != null ||
-            uri.host == 'localhost') {
-          throw const SourceException(
-            'This source did not return a valid stream.',
-          );
-        }
-        return SourceStreamMedia(
-          uri: uri,
-          headers: result['headers'] is Map
-              ? Map<String, dynamic>.from(result['headers'] as Map)
-              : const {},
-          prepare: result['prepareOnFailure'] == true ? prepare : null,
-        );
-      } on Object {
-        _media.remove(id);
-        rethrow;
+    final existing = cache[id];
+    if (existing != null) return existing;
+    // Insert before running the resolver, including a synchronous failure.
+    final pending = Future<SourceStreamMedia>.microtask(() async {
+      if (resolve != null) return await resolve!(track);
+      final acquisition = MornyeAcquisition(sources);
+      Future<PreparedSourceAudio> prepare() =>
+          acquisition.download(track, abort, forPlayback: true);
+      final result = await acquisition.resolve(track, abort);
+      if (result['prepare'] == true) {
+        return SourceStreamMedia(file: await prepare());
       }
+      final uri = Uri.tryParse(result['url'] as String? ?? '');
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.host.isEmpty ||
+          uri.userInfo.isNotEmpty ||
+          InternetAddress.tryParse(uri.host) != null ||
+          uri.host == 'localhost') {
+        throw const SourceException(
+          'This source did not return a valid stream.',
+        );
+      }
+      return SourceStreamMedia(
+        uri: uri,
+        headers: result['headers'] is Map
+            ? Map<String, dynamic>.from(result['headers'] as Map)
+            : const {},
+        prepare: result['prepareOnFailure'] == true ? prepare : null,
+      );
     });
+    cache[id] = pending;
+    try {
+      return await pending;
+    } on Object {
+      if (identical(cache[id], pending)) cache.remove(id);
+      rethrow;
+    }
   }
 
   Future<void> _serve(HttpRequest request) async {
+    // Old requests keep their own cache/cancellation generation. A late failure
+    // must never remove a replacement stream or overwrite its error state.
+    final closed = _closed;
+    final cache = _media;
+    final clients = _clients;
     final client = _client()..connectionTimeout = const Duration(seconds: 30);
+    clients.add(client);
+    String? id;
+    SourceStreamMedia? usedMedia;
+    var servingAudio = false;
+    void ready() {
+      servingAudio = true;
+      if (!closed.isCompleted) sources.issue.value = null;
+    }
+
     try {
       final parts = request.uri.pathSegments;
       final track = parts.length == 2 && parts[0] == _token
@@ -108,27 +130,40 @@ class SourceStreamProxy {
         request.response.statusCode = HttpStatus.notFound;
         return;
       }
-      final id = '${parts[1]}@${sources.revision}';
+      id = '${parts[1]}@${sources.revision}';
       if (!sources.has(track.sourceId.replaceFirst('mornye:', ''))) {
         throw const SourceException('Enable this provider in Music sources.');
       }
-      var media = await _resolve(id, track);
+      var media = await _resolve(id, track, cache, closed.future);
+      if (closed.isCompleted) return;
+      usedMedia = media;
       if (media.file == null &&
           DateTime.now().difference(media.created) >
               const Duration(minutes: 5)) {
-        media = await _resolve(id, track, refresh: true);
+        media = await _resolve(id, track, cache, closed.future, refresh: true);
+        if (closed.isCompleted) return;
+        usedMedia = media;
       }
       if (media.file case final prepared?) {
-        await _serveFile(request, prepared.file);
+        await _serveFile(request, prepared.file, onReady: ready);
       } else {
         HttpClientResponse? upstream;
         for (var attempt = 0; attempt < 2; attempt++) {
           upstream = await _open(client, request, media);
+          if (closed.isCompleted) return;
           if (![401, 403].contains(upstream.statusCode) || attempt == 1) break;
           await upstream.drain<void>();
-          media = await _resolve(id, track, refresh: true);
+          media = await _resolve(
+            id,
+            track,
+            cache,
+            closed.future,
+            refresh: true,
+          );
+          if (closed.isCompleted) return;
+          usedMedia = media;
           if (media.file != null) {
-            await _serveFile(request, media.file!.file);
+            await _serveFile(request, media.file!.file, onReady: ready);
             return;
           }
         }
@@ -136,25 +171,29 @@ class SourceStreamProxy {
             ![200, 206, 416].contains(upstream.statusCode)) {
           if (media.prepare != null) {
             await upstream?.drain<void>();
+            if (closed.isCompleted) return;
             // Share preparation with concurrent HEAD/range requests.
             final prepared = media.prepared ??= media.prepare!().then(
               (file) => SourceStreamMedia(file: file),
             );
-            _media[id] = prepared;
+            cache[id] = prepared;
             try {
               media = await prepared;
             } on Object {
-              _media.remove(id);
+              if (identical(cache[id], prepared)) cache.remove(id);
               rethrow;
             }
-            await _serveFile(request, media.file!.file);
-            sources.issue.value = null;
+            if (closed.isCompleted) return;
+            usedMedia = media;
+            await _serveFile(request, media.file!.file, onReady: ready);
+            if (!closed.isCompleted) sources.issue.value = null;
             return;
           }
           throw const SourceException(
             'The audio source is unavailable. Try another source.',
           );
         }
+        ready();
         request.response.statusCode = upstream.statusCode;
         for (final name in [
           HttpHeaders.contentTypeHeader,
@@ -173,11 +212,35 @@ class SourceStreamProxy {
           await upstream.drain<void>();
         }
       }
-      sources.issue.value = null;
+      if (!closed.isCompleted) sources.issue.value = null;
     } on Object catch (error) {
-      sources.issue.value = error is SourceException
-          ? error.message
-          : 'Playback could not reach this music source. Try again.';
+      // Do not keep a bad URL, missing prepared file or failed transport around
+      // for the next native retry. Successful cached seeks are unaffected.
+      if (!servingAudio && id != null && usedMedia != null) {
+        final cached = cache[id];
+        if (cached != null) {
+          unawaited(() async {
+            try {
+              final media = await cached;
+              if (identical(media, usedMedia) && identical(cache[id], cached)) {
+                cache.remove(id);
+                await media.file?.dispose();
+              }
+            } on Object {
+              /* Resolution failures retire themselves. */
+            }
+          }());
+        }
+      }
+      // Native players routinely cancel range reads when seeking/preloading.
+      // Once valid audio is flowing, do not turn that into a resolver failure
+      // or discard a successfully prepared file. Genuine playback failures
+      // still reach the player's error stream and trigger a fresh session.
+      if (!closed.isCompleted && !servingAudio) {
+        sources.issue.value = error is SourceException
+            ? error.message
+            : 'Playback could not reach this music source. Try again.';
+      }
       try {
         request.response.statusCode = HttpStatus.badGateway;
       } on Object {
@@ -185,6 +248,7 @@ class SourceStreamProxy {
       }
     } finally {
       client.close(force: true);
+      clients.remove(client);
       try {
         await request.response.close();
       } on Object {
@@ -192,9 +256,9 @@ class SourceStreamProxy {
       }
       // Bound prepared media retained for seeks; unused temporary files are
       // removed as the listener moves through the queue.
-      if (_media.length > 4) {
-        final key = _media.keys.first;
-        final old = _media.remove(key)!;
+      if (cache.length > 4) {
+        final key = cache.keys.first;
+        final old = cache.remove(key)!;
         try {
           await (await old).file?.dispose();
         } on Object {
@@ -254,8 +318,15 @@ class SourceStreamProxy {
     throw const SourceException('This source redirected too many times.');
   }
 
-  static Future<void> _serveFile(HttpRequest request, File file) async {
+  static Future<void> _serveFile(
+    HttpRequest request,
+    File file, {
+    void Function()? onReady,
+  }) async {
     final size = await file.length();
+    if (size == 0) {
+      throw const SourceException('This source returned an empty audio file.');
+    }
     final range = request.headers.value(HttpHeaders.rangeHeader);
     var start = 0;
     var end = size - 1;
@@ -276,6 +347,7 @@ class SourceStreamProxy {
       request.response.statusCode = 206;
       request.response.headers.set('Content-Range', 'bytes $start-$end/$size');
     }
+    onReady?.call();
     request.response.headers.set('Content-Type', audioMime(file.path));
     request.response.headers.set('Accept-Ranges', 'bytes');
     request.response.contentLength = end - start + 1;
@@ -284,21 +356,47 @@ class SourceStreamProxy {
     }
   }
 
-  Future<void> close() async {
+  /// Retire failed streams without waiting for a stuck provider to finish.
+  /// Its cancellation and eventual temporary-file cleanup remain attached to
+  /// the old generation, so it cannot poison a fresh retry.
+  Future<void> restart() async {
+    final cleanup = _retire();
+    await cleanup.$1;
+    unawaited(cleanup.$2);
+    await start();
+  }
+
+  (Future<void>, Future<void>) _retire() {
     if (!_closed.isCompleted) _closed.complete();
-    await _server?.close(force: true);
+    final closing =
+        _server?.close(force: true).then<void>((_) {}) ?? Future<void>.value();
     _server = null;
-    // Cancellation may remove failed resolutions while cleanup awaits them.
     final pending = List.of(_media.values);
-    _media.clear();
-    _tracks.clear();
-    for (final value in pending) {
-      try {
-        await (await value).file?.dispose();
-      } on Object {
-        /* Best effort on exit. */
-      }
+    _media = {};
+    for (final client in _clients) {
+      client.close(force: true);
     }
+    _clients = {};
+    _tracks.clear();
+    _token = MornyeSources.nonce();
+    return (
+      closing,
+      Future.wait(
+        pending.map((value) async {
+          try {
+            await (await value).file?.dispose();
+          } on Object {
+            /* Best effort on exit, including cancelled provider requests. */
+          }
+        }),
+      ).then<void>((_) {}),
+    );
+  }
+
+  Future<void> close() async {
+    final cleanup = _retire();
+    await cleanup.$1;
+    await cleanup.$2;
   }
 }
 

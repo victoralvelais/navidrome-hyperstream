@@ -1,4 +1,4 @@
-# External music in 0.60.1
+# External music in 0.60.2
 
 ## Use
 
@@ -127,6 +127,17 @@ public cover references, then resolves audio URLs through the configured source.
 Navidrome scrobbling, favorites and server-playlist actions apply to library tracks.
 
 ## Extension runtime and playback
+
+After a playback error, Play, automatic recovery or choosing another song releases
+the native player and renews the local external-stream session before loading.
+Retries preserve the queue, selected song, position, shuffle order, repeat,
+volume and tempo. Pause or changing the queue still wins over pending recovery.
+The old listener's requests are canceled; late resolutions cannot evict new
+streams or overwrite their status, and late prepared files are cleaned up.
+Bad stream URLs are evicted, while normal native seek/preload cancellations
+retain prepared audio. A pending verification for one service does not block
+unrelated sources. Recovery remains bounded and cannot make an unavailable
+recording or rejected provider session playable.
 
 The supported packages are Spotify Web 1.10.6, Tidal Web 1.2.14,
 Qobuz Web 1.2.27, YouTube Music 2.4.7 and SoundCloud 1.0.15. This is a reviewed subset of the Mornye JavaScript ecosystem;

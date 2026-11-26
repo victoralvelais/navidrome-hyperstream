@@ -1,5 +1,20 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 25: playback recovery without restarting, 0.60.2
+
+- After a playback error, release the native player before reloading the queue.
+  Manual Play, automatic retries and choosing another song all take this path.
+  Keep queue position, shuffle order, repeat, tempo and volume on a retry.
+- Restart the external stream listener and discard its cached stream/preparation
+  state. Cancel old requests without blocking on a stuck resolver; isolate late
+  errors and clean up late prepared files without affecting the new session.
+- Evict bad stream URLs on transport failure, retain prepared audio across
+  ordinary canceled range reads, and scope verification to the playing source.
+- Regression coverage reproduces a player that requires recreation, stale and
+  stalled resolutions, canceled reads, verification isolation, and Pause winning
+  over recovery. The user's original device failure was not logged; device
+  acceptance is still needed to establish its exact trigger.
+
 ## November 25: YouTube creator-upload search fix, 0.60.1
 
 - Combine YouTube Music's general and Videos search categories. Its general

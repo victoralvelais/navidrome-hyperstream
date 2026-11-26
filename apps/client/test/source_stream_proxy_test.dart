@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +32,185 @@ void main() {
     ];
   });
   tearDown(() => sources.dispose());
+  test(
+    'an abandoned range read keeps prepared audio for the next seek',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hyperstream-seek-',
+      );
+      final file = await File('${directory.path}/source.m4a')
+          .writeAsBytes(Uint8List(4 * 1024 * 1024));
+      var resolves = 0;
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (_) async {
+          resolves++;
+          return SourceStreamMedia(file: PreparedSourceAudio(file, directory));
+        },
+      );
+      await proxy.start();
+      addTearDown(proxy.close);
+      final url = proxy.uri(track);
+      final client = HttpClient();
+      final request = await client.getUrl(url);
+      request.headers.set('Range', 'bytes=0-');
+      final response = await request.close();
+      await response.first;
+      client.close(force: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect((await http.head(url)).statusCode, 200);
+      expect(resolves, 1);
+      expect(await file.exists(), true);
+      expect(sources.issue.value, isNull);
+    },
+  );
+  test('a failed transport is resolved afresh on the next Play request', () async {
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    upstream.listen((r) async {
+      r.response.statusCode = r.uri.path == '/stale' ? 404 : 200;
+      if (r.response.statusCode == 200) r.response.add([1, 2, 3]);
+      await r.response.close();
+    });
+    var resolves = 0;
+    final proxy = SourceStreamProxy(
+      sources,
+      resolve: (_) async {
+        resolves++;
+        return SourceStreamMedia(
+          uri: Uri.parse(
+            'http://127.0.0.1:${upstream.port}/${resolves == 1 ? 'stale' : 'fresh'}',
+          ),
+        );
+      },
+    );
+    await proxy.start();
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final url = proxy.uri(track);
+    expect((await http.get(url)).statusCode, 502);
+    final retry = await http.get(url);
+    expect(retry.statusCode, 200);
+    expect(retry.bodyBytes, [1, 2, 3]);
+    expect(resolves, 2);
+    expect(sources.issue.value, isNull);
+  });
+  test(
+    'restart bypasses stuck resolution and ignores its late failure',
+    () async {
+      final started = Completer<void>();
+      final stale = Completer<SourceStreamMedia>();
+      final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      upstream.listen((r) async {
+        r.response.add([1, 2, 3]);
+        await r.response.close();
+      });
+      var resolves = 0;
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (_) {
+          if (++resolves == 1) {
+            started.complete();
+            return stale.future;
+          }
+          return Future.value(
+            SourceStreamMedia(
+              uri: Uri.parse('http://127.0.0.1:${upstream.port}/fresh'),
+            ),
+          );
+        },
+      );
+      await proxy.start();
+      addTearDown(() async {
+        if (!stale.isCompleted) {
+          stale.completeError(const SourceException('Cancelled'));
+        }
+        await proxy.close();
+        await upstream.close(force: true);
+      });
+      final oldUrl = proxy.uri(track);
+      final oldRequest = http
+          .get(oldUrl)
+          .then<void>((_) {}, onError: (Object _) {});
+      await started.future;
+      await proxy.restart().timeout(const Duration(seconds: 2));
+      final url = proxy.uri(track);
+      expect(url, isNot(oldUrl));
+      expect((await http.get(url)).bodyBytes, [1, 2, 3]);
+      stale.completeError(const SourceException('Old private failure'));
+      await oldRequest;
+      await Future<void>.delayed(Duration.zero);
+      expect(sources.issue.value, isNull);
+      expect((await http.get(url)).statusCode, 200);
+      expect(
+        resolves,
+        2,
+        reason: 'A stale failure cannot evict the healthy retry.',
+      );
+    },
+  );
+  test(
+    'restart cleans late prepared files without blocking the new listener',
+    () async {
+      final started = Completer<void>();
+      final stale = Completer<SourceStreamMedia>();
+      final directory = await Directory.systemTemp.createTemp(
+        'hyperstream-retired-',
+      );
+      final file = await File('${directory.path}/late.m4a')
+          .writeAsBytes([1, 2, 3]);
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (_) {
+          started.complete();
+          return stale.future;
+        },
+      );
+      await proxy.start();
+      final oldRequest = http
+          .get(proxy.uri(track))
+          .then<void>((_) {}, onError: (Object _) {});
+      await started.future;
+      await proxy.restart().timeout(const Duration(seconds: 2));
+      expect(proxy.started, true);
+      stale.complete(
+        SourceStreamMedia(file: PreparedSourceAudio(file, directory)),
+      );
+      await oldRequest;
+      for (var i = 0; i < 50 && await directory.exists(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(await directory.exists(), false);
+      await proxy.close();
+    },
+  );
+  test(
+    'a synchronous resolver failure does not poison the cached future',
+    () async {
+      var resolves = 0;
+      final directory = await Directory.systemTemp.createTemp(
+        'hyperstream-retry-',
+      );
+      final file = await File('${directory.path}/source.mp3')
+          .writeAsBytes([1, 2, 3]);
+      final proxy = SourceStreamProxy(
+        sources,
+        resolve: (_) {
+          if (++resolves == 1) throw const SourceException('Temporary failure');
+          return Future.value(
+            SourceStreamMedia(file: PreparedSourceAudio(file, directory)),
+          );
+        },
+      );
+      await proxy.start();
+      addTearDown(proxy.close);
+      final url = proxy.uri(track);
+      expect((await http.get(url)).statusCode, 502);
+      expect((await http.get(url)).bodyBytes, [1, 2, 3]);
+      expect(resolves, 2);
+    },
+  );
   test('closing with a failing resolution retires the cache safely', () async {
     final started = Completer<void>();
     final pending = Completer<SourceStreamMedia>();

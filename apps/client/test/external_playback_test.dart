@@ -15,16 +15,64 @@ import 'package:hyperstream_client/services/music_sources.dart';
 import 'support/fake_player.dart';
 
 const externalSong = Track(
-  id: 'external:source:one',
+  id: 'external:mornye:tidal-web:one',
   title: 'Song',
   artist: 'Artist',
   album: 'Album',
   duration: Duration(minutes: 3),
-  source: SourceReference(sourceId: 'source', trackId: 'one'),
+  source: SourceReference(sourceId: 'mornye:tidal-web', trackId: 'one'),
 );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('a pending Qobuz challenge does not block SoundCloud recovery', (
+    tester,
+  ) async {
+    final sources = MusicSources.instance.extensions!;
+    final client = NavidromeClient(
+      serverUrl: 'https://library.example',
+      username: 'test',
+      password: 'test',
+    );
+    final player = FakePlayer()..failNextLoad = true;
+    var prompts = 0;
+    final playback = PlaybackService(
+      player: player,
+      sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+      verifySource: (_) async {
+        prompts++;
+        return false;
+      },
+    );
+    addTearDown(() async {
+      sources.issue.value = null;
+      sources.verification.value = null;
+      final disposing = playback.dispose();
+      await tester.pump();
+      await disposing;
+      client.close();
+    });
+    sources.verification.value = 'qobuz-web';
+    sources.issue.value = 'This source could not connect.';
+    await playback.playAlbum(client, const [
+      Track(
+        id: 'external:soundcloud:one',
+        title: 'Upload',
+        artist: 'Creator',
+        album: '',
+        duration: Duration(minutes: 3),
+        source: SourceReference(sourceId: 'mornye:soundcloud', trackId: 'one'),
+      ),
+    ], 0);
+    expect(prompts, 0);
+    expect(playback.reconnecting, true);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(player.playing, true);
+    expect(playback.error.value, isNull);
+    expect(prompts, 0);
+    expect(sources.verification.value, 'qobuz-web');
+  });
   testWidgets(
     'initial stream failure starts verification and resumes playback automatically',
     (tester) async {
@@ -85,7 +133,10 @@ void main() {
         username: 'user',
         password: 'private',
       );
-      final player = FakePlayer()..failNextLoad = true;
+      final player = _VerificationPlayer(() {
+        sources.issue.value = 'Tidal needs verification to continue.';
+        sources.verification.value = 'tidal-web';
+      })..failNextLoad = true;
       final verification = Completer<bool>();
       var prompts = 0;
       final playback = PlaybackService(
@@ -169,7 +220,7 @@ void main() {
         (player.loaded.single.single as UriAudioSource).uri.host,
         'source.example',
       );
-      expect(playback.trackAt(0)!.source!.sourceId, 'source');
+      expect(playback.trackAt(0)!.source!.sourceId, 'mornye:tidal-web');
       for (var i = 0; i < 30; i++) {
         elapsed += const Duration(seconds: 4);
         player.emit();
@@ -236,4 +287,26 @@ void main() {
       }
     },
   );
+}
+
+class _VerificationPlayer extends FakePlayer {
+  _VerificationPlayer(this.onFailure);
+  final void Function() onFailure;
+  @override
+  Future<Duration?> setAudioSources(
+    List<AudioSource> audioSources, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+    ShuffleOrder? shuffleOrder,
+  }) {
+    if (failNextLoad) onFailure();
+    return super.setAudioSources(
+      audioSources,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+      shuffleOrder: shuffleOrder,
+    );
+  }
 }

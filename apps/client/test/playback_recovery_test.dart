@@ -14,7 +14,10 @@ import 'support/account_fakes.dart';
 import 'support/fake_player.dart';
 
 class _Recovery {
-  final player = FakePlayer();
+  _Recovery({FakePlayer? player, this.resetSourcePlayback})
+    : player = player ?? FakePlayer();
+  final FakePlayer player;
+  final Future<void> Function()? resetSourcePlayback;
   final client = AccountClient(
     serverUrl: 'https://example.test',
     username: 'user',
@@ -26,6 +29,7 @@ class _Recovery {
     player: player,
     playbackStore: (_) => store,
     artworkLoader: (_, _) async => null,
+    resetSourcePlayback: resetSourcePlayback,
   );
 
   Future<void> failPlay() async {
@@ -55,6 +59,72 @@ class _Recovery {
 }
 
 void main() {
+  for (final action in ['Play', 'automatic retry', 'another song']) {
+    testWidgets('$action rebuilds a failed native player and source session', (
+      tester,
+    ) async {
+      final player = _StickyPlayer();
+      var sourceResets = 0;
+      final brokenAtSourceReset = <bool>[];
+      final f = _Recovery(
+        player: player,
+        resetSourcePlayback: () async {
+          brokenAtSourceReset.add(player.broken);
+          sourceResets++;
+        },
+      );
+      await f.playback.attachAccount(f.client, remember: true);
+      await f.playback.play();
+      player.position = const Duration(seconds: 62);
+      await player.setVolume(.4);
+      await player.setSpeed(.75);
+      await player.setLoopMode(LoopMode.all);
+      player.broken = true;
+      player.errors.add(PlayerException(1, 'private failure', 2));
+      switch (action) {
+        case 'Play':
+          await f.playback.play();
+        case 'automatic retry':
+          await tester.pump(const Duration(seconds: 2));
+        case 'another song':
+          await f.playback.playAlbum(f.client, continuityTracks, 1);
+      }
+      await tester.pumpAndSettle();
+      expect(player.stops, 1);
+      expect(sourceResets, 1);
+      expect(brokenAtSourceReset, [
+        false,
+      ], reason: 'Stop the native player before replacing its stream session.');
+      expect(player.playing, true);
+      expect(f.playback.error.value, isNull);
+      expect(player.volume, .4);
+      expect(player.speed, .75);
+      if (action != 'another song') {
+        expect(player.currentIndex, 2);
+        expect(player.position, const Duration(seconds: 62));
+        expect(player.loopMode, LoopMode.all);
+        expect(player.shuffleIndices, [1, 2, 0]);
+      }
+      await f.close(tester);
+    });
+  }
+  testWidgets('Pause during a playback reset prevents unwanted autoplay', (
+    tester,
+  ) async {
+    final resetting = Completer<void>();
+    final f = _Recovery(resetSourcePlayback: () => resetting.future);
+    await f.failPlay();
+    final retry = f.playback.play();
+    await tester.pump();
+    await f.playback.pause();
+    resetting.complete();
+    await retry;
+    await tester.pump();
+    expect(f.player.playing, false);
+    expect(f.player.currentIndex, 2);
+    expect(f.player.position, const Duration(seconds: 47));
+    await f.close(tester);
+  });
   testWidgets(
     'Play can recover a load that failed before publishing a media item',
     (tester) async {
@@ -273,4 +343,35 @@ void main() {
     expect(f.player.position, const Duration(seconds: 62));
     await f.close(tester);
   });
+}
+
+class _StickyPlayer extends FakePlayer {
+  bool broken = false;
+  int stops = 0;
+  @override
+  Future<Duration?> setAudioSources(
+    List<AudioSource> audioSources, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+    ShuffleOrder? shuffleOrder,
+  }) {
+    if (broken) {
+      throw PlayerException(1, 'Native player needs recreation', initialIndex);
+    }
+    return super.setAudioSources(
+      audioSources,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+      shuffleOrder: shuffleOrder,
+    );
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    broken = false;
+    await super.stop();
+  }
 }

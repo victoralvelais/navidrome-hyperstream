@@ -39,6 +39,7 @@ class PlaybackService extends BaseAudioHandler {
     PlaybackStore Function(NavidromeClient)? playbackStore,
     Uri Function(SourceReference)? sourceStreamUri,
     Future<bool> Function(SourceReference)? verifySource,
+    Future<void> Function()? resetSourcePlayback,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        _configureSession = configureSession ?? _configureNativeSession,
@@ -47,6 +48,8 @@ class PlaybackService extends BaseAudioHandler {
        _random = random ?? Random() {
     _sourceStreamUri = sourceStreamUri ?? MusicSources.instance.streamUri;
     _verifySource = verifySource ?? MusicSources.instance.verifyPlayback;
+    _resetSourcePlayback =
+        resetSourcePlayback ?? MusicSources.instance.resetPlayback;
     _storeFactory = playbackStore;
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
@@ -96,6 +99,9 @@ class PlaybackService extends BaseAudioHandler {
   final AudioPlayer _player;
   late final Uri Function(SourceReference) _sourceStreamUri;
   late final Future<bool> Function(SourceReference) _verifySource;
+  late final Future<void> Function() _resetSourcePlayback;
+  bool _needsPlaybackReset = false;
+  bool _resettingPlayback = false;
   int? _sourceVerificationEpoch;
   int? _verificationRecoveryRevision;
   final _sourceArtwork = SystemArtwork();
@@ -490,7 +496,21 @@ class PlaybackService extends BaseAudioHandler {
       if (revision != _revision) return;
       _loading = true;
       try {
-        await _player.pause();
+        if (_needsPlaybackReset) {
+          // Reloading items can retain a failed AVPlayer/decoder. Stop releases
+          // the native instance; the next load reactivates it with our saved
+          // queue, position, rate, repeat, shuffle and volume.
+          _resettingPlayback = true;
+          try {
+            await _player.stop();
+            await _resetSourcePlayback();
+            _needsPlaybackReset = false;
+          } finally {
+            _resettingPlayback = false;
+          }
+        } else {
+          await _player.pause();
+        }
         if (revision != _revision) return;
         await _player.setShuffleModeEnabled(false);
         if (revision != _revision) return;
@@ -785,7 +805,8 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   void _reportFailure() {
-    if (_disposed) return;
+    if (_disposed || _resettingPlayback) return;
+    _needsPlaybackReset = true;
     _retrySnapshot ??= _snapshot();
     // A failed initial load has no listening tracks or native current index.
     // The intended queue still identifies the source whose resolver failed.
@@ -798,7 +819,8 @@ class PlaybackService extends BaseAudioHandler {
         : null;
     final needsVerification =
         sourceIssue != null &&
-        MusicSources.instance.extensions?.verification.value != null;
+        failedTrack?.source != null &&
+        MusicSources.instance.needsPlaybackVerification(failedTrack!.source!);
     final wantedPlayback = _playWhenReady || _reconnectWanted;
     final now = _timerClock();
     if (_lastPlaybackFailure == null ||
