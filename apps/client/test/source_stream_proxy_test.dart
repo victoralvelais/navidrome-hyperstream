@@ -84,6 +84,7 @@ void main() {
           ),
           sourceId: 'mornye:qobuz-web',
           format: 'flac',
+          bitRate: 941,
         );
       },
     );
@@ -99,7 +100,8 @@ void main() {
     expect(retry.statusCode, 200);
     expect(retry.bodyBytes, [1, 2, 3]);
     expect(resolves, 2);
-    expect(published.single.label, 'Qobuz · FLAC');
+    expect(published.single.bitRate, 941);
+    expect(published.single.label, 'Qobuz · FLAC · 941 kbps');
     expect(sources.issue.value, isNull);
   });
   test(
@@ -417,6 +419,87 @@ void main() {
     await proxy.close();
     expect(await directory.exists(), false);
   });
+
+  for (final probeFails in [false, true]) {
+    test(
+      'prepared audio remains seekable ${probeFails ? 'after probe failure' : 'while bitrate is pending'}',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'hyperstream-probe-',
+        );
+        final file = await File('${directory.path}/source.m4a')
+            .writeAsBytes([0, 1, 2, 3, 4, 5]);
+        const resolvedSource = 'mornye:qobuz-web';
+        const quality = SourcePlaybackInfo(
+          sourceId: resolvedSource,
+          format: 'm4a',
+          codec: 'aac',
+          bitRate: 129,
+          bitRateEstimated: true,
+        );
+        final probe = Completer<SourcePlaybackInfo?>();
+        final updated = Completer<void>();
+        final published = <SourcePlaybackInfo>[];
+        var probes = 0;
+        var resolves = 0;
+        final proxy = SourceStreamProxy(
+          sources,
+          resolve: (_) async {
+            resolves++;
+            return SourceStreamMedia(
+              sourceId: resolvedSource,
+              file: PreparedSourceAudio(file, directory),
+            );
+          },
+          onMedia: (reference, info) {
+            expect(reference, track);
+            published.add(info);
+            if (info.bitRate != null && !updated.isCompleted) {
+              updated.complete();
+            }
+          },
+          probeAudio: (prepared, sourceId) {
+            probes++;
+            expect(prepared.path, file.path);
+            expect(sourceId, resolvedSource);
+            return probe.future;
+          },
+        );
+        await proxy.start();
+        addTearDown(() async {
+          if (!probe.isCompleted) probe.complete(null);
+          await proxy.close();
+        });
+        final url = proxy.uri(track);
+        expect((await http.get(url)).bodyBytes, [0, 1, 2, 3, 4, 5]);
+        expect(published.last.sourceId, resolvedSource);
+        expect(published.last.bitRate, isNull);
+        final pendingSeek = await http.get(
+          url,
+          headers: {'Range': 'bytes=2-4'},
+        );
+        expect(pendingSeek.statusCode, 206);
+        expect(pendingSeek.bodyBytes, [2, 3, 4]);
+
+        if (probeFails) {
+          probe.completeError(
+            const FormatException('Malformed probe response'),
+          );
+        } else {
+          probe.complete(quality);
+          await updated.future.timeout(const Duration(seconds: 2));
+        }
+        final cachedSeek = await http.get(url, headers: {'Range': 'bytes=4-5'});
+        expect(cachedSeek.statusCode, 206);
+        expect(cachedSeek.bodyBytes, [4, 5]);
+        expect(published.last.bitRate, probeFails ? null : 129);
+        expect(published.last.bitRateEstimated, !probeFails);
+        expect(resolves, 1);
+        expect(probes, 1);
+        expect(sources.issue.value, isNull);
+      },
+    );
+  }
 }
 
 class _MappedClient extends Fake implements HttpClient {

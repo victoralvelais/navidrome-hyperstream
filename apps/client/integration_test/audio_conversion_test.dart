@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/mp3_converter.dart';
+import 'package:hyperstream_client/services/playback_audio_probe.dart';
 import 'package:hyperstream_client/services/source_audio_preparation.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -41,11 +42,24 @@ void main() {
         );
         final probe = await FFprobeKit.getMediaInformation(playback.path);
         final data = probe.getMediaInformation()!.getAllProperties()!;
-        expect((data['streams'] as List).single['codec_name'], 'aac');
+        final stream = (data['streams'] as List).single as Map;
+        expect(stream['codec_name'], 'aac');
         expect(
           double.parse((data['format'] as Map)['duration'] as String),
           closeTo(4, .2),
         );
+        const youtube = 'mornye:ytmusic-spotiflac';
+        final quality = await PlaybackAudioProbe.read(playback, youtube);
+        expect(quality, isNotNull);
+        expect(quality!.sourceId, youtube);
+        expect(quality.format, 'm4a');
+        expect(quality.codec, 'aac');
+        expect(quality.bitRate, greaterThan(0));
+        expect(
+          quality.bitRate,
+          (int.parse(stream['bit_rate'] as String) / 1000).round(),
+        );
+        expect(quality.bitRateEstimated, isFalse);
         const track = Track(
           id: 'synthetic-upload',
           title: 'Upload',
@@ -85,6 +99,14 @@ void main() {
           input.path,
         ]);
         expect(ReturnCode.isSuccess(await source.getReturnCode()), true);
+        const qobuz = 'mornye:qobuz-web';
+        final quality = await PlaybackAudioProbe.read(input, qobuz);
+        expect(quality, isNotNull);
+        expect(quality!.sourceId, qobuz);
+        expect(quality.format, 'flac');
+        expect(quality.codec, 'flac');
+        expect(quality.bitRate, greaterThan(0));
+        expect(quality.bitRateEstimated, isTrue);
         const track = Track(
           id: 'synthetic',
           title: 'Synthetic title',

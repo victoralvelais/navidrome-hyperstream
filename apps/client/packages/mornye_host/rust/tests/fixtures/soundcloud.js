@@ -6,7 +6,8 @@ function rawTrack(id) {
     media:{transcodings:[
       {url:'https://example.test/hls', format:{protocol:'hls', mime_type:'audio/mp4'},
         snipped:id === '5'},
-      ...(id === '1' ? [{url:'https://example.test/audio',
+      ...(['1', '6'].includes(id) ? [{url:'https://example.test/audio',
+        preset:id === '1' ? 'mp3_0_1' : 'mp3_0_128k',
         format:{protocol:'progressive', mime_type:'audio/mpeg'}}] : [])
     ]}};
 }

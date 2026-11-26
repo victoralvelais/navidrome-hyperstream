@@ -5,6 +5,8 @@ import '../models/source_reference.dart';
 import 'mornye_provider.dart';
 import 'mornye_sources.dart';
 import 'music_provider.dart';
+import 'playback_audio_probe.dart';
+import 'playback_diagnostics.dart';
 
 /// Lazy, range-preserving URLs for the native queue. Only the loopback listener
 /// knows these per-launch tokens; resolved provider URLs never enter queue JSON.
@@ -13,12 +15,14 @@ class SourceStreamProxy {
     this.sources, {
     this.resolve,
     this.onMedia,
+    this.probeAudio = PlaybackAudioProbe.read,
     HttpClient Function()? client,
   }) : _client = client ?? HttpClient.new;
   final HttpClient Function() _client;
   final Future<SourceStreamMedia> Function(SourceReference)? resolve;
   final MornyeSources sources;
   final void Function(SourceReference, SourcePlaybackInfo)? onMedia;
+  final Future<SourcePlaybackInfo?> Function(File, String) probeAudio;
   HttpServer? _server;
   var _token = MornyeSources.nonce();
   final _tracks = <String, SourceReference>{};
@@ -93,10 +97,18 @@ class SourceStreamProxy {
           'This source did not return a valid stream.',
         );
       }
+      final reportedRate = result['bitrate_kbps'];
       return SourceStreamMedia(
         uri: uri,
         sourceId: result['sourceId'] as String?,
         format: result['format'] as String?,
+        bitRate:
+            reportedRate is num &&
+                reportedRate.isFinite &&
+                reportedRate >= 1 &&
+                reportedRate <= 10000
+            ? reportedRate.round()
+            : null,
         headers: result['headers'] is Map
             ? Map<String, dynamic>.from(result['headers'] as Map)
             : const {},
@@ -122,6 +134,9 @@ class SourceStreamProxy {
     clients.add(client);
     String? id;
     SourceStreamMedia? usedMedia;
+    SourceReference? activeTrack;
+    final watch = Stopwatch()..start();
+    var stage = PlaybackStage.resolve;
     var servingAudio = false;
     void ready() {
       servingAudio = true;
@@ -130,14 +145,40 @@ class SourceStreamProxy {
         final track = _tracks[request.uri.pathSegments[1]];
         final media = usedMedia;
         if (track != null && media != null) {
+          final sourceId =
+              media.file?.sourceId ?? media.sourceId ?? track.sourceId;
           onMedia?.call(
             track,
-            SourcePlaybackInfo(
-              sourceId:
-                  media.file?.sourceId ?? media.sourceId ?? track.sourceId,
-              format: media.file?.file.path.split('.').last ?? media.format,
-            ),
+            media.info ??
+                SourcePlaybackInfo(
+                  sourceId: sourceId,
+                  format: media.file?.file.path.split('.').last ?? media.format,
+                  bitRate: media.bitRate,
+                ),
           );
+          if (media.file != null && media.probing == null && onMedia != null) {
+            final entry = cache[id];
+            media.probing = () async {
+              try {
+                final info = await probeAudio(media.file!.file, sourceId);
+                if (!closed.isCompleted && identical(cache[id], entry)) {
+                  sources.diagnostics.record(
+                    stage: PlaybackStage.mediaProbe,
+                    outcome: info == null
+                        ? PlaybackOutcome.failed
+                        : PlaybackOutcome.ready,
+                    sourceId: sourceId,
+                  );
+                  if (info != null) {
+                    media.info = info;
+                    onMedia?.call(track, info);
+                  }
+                }
+              } on Object {
+                // Optional quality metadata must never break audio playback.
+              }
+            }();
+          }
         }
       }
     }
@@ -151,6 +192,7 @@ class SourceStreamProxy {
         request.response.statusCode = HttpStatus.notFound;
         return;
       }
+      activeTrack = track;
       id = '${parts[1]}@${sources.revision}';
       if (!sources.has(track.sourceId.replaceFirst('mornye:', ''))) {
         throw const SourceException('Enable this provider in Music sources.');
@@ -158,6 +200,7 @@ class SourceStreamProxy {
       var media = await _resolve(id, track, cache, closed.future);
       if (closed.isCompleted) return;
       usedMedia = media;
+      stage = PlaybackStage.transport;
       if (media.file == null &&
           DateTime.now().difference(media.created) >
               const Duration(minutes: 5)) {
@@ -258,6 +301,13 @@ class SourceStreamProxy {
       // or discard a successfully prepared file. Genuine playback failures
       // still reach the player's error stream and trigger a fresh session.
       if (!closed.isCompleted && !servingAudio) {
+        sources.diagnostics.record(
+          stage: stage,
+          outcome: PlaybackOutcome.failed,
+          sourceId: activeTrack?.sourceId ?? 'unknown',
+          elapsedMs: watch.elapsedMilliseconds,
+          privateError: error.toString(),
+        );
         sources.issue.value = error is SourceException
             ? error.message
             : 'Playback could not reach this music source. Try again.';
@@ -289,7 +339,7 @@ class SourceStreamProxy {
     }
   }
 
-  static Future<HttpClientResponse> _open(
+  Future<HttpClientResponse> _open(
     HttpClient client,
     HttpRequest incoming,
     SourceStreamMedia media,
@@ -317,6 +367,15 @@ class SourceStreamProxy {
       final response = await outgoing.close().timeout(
         const Duration(seconds: 30),
       );
+      // Range probes beyond EOF are a normal part of native player loading.
+      if (response.statusCode >= 400 && response.statusCode != 416) {
+        sources.diagnostics.record(
+          stage: PlaybackStage.transport,
+          outcome: PlaybackOutcome.failed,
+          sourceId: media.sourceId ?? 'unknown',
+          httpStatus: response.statusCode,
+        );
+      }
       if (![301, 302, 303, 307, 308].contains(response.statusCode)) {
         return response;
       }
@@ -429,10 +488,14 @@ class SourceStreamMedia {
     this.prepare,
     this.sourceId,
     this.format,
+    this.bitRate,
   });
   final Uri? uri;
   final String? sourceId;
   final String? format;
+  final int? bitRate;
+  SourcePlaybackInfo? info;
+  Future<void>? probing;
   final PreparedSourceAudio? file;
   final Map<String, dynamic> headers;
   final Future<PreparedSourceAudio> Function()? prepare;

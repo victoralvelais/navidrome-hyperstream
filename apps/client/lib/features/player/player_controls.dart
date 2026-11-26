@@ -13,6 +13,7 @@ import '../../services/navidrome_client.dart';
 import '../../services/playback_service.dart';
 import '../../services/camera_service.dart';
 import '../../widgets/glass_surface.dart';
+import '../../widgets/music_source_icon.dart';
 import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
 import '../library/cover_art.dart';
@@ -26,6 +27,64 @@ import '../search/source_import_action.dart';
 
 part 'now_playing_part.dart';
 part 'camera_page.dart';
+
+Future<void> _showPlaybackDiagnostics(
+  BuildContext context,
+  PlaybackService playback,
+) {
+  final report = playback.diagnostics.report(
+    appVersion: const String.fromEnvironment('HYPERSTREAM_VERSION'),
+    platform: Theme.of(context).platform.name.toLowerCase(),
+  );
+  return showGlassSheet<void>(
+    context: context,
+    builder: (context) => FractionallySizedBox(
+      heightFactor: .7,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Playback diagnostics',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Recent playback stages and safe error codes. No accounts, song names, addresses, or stream links. Nothing is sent automatically.',
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(child: SelectableText(report)),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: report));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Playback diagnostics copied'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Copy diagnostics'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 String _time(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
@@ -330,6 +389,11 @@ class _PlayerErrors extends StatelessWidget {
           onPressed: playback.pause,
           child: const Text('Stop retrying'),
         ),
+      if (state.processingState == AudioProcessingState.error)
+        TextButton(
+          onPressed: () => _showPlaybackDiagnostics(context, playback),
+          child: const Text('Playback details'),
+        ),
       ValueListenableBuilder<String?>(
         valueListenable: playback.settingsError,
         builder: (context, error, _) => error == null
@@ -404,12 +468,7 @@ class _SeekBarState extends State<_SeekBar> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      widget.item?.extras?['audioDetails'] as String? ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
+                    child: _AudioDetails(item: widget.item),
                   ),
                 ),
                 Text(
@@ -422,6 +481,43 @@ class _SeekBarState extends State<_SeekBar> {
       );
     },
   );
+}
+
+class _AudioDetails extends StatelessWidget {
+  const _AudioDetails({required this.item});
+  final MediaItem? item;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item == null) return const SizedBox.shrink();
+    final id =
+        item!.extras?['playbackSourceId'] as String? ??
+        item!.extras?['sourceId'] as String? ??
+        'navidrome';
+    final details = item!.extras?['audioDetails'] as String? ?? '';
+    final label = id == 'navidrome'
+        ? ['Navidrome', if (details.isNotEmpty) details].join(' · ')
+        : details;
+    return Tooltip(
+      message:
+          '$label${label.contains('≈') ? '\nApproximate file bitrate, including container overhead.' : ''}',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          MusicSourceIcon(sourceId: id, name: musicSourceName(id), size: 16),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PlaybackView extends StatelessWidget {

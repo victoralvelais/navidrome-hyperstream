@@ -18,6 +18,7 @@ import 'startup_stage.dart';
 import 'system_artwork.dart';
 import 'playback_store.dart';
 import 'song_playback_store.dart';
+import 'playback_diagnostics.dart';
 
 class SleepTimerState {
   const SleepTimerState({this.deadline, this.endOfTrack = false});
@@ -43,8 +44,10 @@ class PlaybackService extends BaseAudioHandler {
     Future<bool> Function(SourceReference)? verifySource,
     Future<void> Function()? resetSourcePlayback,
     ValueListenable<Map<String, SourcePlaybackInfo>>? sourcePlaybackInfo,
+    PlaybackDiagnostics? diagnostics,
     this.sourceLoadTimeout = const Duration(seconds: 90),
   }) : _player = player ?? AudioPlayer(),
+       diagnostics = diagnostics ?? PlaybackDiagnostics.instance,
        preferences = preferences ?? AppPreferences(),
        songPlaybackStore = songPlaybackStore ?? SongPlaybackStore(),
        _configureSession = configureSession ?? _configureNativeSession,
@@ -70,7 +73,7 @@ class PlaybackService extends BaseAudioHandler {
       _player.playerStateStream.listen((_) => _publishState()),
       _player.currentIndexStream.listen((_) => _publishItem()),
       _player.durationStream.listen((_) => _publishItem()),
-      _player.errorStream.listen((_) => _reportFailure()),
+      _player.errorStream.listen(_reportFailure),
     ]);
   }
 
@@ -108,12 +111,18 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   final AudioPlayer _player;
+  final PlaybackDiagnostics diagnostics;
   final Duration sourceLoadTimeout;
   late final Uri Function(SourceReference) _sourceStreamUri;
   late final Future<bool> Function(SourceReference) _verifySource;
   late final Future<void> Function() _resetSourcePlayback;
   late final ValueListenable<Map<String, SourcePlaybackInfo>>
   _sourcePlaybackInfo;
+
+  String _playbackSource(Track track) => track.source == null
+      ? 'navidrome'
+      : _sourcePlaybackInfo.value[track.source!.identity]?.sourceId ??
+            track.source!.sourceId;
 
   String _audioDetails(Track track) {
     final source = track.source;
@@ -131,7 +140,11 @@ class PlaybackService extends BaseAudioHandler {
       final track = trackAt(entry.$1);
       if (track?.source == null) return entry.$2;
       return entry.$2.copyWith(
-        extras: {...?entry.$2.extras, 'audioDetails': _audioDetails(track!)},
+        extras: {
+          ...?entry.$2.extras,
+          'audioDetails': _audioDetails(track!),
+          'playbackSourceId': _playbackSource(track),
+        },
       );
     }).toList();
     queue.add(items);
@@ -626,6 +639,12 @@ class PlaybackService extends BaseAudioHandler {
       return Future.value();
     }
     if (shuffle) index = _random.nextInt(tracks.length);
+    final watch = Stopwatch()..start();
+    diagnostics.record(
+      stage: PlaybackStage.player,
+      outcome: PlaybackOutcome.started,
+      sourceId: tracks[index].source?.sourceId,
+    );
     _abandonLoad();
     _cancelReconnect(resetBudget: !automaticRecovery);
     _healthyPlaybackSince = null;
@@ -709,6 +728,7 @@ class PlaybackService extends BaseAudioHandler {
                   'audioDetails': _audioDetails(entry.$2),
                   'sourceArtwork': ?entry.$2.source?.artwork?.toString(),
                   'sourceId': ?entry.$2.source?.sourceId,
+                  'playbackSourceId': _playbackSource(entry.$2),
                   'external': entry.$2.source != null,
                 },
               ),
@@ -799,13 +819,19 @@ class PlaybackService extends BaseAudioHandler {
         }
         _publishState();
         _scheduleCheckpoint();
+        diagnostics.record(
+          stage: PlaybackStage.player,
+          outcome: PlaybackOutcome.ready,
+          sourceId: _playbackSource(tracks[index]),
+          elapsedMs: watch.elapsedMilliseconds,
+        );
         if (_playWhenReady) {
           unawaited(_play(automaticRecovery: automaticRecovery));
         }
       } on Object catch (failure) {
         if (revision == _revision) {
           _loading = false;
-          _reportFailure();
+          _reportFailure(failure);
           if (failure is TimeoutException && tracks[index].source != null) {
             // A native load can remain pending without emitting an error. End
             // this attempt so Play/new selections can reach stop and reset.
@@ -1037,7 +1063,7 @@ class PlaybackService extends BaseAudioHandler {
     }
   }
 
-  void _reportFailure() {
+  void _reportFailure([Object? failure]) {
     if (_disposed || _resettingPlayback) return;
     _needsPlaybackReset = true;
     // Some native failures arrive on the error stream before (or without)
@@ -1054,6 +1080,13 @@ class PlaybackService extends BaseAudioHandler {
     final failedTrack = snapshot == null
         ? trackAt(_player.currentIndex ?? -1)
         : snapshot.tracks[snapshot.index];
+    diagnostics.record(
+      stage: PlaybackStage.player,
+      outcome: PlaybackOutcome.failed,
+      sourceId: failedTrack == null ? 'unknown' : _playbackSource(failedTrack),
+      nativeCode: failure is PlayerException ? failure.code : null,
+      privateError: failure?.toString(),
+    );
     final sourceIssue = failedTrack?.source != null
         ? MusicSources.instance.extensions?.issue.value
         : null;
@@ -1235,8 +1268,8 @@ class PlaybackService extends BaseAudioHandler {
     final revision = _revision;
     try {
       await command();
-    } on Object {
-      if (!_disposed && revision == _revision) _reportFailure();
+    } on Object catch (failure) {
+      if (!_disposed && revision == _revision) _reportFailure(failure);
     }
   }
 

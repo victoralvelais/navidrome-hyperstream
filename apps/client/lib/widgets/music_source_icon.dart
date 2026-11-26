@@ -39,7 +39,9 @@ class MusicSourceIcon extends StatelessWidget {
         child: ExcludeSemantics(
           child: SizedBox.square(
             dimension: size,
-            child: slug == null
+            child: sourceId == 'navidrome'
+                ? Icon(Icons.library_music_rounded, size: size, color: color)
+                : slug == null
                 ? Center(
                     child: Text(
                       sourceId == 'mornye:qobuz-web' ? 'Q' : 'M',

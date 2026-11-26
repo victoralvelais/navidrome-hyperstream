@@ -114,6 +114,11 @@ mod tests {
         assert_eq!(direct["url"], "https://example.test/audio");
         assert_eq!(direct["format"], "mp3");
         assert_eq!(direct["prepareOnFailure"], true);
+        assert!(direct.get("bitrate_kbps").is_none());
+        let with_bitrate = host
+            .call(&sc_call("hyperstreamResolve", json!(["6", "aac_160"])))
+            .unwrap();
+        assert_eq!(with_bitrate["bitrate_kbps"], 128);
         assert_eq!(
             host.call(&sc_call("hyperstreamResolve", json!(["2", "aac_160"])))
                 .unwrap(),
@@ -163,8 +168,9 @@ mod tests {
         fs::write(dir.join("index.js"), r#"
             function requestInnerTubeAudioDownload(id) {
                 if (id === 'failed') throw new Error('provider unavailable');
-                return {extension:'.opus', url:'https://example.test/opus', alternatives:
-                    id === 'opus' ? [] : [{extension:'.m4a', url:'https://example.test/'+id, ua:'Synthetic client'}]};
+                return {extension:'.opus', url:'https://example.test/opus', bitrate:160000, alternatives:
+                    id === 'opus' ? [] : [{extension:'.m4a', url:'https://example.test/'+id,
+                        ua:'Synthetic client', bitrate:id === 'invalid-bitrate' ? 10000001 : 127600}]};
             }
             function waitUntilAvailable() { return true; }
             function fetchVideoMetadataSync(id) { return {id:id, title:'User upload', duration:150}; }
@@ -241,7 +247,11 @@ mod tests {
             host.call(&request("videos-fail")).unwrap()[0]["id"],
             "studio"
         );
-        assert!(host.call(&request("both-fail")).is_err());
+        let error = host.call(&request("both-fail")).unwrap_err();
+        assert!(
+            error.contains("Synthetic category failure"),
+            "The pinned runtime should preserve the thrown JavaScript message"
+        );
     }
     #[test]
     fn youtube_stream_uses_m4a_with_request_context_or_prepares_audio() {
@@ -253,6 +263,8 @@ mod tests {
         assert_eq!(direct["url"], "https://example.test/exact-upload");
         assert_eq!(direct["headers"]["User-Agent"], "Synthetic client");
         assert_eq!(direct["prepareOnFailure"], true);
+        assert_eq!(direct["bitrate_kbps"], 128);
+        assert!(resolve("invalid-bitrate").get("bitrate_kbps").is_none());
         assert_eq!(resolve("opus"), json!({"prepare":true}));
         assert_eq!(resolve("failed"), json!({"prepare":true}));
     }

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/features/player/player_controls.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
+import 'package:hyperstream_client/services/playback_diagnostics.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/song_playback_store.dart';
 import 'package:just_audio/just_audio.dart';
@@ -23,6 +25,7 @@ class _Recovery {
   final FakePlayer player;
   final SongPlaybackStore? songPlaybackStore;
   final Future<void> Function()? resetSourcePlayback;
+  final diagnostics = PlaybackDiagnostics();
   final client = AccountClient(
     serverUrl: 'https://example.test',
     username: 'user',
@@ -36,6 +39,7 @@ class _Recovery {
     playbackStore: (_) => store,
     artworkLoader: (_, _) async => null,
     resetSourcePlayback: resetSourcePlayback,
+    diagnostics: diagnostics,
   );
 
   Future<void> failPlay() async {
@@ -65,6 +69,84 @@ class _Recovery {
 }
 
 void main() {
+  testWidgets('playback diagnostics can be copied before and after recovery', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final f = _Recovery();
+    final clipboard = <String>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        clipboard.add(call.arguments['text'] as String);
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await f.failPlay();
+    f.diagnostics.record(
+      stage: PlaybackStage.transport,
+      outcome: PlaybackOutcome.failed,
+      sourceId: 'mornye:qobuz-web',
+      privateError: 'HTTP 429 at https://private.example/secret?token=secret',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.iOS),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: PlayerControls(playback: f.playback, client: f.client),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> copyDetails() async {
+      await tester.tap(find.text('Playback details'));
+      await tester.pumpAndSettle();
+      expect(find.text('Playback diagnostics'), findsOneWidget);
+      await tester.tap(find.text('Copy diagnostics'));
+      await tester.pumpAndSettle();
+      expect(clipboard.last, contains('rate-limited'));
+      expect(clipboard.last, contains('429'));
+      expect(clipboard.last, contains('Qobuz'));
+      expect(clipboard.last, isNot(contains('private.example')));
+      expect(clipboard.last, isNot(contains('secret')));
+      await tester.tap(find.text('Done').last);
+      await tester.pumpAndSettle();
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+          .removeCurrentSnackBar();
+      await tester.pumpAndSettle();
+    }
+
+    await copyDetails();
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pumpAndSettle();
+    expect(f.playback.error.value, isNull);
+    expect(find.text('Playback details'), findsNothing);
+    await tester.tap(find.text(f.playback.mediaItem.value!.title));
+    await tester.pumpAndSettle();
+    final queue = find.byTooltip('Show queue');
+    await Scrollable.ensureVisible(tester.element(queue), alignment: .35);
+    await tester.pumpAndSettle();
+    await tester.tap(queue);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Queue options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Player info'));
+    await tester.pumpAndSettle();
+    await copyDetails();
+    expect(clipboard, hasLength(2));
+    await f.close(tester);
+  });
+
   testWidgets(
     'Play recovers from a failed load while song edits are disabled',
     (tester) async {

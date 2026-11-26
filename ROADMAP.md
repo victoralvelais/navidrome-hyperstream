@@ -1,5 +1,22 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 26: playback diagnostics and Now Playing source quality, 0.65.0
+
+- Add Playback details to playback errors and Queue > Player info. Keep a bounded
+  session-only timeline of safe stage labels, timing, provider versions, recognized
+  failure categories and HTTP/native codes. Copy explicitly; never retain raw
+  errors, titles, account data, server addresses, private paths or stream URLs.
+- Classify both thrown provider failures and structured failure responses. Keep
+  verification and finite automatic recovery; an upstream outage still needs a
+  working provider. Unclassified failures remain honestly unclassified.
+- Show the actual audio provider's colored icon beside Now Playing quality,
+  including matched Spotify results. Distinguish server songs with a purple
+  library icon and Navidrome label.
+- Probe prepared local audio once for codec and bitrate without delaying playback.
+  Prefer audio-stream bitrate; mark eligible file-level estimates with ≈. Forward
+  reported SoundCloud/YouTube direct-stream bitrate when provided. Leave unknown
+  values absent; never infer encoded bitrate from the requested quality.
+
 ## November 26: online reliability, original lossy audio and listening history, 0.64.0
 
 - Bound external playback startup and automatic recovery. A slow failed request

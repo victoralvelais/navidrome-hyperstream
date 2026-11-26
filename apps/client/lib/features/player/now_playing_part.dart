@@ -406,9 +406,13 @@ class _QueuePageState extends State<_QueuePage> {
             content: Text(
               track == null
                   ? 'Nothing playing'
-                  : '${track.title}\n${track.artist}\n${track.album}\n\nOriginal file${track.audioDetails.isEmpty ? '' : ' · ${track.audioDetails}'}\nPlayback rate: ${playback.playbackState.value.speed}×',
+                  : '${track.title}\n${track.artist}\n${track.album}\n\n${track.source == null ? 'Navidrome · ' : ''}${playback.mediaItem.value?.extras?['audioDetails'] ?? track.audioDetails}\nPlayback rate: ${playback.playbackState.value.speed}×',
             ),
             actions: [
+              TextButton(
+                onPressed: () => _showPlaybackDiagnostics(context, playback),
+                child: const Text('Playback details'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Done'),

@@ -57,8 +57,12 @@ function hyperstreamSoundCloudResolve(id) {
         (format !== 'm4a' && format !== 'mp3')) continue;
     try {
       var url = resolveStreamURL(candidate, track);
-      return {url:url, format:format, prepareOnFailure:true,
+      var resolved = {url:url, format:format, prepareOnFailure:true,
         headers:{'User-Agent':userAgentForURL(url)}};
+      var bitrate = String(candidate.preset || '').match(/_(\d+)k/);
+      if (bitrate && Number(bitrate[1]) > 0 && Number(bitrate[1]) <= 10000)
+        resolved.bitrate_kbps = Number(bitrate[1]);
+      return resolved;
     } catch (_) { /* The reviewed downloader can prepare another full stream. */ }
   }
   // The existing preparation path joins HLS locally, retaining duration checks,
@@ -189,12 +193,15 @@ registerExtension = function(extension) {
         for (var i = 0; i < candidates.length; i++) {
           var audio = candidates[i];
           if (audio.extension === '.m4a' && audio.url && waitUntilAvailable(audio)) {
-            return {
+            var resolved = {
               url:audio.url, format:'m4a', prepareOnFailure:true,
               headers:{'User-Agent':audio.ua || getRandomUserAgent(),
                 'Referer':'https://www.youtube.com/watch?v=' + id,
                 'Origin':'https://www.youtube.com'}
             };
+            if (Number(audio.bitrate) > 0 && Number(audio.bitrate) <= 10000000)
+              resolved.bitrate_kbps = Math.round(Number(audio.bitrate) / 1000);
+            return resolved;
           }
         }
       } catch (_) { /* The downloader retains the package's own fallbacks. */ }

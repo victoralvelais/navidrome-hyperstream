@@ -18,6 +18,7 @@ import 'account_store.dart';
 import 'music_provider.dart';
 import 'remote_transfer_background.dart';
 import 'source_verification.dart';
+import 'playback_diagnostics.dart';
 import '../models/source_reference.dart';
 
 class MornyeExtension {
@@ -52,7 +53,9 @@ class MornyeSources extends ChangeNotifier {
     Future<String?> Function(String)? read,
     Future<void> Function(String, String)? write,
     Future<String> Function(Uri, String)? authenticate,
+    PlaybackDiagnostics? diagnostics,
   }) : _native = native ?? callMornye,
+       diagnostics = diagnostics ?? PlaybackDiagnostics.instance,
        _directory = directory ?? getApplicationSupportDirectory,
        _authenticate =
            authenticate ??
@@ -68,6 +71,7 @@ class MornyeSources extends ChangeNotifier {
            ((key, value) =>
                SecureAccountStore.defaultStorage.write(key: key, value: value));
   static final instance = MornyeSources();
+  final PlaybackDiagnostics diagnostics;
   final Future<dynamic> Function(Map<String, dynamic>) _native;
   final Future<Directory> Function() _directory;
   final Future<String?> Function(String) _read;
@@ -248,6 +252,26 @@ class MornyeSources extends ChangeNotifier {
       if (!_ready) throw SourceException(error!);
     }
     final requestId = nonce();
+    final watch = Stopwatch()..start();
+    final providerId = request['id'] as String?;
+    final stage = switch (request['method']) {
+      'hyperstreamResolve' => PlaybackStage.resolve,
+      'hyperstreamDownload' => PlaybackStage.download,
+      _ => PlaybackStage.provider,
+    };
+    void record(PlaybackOutcome outcome, [String? detail]) =>
+        diagnostics.record(
+          stage: stage,
+          outcome: outcome,
+          sourceId: 'mornye:${providerId ?? 'unknown'}',
+          extensionVersion: extensions
+              .where((e) => e.id == providerId)
+              .firstOrNull
+              ?.version,
+          elapsedMs: watch.elapsedMilliseconds,
+          privateError: detail,
+        );
+    record(PlaybackOutcome.started);
     var finished = false;
     _operations++;
     _pump ??= Timer.periodic(
@@ -270,6 +294,17 @@ class MornyeSources extends ChangeNotifier {
       if (result is Map &&
           (result['success'] == false ||
               result['needs_verification'] == true)) {
+        final detail = [
+          if (result['needs_verification'] == true) 'verification_required',
+          for (final key in [
+            'error_message',
+            'error',
+            'error_code',
+            'error_type',
+          ])
+            if (result[key] is String) result[key] as String,
+        ].join(' ');
+        record(PlaybackOutcome.failed, detail);
         await _checkVerification(request['id'] as String?);
         if (request['id'] == 'soundcloud' &&
             result['error_code'] == 'track_unavailable') {
@@ -277,16 +312,16 @@ class MornyeSources extends ChangeNotifier {
             'This SoundCloud upload does not offer a full playable stream. Try another upload.',
           );
         }
-        throw const SourceException(
-          'This provider could not supply the requested music. Try another source.',
-        );
+        throw SourceException(_providerFailure(providerId, detail));
       }
       if (request['op'] == 'save_settings') {
         revision++;
         notifyListeners();
       }
+      record(PlaybackOutcome.ready);
       return result;
     } on MornyeHostException catch (failure) {
+      record(PlaybackOutcome.failed, failure.detail);
       await _checkVerification(request['id'] as String?);
       throw SourceException(
         _providerFailure(request['id'] as String?, failure.detail),
@@ -305,28 +340,29 @@ class MornyeSources extends ChangeNotifier {
     final provider = id == null ? 'This provider' : name(id);
     // Classify known extension/runtime errors, but never surface the original
     // text: it can contain signed URLs, headers, session grants or response data.
-    final message = detail.toLowerCase();
-    if (RegExp(r'\bhttp\s+429\b').hasMatch(message) ||
-        message.contains('rate limit') ||
-        message.contains('too many requests')) {
+    final reasons = PlaybackFailureFacts.read(detail).reasons;
+    if (reasons.contains('rate-limited')) {
       return '$provider is limiting requests. Wait a little before retrying, or choose another source.';
     }
-    if (message.contains('timeout') ||
-        message.contains('timed out') ||
-        message.contains('deadline exceeded')) {
+    if (reasons.contains('timeout')) {
       return '$provider took too long to return audio. Try again or choose another source.';
     }
-    if (RegExp(r'\bhttp\s+5\d\d\b').hasMatch(message)) {
+    if (reasons.contains('upstream-service-error')) {
       return '$provider’s audio service is temporarily unavailable. Try again later or choose another source.';
     }
-    if (RegExp(r'\bhttp\s+(401|403)\b').hasMatch(message)) {
+    if (reasons.contains('access-rejected')) {
       return '$provider rejected access to this request. Try again or choose another source.';
     }
-    if (RegExp(r'\bhttp\s+404\b').hasMatch(message) ||
-        message.contains('track unavailable') ||
-        message.contains('track not found') ||
-        message.contains('not available for streaming')) {
+    if (reasons.contains('recording-unavailable')) {
       return '$provider could not provide this recording. Choose another source.';
+    }
+    if (reasons.contains('all-audio-providers-failed')) {
+      return '$provider could not get audio from any of its providers. Try again later or choose another source.';
+    }
+    if (reasons.contains('upstream-challenge') ||
+        reasons.contains('unexpected-response-format') ||
+        reasons.contains('incomplete-provider-response')) {
+      return '$provider’s audio service returned an unusable response. Try again later or choose another source.';
     }
     return '$provider could not complete this request. Try again or choose another source.';
   }
@@ -343,6 +379,12 @@ class MornyeSources extends ChangeNotifier {
       return;
     }
     if (pending != null) {
+      diagnostics.record(
+        stage: PlaybackStage.provider,
+        outcome: PlaybackOutcome.failed,
+        sourceId: 'mornye:$id',
+        privateError: 'verification_required',
+      );
       verification.value = id;
       throw ProviderVerificationRequired(id, name: name(id));
     }

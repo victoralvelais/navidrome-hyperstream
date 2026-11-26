@@ -189,20 +189,37 @@ void main() {
         playback.queue.value.single.extras?['sourceId'],
         song.source!.sourceId,
       );
+      expect(
+        playback.queue.value.single.extras?['playbackSourceId'],
+        'mornye:qobuz-web',
+      );
+      expect(
+        playback.mediaItem.value?.extras?['playbackSourceId'],
+        'mornye:qobuz-web',
+      );
       expect(playback.mediaItem.value?.extras?['audioDetails'], 'Qobuz · FLAC');
 
       info.value = {
         song.source!.identity: const SourcePlaybackInfo(
           sourceId: 'mornye:tidal-web',
           format: 'aac',
+          bitRate: 132,
+          bitRateEstimated: true,
         ),
       };
       expect(
         playback.queue.value.single.extras?['audioDetails'],
-        'Tidal · AAC',
+        'Tidal · AAC · ≈132 kbps',
+      );
+      expect(
+        playback.mediaItem.value?.extras?['playbackSourceId'],
+        'mornye:tidal-web',
       );
       await playback.pause();
-      expect(playback.mediaItem.value?.extras?['audioDetails'], 'Tidal · AAC');
+      expect(
+        playback.mediaItem.value?.extras?['audioDetails'],
+        'Tidal · AAC · ≈132 kbps',
+      );
     },
   );
   testWidgets('a pending Qobuz challenge does not block SoundCloud recovery', (

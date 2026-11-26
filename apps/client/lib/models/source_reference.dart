@@ -47,6 +47,7 @@ class SourceReference {
 }
 
 String musicSourceName(String id) => switch (id) {
+  'navidrome' => 'Navidrome',
   'mornye:spotify-web' => 'Spotify',
   'mornye:ytmusic-spotiflac' => 'YouTube',
   'mornye:soundcloud' => 'SoundCloud',
@@ -58,10 +59,18 @@ String musicSourceName(String id) => switch (id) {
 
 /// Public media facts only. Resolved URLs and authorization never reach the UI.
 class SourcePlaybackInfo {
-  const SourcePlaybackInfo({required this.sourceId, this.format, this.bitRate});
+  const SourcePlaybackInfo({
+    required this.sourceId,
+    this.format,
+    this.codec,
+    this.bitRate,
+    this.bitRateEstimated = false,
+  });
   final String sourceId;
   final String? format;
+  final String? codec;
   final int? bitRate;
+  final bool bitRateEstimated;
 
   String get label => [
     musicSourceName(sourceId),
@@ -78,7 +87,12 @@ class SourcePlaybackInfo {
           'caf',
         ].contains(format!.toLowerCase()))
       format!.toUpperCase(),
-    if (bitRate != null && bitRate! > 0 && bitRate! <= 10000) '$bitRate kbps',
+    if (codec != null &&
+        ['aac', 'alac', 'opus', 'vorbis'].contains(codec) &&
+        codec != format?.toLowerCase())
+      codec!.toUpperCase(),
+    if (bitRate != null && bitRate! > 0 && bitRate! <= 10000)
+      '${bitRateEstimated ? '≈' : ''}$bitRate kbps',
   ].join(' · ');
 }
 

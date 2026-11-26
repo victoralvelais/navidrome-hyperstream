@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/services/mornye_sources.dart';
 import 'package:hyperstream_client/services/music_provider.dart';
+import 'package:hyperstream_client/services/playback_diagnostics.dart';
 import 'package:mornye_host/mornye_host.dart';
 
 void main() {
@@ -14,11 +16,13 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late Directory directory;
   late MornyeSources sources;
+  late PlaybackDiagnostics diagnostics;
   late Map<String, String> saved;
   late List<String> operations;
   late bool rejectDirectory;
   late bool rejectEngine;
   late String? providerFailure;
+  late Map<String, Object>? structuredFailure;
   late bool rejectPending;
 
   setUp(() async {
@@ -29,6 +33,7 @@ void main() {
     rejectDirectory = false;
     rejectEngine = false;
     providerFailure = null;
+    structuredFailure = null;
     rejectPending = false;
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'prepareDirectory');
@@ -38,7 +43,9 @@ void main() {
       }
       return null;
     });
+    diagnostics = PlaybackDiagnostics();
     sources = MornyeSources(
+      diagnostics: diagnostics,
       directory: () async => directory,
       read: (key) async => saved[key],
       write: (key, value) async {
@@ -54,12 +61,15 @@ void main() {
         if (request['op'] == 'resolve' && providerFailure != null) {
           throw MornyeHostException(providerFailure!);
         }
+        if (request['method'] == 'hyperstreamDownload') {
+          return structuredFailure;
+        }
         if (request['op'] == 'pending' && rejectPending) {
           throw const MornyeHostException('Private pending request failure');
         }
         if (request['op'] == 'list') {
           return [
-            if (providerFailure != null)
+            if (providerFailure != null || structuredFailure != null)
               {
                 'id': 'qobuz-web',
                 'display_name': 'Qobuz',
@@ -140,7 +150,11 @@ void main() {
       providerFailure = '$detail https://example.test/audio?token=synthetic';
       rejectPending = true;
       await expectLater(
-        sources.execute({'op': 'resolve', 'id': 'qobuz-web'}),
+        sources.execute({
+          'op': 'resolve',
+          'id': 'qobuz-web',
+          'method': 'hyperstreamResolve',
+        }),
         throwsA(
           isA<SourceException>()
               .having((error) => error.message, 'provider', contains('Qobuz'))
@@ -156,6 +170,46 @@ void main() {
               ),
         ),
       );
+      final report = diagnostics.report();
+      final events =
+          (jsonDecode(report) as Map<String, dynamic>)['events']
+              as List<dynamic>;
+      expect(events.last, containsPair('stage', 'resolve'));
+      expect(events.last, containsPair('outcome', 'failed'));
+      expect(events.last, containsPair('source', 'Qobuz'));
+      expect(report, isNot(contains('example.test')));
     });
   }
+
+  test(
+    'structured download failure supplies safe facts to diagnostics',
+    () async {
+      structuredFailure = {
+        'success': false,
+        'error_message': 'HTTP 503 for https://example.test/?token=synthetic',
+      };
+      await expectLater(
+        sources.execute({
+          'op': 'download',
+          'id': 'qobuz-web',
+          'method': 'hyperstreamDownload',
+        }),
+        throwsA(
+          isA<SourceException>().having(
+            (error) => error.message,
+            'message',
+            contains('temporarily unavailable'),
+          ),
+        ),
+      );
+      final report = diagnostics.report();
+      final events =
+          (jsonDecode(report) as Map<String, dynamic>)['events']
+              as List<dynamic>;
+      expect(events.last, containsPair('stage', 'download'));
+      expect(events.last, containsPair('outcome', 'failed'));
+      expect(events.last, containsPair('http_status', [503]));
+      expect(report, isNot(contains('example.test')));
+    },
+  );
 }

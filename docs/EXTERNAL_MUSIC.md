@@ -1,4 +1,4 @@
-# External music in 0.60.2
+# External music
 
 ## Use
 
@@ -73,6 +73,27 @@ catalog result: Spotify audio still resolves through the chosen audio provider.
 Playback and Send to folder retain the selected result's source identity.
 Duplicates within one provider are removed; copies across providers, remixes and
 different uploads remain separate so you can choose the version you want.
+
+### Playback details and quality
+
+Now Playing shows the audio provider's colored icon and name; Spotify catalog
+matches show the provider actually supplying audio. Your server songs show a
+library icon and **Navidrome**, rather than implying the file is on the phone.
+Known codec/format and kbps appear alongside the source. Prepared local files are
+probed without blocking playback; direct streams use provider-reported bitrate
+when available. An **≈** marks a file-level estimate that can include artwork or
+container overhead. Unknown bitrate stays absent, and bitrate is not a measure of
+lossless compression quality or the original upload's quality.
+
+If playback fails, tap **Playback details → Copy diagnostics** and include the
+report when describing the failed song/action. It is also available under
+**Queue → Player info → Playback details** after recovery. Capture it before
+restarting: the last 80 events live only in memory. Reports contain fixed stage
+labels, timing, provider versions, recognized failure reasons, and HTTP/native
+codes; they omit song names/IDs, account data, addresses, paths, URLs and raw error
+text. Nothing is automatically uploaded. Release builds include the app version.
+An unclassified error needs further investigation; this report does not claim an
+upstream service has been fixed or bypass verification.
 
 ### SoundCloud
 
