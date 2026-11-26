@@ -54,7 +54,7 @@ class _TempoControls extends StatelessWidget {
     initialData: playback.playbackState.value,
     builder: (context, snapshot) {
       final speed = (snapshot.data?.speed ?? 1).clamp(.5, 2.0);
-      final enabled = playback.mediaItem.value != null;
+      final enabled = playback.canEditSongSettings;
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         child: Column(
@@ -74,6 +74,13 @@ class _TempoControls extends StatelessWidget {
                   child: const Text('Reset 1×'),
                 ),
               ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Saved for this song',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
             Wrap(
               spacing: 6,
@@ -131,26 +138,33 @@ class _TempoControls extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [Text('0.50×'), Text('2.00×')],
             ),
-            ListenableBuilder(
-              listenable: playback.preferences,
-              builder: (context, _) => SwitchListTile.adaptive(
+            ValueListenableBuilder(
+              valueListenable: playback.songPlaybackSettings,
+              builder: (context, songSettings, _) => SwitchListTile.adaptive(
                 key: const ValueKey('keep-pitch-toggle'),
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Keep pitch'),
                 subtitle: Text(
                   !playback.supportsPitchControl
                       ? 'Pitch control is not available on Windows yet'
-                      : playback.preferences.keepPitch
+                      : songSettings.keepPitch
                       ? 'Original pitch at every speed'
                       : 'Pitch changes with speed',
                 ),
-                value:
-                    !playback.supportsPitchControl ||
-                    playback.preferences.keepPitch,
+                value: !playback.supportsPitchControl || songSettings.keepPitch,
                 onChanged: enabled && playback.supportsPitchControl
                     ? playback.setKeepPitch
                     : null,
               ),
+            ),
+            ListenableBuilder(
+              listenable: playback.songPlaybackStore,
+              builder: (context, _) {
+                final notice = playback.songPlaybackStore.notice;
+                return notice == null
+                    ? const SizedBox.shrink()
+                    : Semantics(liveRegion: true, child: Text(notice));
+              },
             ),
             ValueListenableBuilder<String?>(
               valueListenable: playback.settingsError,

@@ -19,26 +19,18 @@ class FakePreferenceStorage extends Fake implements SharedPreferencesAsync {
 }
 
 void main() {
-  test('pitch defaults to preservation and persists both choices', () async {
-    String? saved;
-    final preferences = AppPreferences(save: (json) async => saved = json);
-    addTearDown(preferences.dispose);
-    expect(preferences.keepPitch, isTrue);
-    for (final keepPitch in [false, true]) {
-      await preferences.setKeepPitch(keepPitch);
-      await preferences.setVolume(.42);
-      expect(jsonDecode(saved!)['keepPitch'], keepPitch);
-      final restored = AppPreferences()..restore(saved!);
-      expect(restored.keepPitch, keepPitch);
-      expect(restored.volume, .42);
-      restored.dispose();
-    }
-    for (final json in ['{}', '{"keepPitch":"false"}']) {
-      final restored = AppPreferences()..restore(json);
-      expect(restored.keepPitch, isTrue);
-      restored.dispose();
-    }
-  });
+  test(
+    'legacy global pitch is ignored without losing other preferences',
+    () async {
+      String? saved;
+      final preferences = AppPreferences(save: (json) async => saved = json)
+        ..restore('{"keepPitch":false,"volume":0.42}');
+      addTearDown(preferences.dispose);
+      expect(preferences.volume, .42);
+      await preferences.setVolume(.5);
+      expect(jsonDecode(saved!)['keepPitch'], isNull);
+    },
+  );
 
   test(
     'each icon style survives restart and unrelated preference changes',

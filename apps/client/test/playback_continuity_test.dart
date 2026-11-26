@@ -107,7 +107,7 @@ void main() {
     expect(player.preloads, [false]);
     expect(playback.playbackState.value.playing, isFalse);
     expect(playback.playbackState.value.repeatMode, AudioServiceRepeatMode.all);
-    expect(player.speed, 1.25);
+    expect(player.speed, 1);
     expect(playback.sleepTimer.value, isNull);
     expect(playback.queue.value.last.extras?['coverArtId'], 'cover');
     final uri = (player.loaded.single.first as UriAudioSource).uri;

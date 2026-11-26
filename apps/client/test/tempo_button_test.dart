@@ -1,4 +1,3 @@
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,9 +6,10 @@ import 'package:hyperstream_client/features/player/playback_settings_group.dart'
 import 'package:hyperstream_client/features/player/player_controls.dart';
 import 'package:hyperstream_client/features/player/tempo_button.dart';
 import 'package:hyperstream_client/models/library.dart';
-import 'package:hyperstream_client/services/app_preferences.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
+import 'package:hyperstream_client/services/song_playback_store.dart';
+import 'package:hyperstream_client/widgets/glass_overlays.dart';
 
 import 'support/fake_player.dart';
 
@@ -45,7 +45,9 @@ void main() {
         final saves = <String>[];
         final playback = PlaybackService(
           player: player,
-          preferences: AppPreferences(save: (json) async => saves.add(json)),
+          songPlaybackStore: SongPlaybackStore(
+            save: (json) async => saves.add(json),
+          ),
           configureSession: (_) async {},
         );
         final client = NavidromeClient(
@@ -105,6 +107,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(UiKitView), findsNothing);
         expect(find.byType(ChoiceChip), findsNWidgets(6));
+        expect(find.text('Saved for this song'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.widgetWithText(ChoiceChip, '0.75×'));
         await tester.pumpAndSettle();
@@ -116,13 +119,19 @@ void main() {
         expect(player.position, const Duration(seconds: 45));
         expect(player.playCalls, calls);
         expect(player.playing, isFalse);
+        final errorMessage = find.descendant(
+          of: find.byType(GlassMenuContent<void>),
+          matching: find.text(
+            "Could not change this song's audio settings. Try again.",
+          ),
+        );
         final pitch = find.byKey(const ValueKey('keep-pitch-toggle'));
         expect(find.text('Original pitch at every speed'), findsOneWidget);
         await tester.tap(pitch);
         await tester.pumpAndSettle();
         expect(find.text('Pitch changes with speed'), findsOneWidget);
         expect(player.preservesPitch, isFalse);
-        expect(playback.preferences.keepPitch, isFalse);
+        expect(playback.songPlaybackSettings.value.keepPitch, isFalse);
         final savesBeforeFailure = saves.length;
         expect(savesBeforeFailure, greaterThan(0));
         player.failPitch = true;
@@ -130,38 +139,37 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Pitch changes with speed'), findsOneWidget);
         expect(player.preservesPitch, isFalse);
-        expect(playback.preferences.keepPitch, isFalse);
+        expect(playback.songPlaybackSettings.value.keepPitch, isFalse);
         expect(saves, hasLength(savesBeforeFailure));
         expect(find.textContaining('private native pitch error'), findsNothing);
-        expect(
-          find
-              .text('Could not change the audio setting. Try again.')
-              .hitTestable(),
-          findsOneWidget,
-        );
+        await tester.ensureVisible(errorMessage);
+        await tester.pumpAndSettle();
+        expect(errorMessage.hitTestable(), findsOneWidget);
         player.failPitch = false;
+        await tester.ensureVisible(pitch);
         await tester.tap(pitch);
         await tester.pumpAndSettle();
         expect(find.text('Original pitch at every speed'), findsOneWidget);
-        expect(playback.preferences.keepPitch, isTrue);
+        expect(playback.songPlaybackSettings.value.keepPitch, isTrue);
         expect(player.preservesPitch, isTrue);
         expect(player.speed, .77);
         expect(player.position, const Duration(seconds: 45));
         expect(player.playCalls, calls);
         expect(player.playing, isFalse);
         player.failSpeed = true;
-        await tester.tap(find.widgetWithText(ChoiceChip, '1.50×'));
+        final faster = find.widgetWithText(ChoiceChip, '1.50×');
+        await tester.ensureVisible(faster);
+        await tester.tap(faster);
         await tester.pumpAndSettle();
         expect(player.speed, .77);
-        expect(
-          find
-              .text('Could not change the audio setting. Try again.')
-              .hitTestable(),
-          findsOneWidget,
-        );
+        await tester.ensureVisible(errorMessage);
+        await tester.pumpAndSettle();
+        expect(errorMessage.hitTestable(), findsOneWidget);
         expect(find.textContaining('private native error'), findsNothing);
         player.failSpeed = false;
-        await tester.tap(find.text('Reset 1×'));
+        final reset = find.text('Reset 1×');
+        await tester.ensureVisible(reset);
+        await tester.tap(reset);
         await tester.pumpAndSettle();
         expect(player.speed, 1);
         await tester.tapAt(const Offset(2, 2));
@@ -182,8 +190,25 @@ void main() {
     tester,
   ) async {
     final player = FakePlayer();
-    final playback = PlaybackService(player: player);
-    playback.mediaItem.add(const MediaItem(id: 'one', title: 'Coastline'));
+    final playback = PlaybackService(
+      player: player,
+      configureSession: (_) async {},
+    );
+    final client = NavidromeClient(
+      serverUrl: 'https://music.example.com',
+      username: 'test',
+      password: 'test',
+    );
+    addTearDown(client.close);
+    await playback.playAlbum(client, const [
+      Track(
+        id: 'one',
+        title: 'Coastline',
+        artist: 'Northline',
+        album: 'Album',
+        duration: Duration(minutes: 3),
+      ),
+    ], 0);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: TempoButton(playback: playback)),

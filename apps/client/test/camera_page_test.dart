@@ -159,7 +159,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('keep-pitch-toggle')));
         await tester.pumpAndSettle();
         expect(player.preservesPitch, isFalse);
-        expect(playback.preferences.keepPitch, isFalse);
+        expect(playback.songPlaybackSettings.value.keepPitch, isFalse);
         expect(player.speed, 1.25);
         expect(camera.recording, isTrue);
         expect(player.position, const Duration(seconds: 45));

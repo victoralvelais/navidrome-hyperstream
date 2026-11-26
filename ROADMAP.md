@@ -1,5 +1,21 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 26: per-song tempo and pitch, 0.62.0
+
+- Save tempo and Keep pitch for each exact song on this device. New songs start
+  at 1× with pitch preservation; moving through the queue restores each song's
+  own choice, including repeats, previous/next, restored queues and recovery.
+- Scope library identities to their Navidrome server/account; scope online
+  identities to provider and track ID. Persist only hashed keys and settings,
+  without credentials, server addresses, artwork or stream URLs.
+- Replace the global pitch preference and legacy queue-wide tempo restoration.
+  Keep song choices separate from app configuration and clearing the queue.
+- Fence delayed controls to their originating selection, so a late command
+  cannot save another song's settings or block playback recovery. Surface
+  storage failures and preserve unread data instead of overwriting it.
+- The shared player/camera controls indicate that settings belong to this song.
+  Windows saves per-song speed; pitch switching remains unavailable there.
+
 ## November 25: pitch mode in the tempo popover, 0.61.0
 
 - Add a saved Keep pitch toggle alongside the shared tempo presets and slider.

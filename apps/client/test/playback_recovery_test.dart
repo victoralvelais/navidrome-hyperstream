@@ -4,9 +4,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/features/player/player_controls.dart';
-import 'package:hyperstream_client/services/app_preferences.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
+import 'package:hyperstream_client/services/song_playback_store.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'playback_continuity_test.dart'
@@ -15,10 +15,13 @@ import 'support/account_fakes.dart';
 import 'support/fake_player.dart';
 
 class _Recovery {
-  _Recovery({FakePlayer? player, this.resetSourcePlayback, this.preferences})
-    : player = player ?? FakePlayer();
+  _Recovery({
+    FakePlayer? player,
+    this.resetSourcePlayback,
+    this.songPlaybackStore,
+  }) : player = player ?? FakePlayer();
   final FakePlayer player;
-  final AppPreferences? preferences;
+  final SongPlaybackStore? songPlaybackStore;
   final Future<void> Function()? resetSourcePlayback;
   final client = AccountClient(
     serverUrl: 'https://example.test',
@@ -29,7 +32,7 @@ class _Recovery {
     ..value = savedQueue(index: 2, order: [1, 2, 0]);
   late final playback = PlaybackService(
     player: player,
-    preferences: preferences,
+    songPlaybackStore: songPlaybackStore,
     playbackStore: (_) => store,
     artworkLoader: (_, _) async => null,
     resetSourcePlayback: resetSourcePlayback,
@@ -63,7 +66,7 @@ class _Recovery {
 
 void main() {
   testWidgets(
-    'Play recovers while the failed load and an audio setting are pending',
+    'Play recovers from a failed load while song edits are disabled',
     (tester) async {
       final player = _SpeedGatedPlayer()..supportsPitchControl = true;
       final f = _Recovery(player: player);
@@ -75,9 +78,11 @@ void main() {
           .whenComplete(() => finished = true);
       await tester.pump();
       expect(finished, false);
+      expect(f.playback.canEditSongSettings, isFalse);
       final speedChange = f.playback.setSpeed(.75);
       await tester.pump();
-      expect(player.speedChangeStarted, isTrue);
+      expect(player.speedChangeStarted, isFalse);
+      await speedChange;
       f.player.errors.add(PlayerException(1, 'private native failure', 1));
       await tester.pumpAndSettle();
       expect(
@@ -97,14 +102,40 @@ void main() {
       expect(f.player.currentIndex, 1);
       expect(f.playback.error.value, isNull);
       stuck.completeError(PlayerException(1, 'late old failure', 1));
-      player.speedChangeGate.complete();
-      await speedChange;
       await tester.pumpAndSettle();
       expect(f.playback.error.value, isNull);
       expect(f.player.playing, true);
       await f.close(tester);
     },
   );
+  testWidgets('Play recovers while a prior song edit is pending', (
+    tester,
+  ) async {
+    final player = _SpeedGatedPlayer()..supportsPitchControl = true;
+    final f = _Recovery(player: player);
+    await f.playback.playAlbum(f.client, continuityTracks, 1);
+    final speedChange = f.playback.setSpeed(.75);
+    await tester.pump();
+    expect(player.speedChangeStarted, isTrue);
+    player.errors.add(PlayerException(1, 'private native failure', 1));
+    await tester.pumpAndSettle();
+    expect(f.playback.canRetryPlayback, isTrue);
+    var recovered = false;
+    final retry = f.playback.play().whenComplete(() => recovered = true);
+    await tester.pumpAndSettle();
+    expect(recovered, isTrue);
+    await retry;
+    expect(player.playing, isTrue);
+    expect(player.currentIndex, 1);
+    expect(player.speed, 1);
+    player.speedChangeGate.complete();
+    await speedChange;
+    await tester.pumpAndSettle();
+    expect(player.speed, 1);
+    expect(f.playback.error.value, isNull);
+    await f.close(tester);
+  });
+
   for (final action in ['Play', 'automatic retry', 'another song']) {
     testWidgets('$action rebuilds a failed native player and source session', (
       tester,
@@ -114,11 +145,15 @@ void main() {
       final brokenAtSourceReset = <bool>[];
       final f = _Recovery(
         player: player,
-        preferences: AppPreferences()..restore('{"keepPitch":false}'),
+        songPlaybackStore: SongPlaybackStore(),
         resetSourcePlayback: () async {
           brokenAtSourceReset.add(player.broken);
           sourceResets++;
         },
+      );
+      await f.songPlaybackStore!.set(
+        SongPlaybackStore.keyFor(f.client, continuityTracks[2]),
+        const SongPlaybackSettings(speed: .75, keepPitch: false),
       );
       await f.playback.attachAccount(f.client, remember: true);
       await f.playback.play();
@@ -126,7 +161,6 @@ void main() {
       expect(player.pitchAtLoad, everyElement(false));
       player.position = const Duration(seconds: 62);
       await player.setVolume(.4);
-      await player.setSpeed(.75);
       await player.setLoopMode(LoopMode.all);
       player.broken = true;
       player.errors.add(PlayerException(1, 'private failure', 2));
@@ -147,9 +181,10 @@ void main() {
       expect(player.playing, true);
       expect(f.playback.error.value, isNull);
       expect(player.volume, .4);
-      expect(player.speed, .75);
-      expect(player.pitchAtLoad.last, isFalse);
-      expect(player.preservesPitch, isFalse);
+      final anotherSong = action == 'another song';
+      expect(player.speed, anotherSong ? 1 : .75);
+      expect(player.pitchAtLoad.last, anotherSong);
+      expect(player.preservesPitch, anotherSong);
       if (action != 'another song') {
         expect(player.currentIndex, 2);
         expect(player.position, const Duration(seconds: 62));

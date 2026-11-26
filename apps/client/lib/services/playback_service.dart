@@ -17,6 +17,7 @@ import 'listen_tracker.dart';
 import 'startup_stage.dart';
 import 'system_artwork.dart';
 import 'playback_store.dart';
+import 'song_playback_store.dart';
 
 class SleepTimerState {
   const SleepTimerState({this.deadline, this.endOfTrack = false});
@@ -30,6 +31,7 @@ class PlaybackService extends BaseAudioHandler {
   PlaybackService({
     AudioPlayer? player,
     AppPreferences? preferences,
+    SongPlaybackStore? songPlaybackStore,
     Future<void> Function(AudioSessionConfiguration)? configureSession,
     Duration Function()? listeningClock,
     DateTime Function()? listeningTime,
@@ -42,6 +44,7 @@ class PlaybackService extends BaseAudioHandler {
     Future<void> Function()? resetSourcePlayback,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
+       songPlaybackStore = songPlaybackStore ?? SongPlaybackStore(),
        _configureSession = configureSession ?? _configureNativeSession,
        _artworkLoader = artworkLoader ?? SystemArtwork().load,
        _timerClock = timerClock ?? DateTime.now,
@@ -70,10 +73,13 @@ class PlaybackService extends BaseAudioHandler {
     AppPreferences? preferences,
     ValueChanged<StartupStage>? onStage,
     PlaybackStore Function(NavidromeClient)? playbackStore,
+    SongPlaybackStore? songPlaybackStore,
   }) async {
     onStage?.call(StartupStage.player);
+    final songSettings = songPlaybackStore ?? await SongPlaybackStore.load();
     PlaybackService build() => PlaybackService(
       preferences: preferences,
+      songPlaybackStore: songSettings,
       playbackStore: playbackStore ?? FilePlaybackStore.new,
     );
     final handler = Platform.isIOS
@@ -89,10 +95,6 @@ class PlaybackService extends BaseAudioHandler {
       );
       onStage?.call(StartupStage.volume);
       await handler._player.setVolume(handler.preferences.volume);
-      if (handler.supportsPitchControl) {
-        await handler._player.setPreservesPitch(handler.preferences.keepPitch);
-        handler._pitchPreferenceInitialized = true;
-      }
     } on Object {
       await handler.dispose();
       rethrow;
@@ -111,6 +113,11 @@ class PlaybackService extends BaseAudioHandler {
   int? _verificationRecoveryRevision;
   final _sourceArtwork = SystemArtwork();
   final AppPreferences preferences;
+  final SongPlaybackStore songPlaybackStore;
+  final songPlaybackSettings = ValueNotifier(const SongPlaybackSettings());
+  String? _activeSongKey;
+  int _songSettingsEpoch = 0;
+  Future<void> _songSettingsPending = Future.value();
   final Future<void> Function(AudioSessionConfiguration) _configureSession;
   final ValueNotifier<String?> settingsError = ValueNotifier(null);
   final ValueNotifier<String?> listeningNotice = ValueNotifier(null);
@@ -126,7 +133,8 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> _settingsPending = Future.value();
   bool get supportsMixing => Platform.isIOS;
   bool get supportsPitchControl => _player.supportsPitchControl;
-  bool _pitchPreferenceInitialized = false;
+  bool get canEditSongSettings =>
+      !_disposed && !_loading && error.value == null && _activeSongKey != null;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final ValueNotifier<String?> error = ValueNotifier(null);
   Future<void> _pending = Future.value();
@@ -380,27 +388,129 @@ class PlaybackService extends BaseAudioHandler {
       });
 
   @override
-  Future<void> setSpeed(double speed) => _changeSetting(() async {
-    if (!speed.isFinite || speed < .5 || speed > 2) return;
-    await _player.setSpeed(speed);
-    _publishState();
-  });
-
-  Future<void> adjustSpeed(double delta) => _changeSetting(() async {
-    if (!delta.isFinite) return;
-    final speed = ((_player.speed + delta).clamp(.5, 2) * 100).round() / 100;
-    await _player.setSpeed(speed);
-    _publishState();
-  });
-
-  Future<void> setKeepPitch(bool enabled) => _changeSetting(() async {
-    if (!supportsPitchControl) {
-      throw UnsupportedError('Pitch control is unavailable.');
+  Future<void> setSpeed(double speed) {
+    if (!speed.isFinite || speed < .5 || speed > 2 || !canEditSongSettings) {
+      return Future.value();
     }
-    await _player.setPreservesPitch(enabled);
-    _pitchPreferenceInitialized = true;
-    unawaited(preferences.setKeepPitch(enabled));
-  });
+    return _queueSongSettings(
+      (value) => SongPlaybackSettings(speed: speed, keepPitch: value.keepPitch),
+    );
+  }
+
+  Future<void> adjustSpeed(double delta) {
+    if (!delta.isFinite || !canEditSongSettings) return Future.value();
+    return _queueSongSettings(
+      (value) => SongPlaybackSettings(
+        speed: (((value.speed + delta).clamp(.5, 2)) * 100).round() / 100,
+        keepPitch: value.keepPitch,
+      ),
+    );
+  }
+
+  Future<void> setKeepPitch(bool enabled) {
+    if (!canEditSongSettings) return Future.value();
+    if (!supportsPitchControl) {
+      settingsError.value = 'Pitch control is unavailable on this device.';
+      return Future.value();
+    }
+    return _queueSongSettings(
+      (value) => SongPlaybackSettings(speed: value.speed, keepPitch: enabled),
+    );
+  }
+
+  void _selectSongSettings(String? key) {
+    _activeSongKey = key;
+    ++_songSettingsEpoch;
+    // A stalled command for an abandoned song must not hold up another song.
+    _songSettingsPending = Future.value();
+    songPlaybackSettings.value = key == null
+        ? const SongPlaybackSettings()
+        : songPlaybackStore.get(key);
+  }
+
+  bool _songIsCurrent(String key, int epoch) =>
+      !_disposed && _activeSongKey == key && _songSettingsEpoch == epoch;
+
+  Future<bool> _applySongSettings(
+    SongPlaybackSettings value,
+    bool Function() current,
+  ) async {
+    if (!current()) return false;
+    if (supportsPitchControl && _player.preservesPitch != value.keepPitch) {
+      await _player.setPreservesPitch(value.keepPitch);
+    }
+    if (!current()) return false;
+    if (_player.speed != value.speed) await _player.setSpeed(value.speed);
+    return current();
+  }
+
+  Future<void> _queueSongSettings([
+    SongPlaybackSettings Function(SongPlaybackSettings)? change,
+  ]) {
+    final key = _activeSongKey;
+    final epoch = _songSettingsEpoch;
+    if (key == null) return Future.value();
+    bool current() => _songIsCurrent(key, epoch) && !_loading;
+    _songSettingsPending = _songSettingsPending.then((_) async {
+      if (!current()) return;
+      final saved = songPlaybackStore.get(key);
+      final value = change == null ? saved : change(saved);
+      try {
+        if (!await _applySongSettings(value, current)) {
+          _repairCurrentSongSettings();
+          return;
+        }
+        if (change != null) unawaited(songPlaybackStore.set(key, value));
+        songPlaybackSettings.value = value;
+        settingsError.value = null;
+        _publishState();
+        _scheduleCheckpoint();
+      } on Object {
+        if (current()) {
+          settingsError.value =
+              'Could not change this song\'s audio settings. Try again.';
+        } else {
+          _repairCurrentSongSettings();
+        }
+      }
+    });
+    return _songSettingsPending;
+  }
+
+  Future<bool> _restoreSongSettings(
+    SongPlaybackSettings value,
+    bool Function() current,
+  ) async {
+    try {
+      final applied = await _applySongSettings(value, current);
+      if (applied) settingsError.value = null;
+      return applied;
+    } on Object {
+      if (!current()) return false;
+      // A rejected setting is not a failed stream. Keep the saved choice for
+      // another attempt, and let the song play with the available settings.
+      settingsError.value = 'Could not apply this song\'s saved audio settings. Adjust the tempo or pitch to try again.';
+      return true;
+    }
+  }
+
+  void _repairCurrentSongSettings() {
+    // Native events can be synchronous; don't issue nested commands from them.
+    scheduleMicrotask(() {
+      if (canEditSongSettings) unawaited(_queueSongSettings());
+    });
+  }
+
+  void _syncSongSettings() {
+    if (_disposed || _loading || error.value != null) return;
+    final client = _listeningClient;
+    final track = trackAt(_player.currentIndex ?? -1);
+    if (client == null || track == null) return;
+    final key = SongPlaybackStore.keyFor(client, track);
+    if (key == _activeSongKey) return;
+    _selectSongSettings(key);
+    _repairCurrentSongSettings();
+  }
 
   Stream<Duration> get positionStream => _player.positionStream;
   Duration get position => _player.position;
@@ -504,6 +614,7 @@ class PlaybackService extends BaseAudioHandler {
     _requestedArtwork.clear();
     _clearListening();
     _loading = true;
+    _selectSongSettings(SongPlaybackStore.keyFor(client, tracks[index]));
     _playWhenReady = autoplay;
     _checkpointState = null;
     error.value = null;
@@ -528,11 +639,16 @@ class PlaybackService extends BaseAudioHandler {
           await _player.pause();
         }
         if (revision != _revision) return;
-        // Initialize once; AudioPlayer retains this choice across native resets.
-        // Recovery must not await an older setting blocked on a failed load.
-        if (supportsPitchControl && !_pitchPreferenceInitialized) {
-          await _player.setPreservesPitch(preferences.keepPitch);
-          _pitchPreferenceInitialized = true;
+        // Read the selected song's choice before loading/playing, independently
+        // of older controls that may be waiting on a failed native load.
+        final value = songPlaybackStore.get(
+          SongPlaybackStore.keyFor(client, tracks[index]),
+        );
+        if (!await _restoreSongSettings(
+          value,
+          () => !_disposed && revision == _revision,
+        )) {
+          return;
         }
         if (revision != _revision) return;
         await _player.setShuffleModeEnabled(false);
@@ -606,8 +722,6 @@ class PlaybackService extends BaseAudioHandler {
           }
           await _player.setLoopMode(LoopMode.values.byName(restored.repeat));
           if (revision != _revision) return;
-          await _player.setSpeed(restored.speed);
-          if (revision != _revision) return;
           await _player.setShuffleModeEnabled(restored.shuffleOrder.isNotEmpty);
           if (revision != _revision) return;
         }
@@ -618,6 +732,14 @@ class PlaybackService extends BaseAudioHandler {
           if (revision != _revision) return;
           await _player.setShuffleModeEnabled(true);
           if (revision != _revision) return;
+        }
+        // A late command from the previous song can settle during this load.
+        // Reconcile once more before allowing audio to start.
+        if (!await _restoreSongSettings(
+          value,
+          () => !_disposed && revision == _revision,
+        )) {
+          return;
         }
         _loading = false;
         _listeningClient = client;
@@ -646,6 +768,7 @@ class PlaybackService extends BaseAudioHandler {
 
   void _publishItem() {
     if (_loading) return;
+    _syncSongSettings();
     final index = _player.currentIndex;
     if (index != null && index >= 0 && index < queue.value.length) {
       final item = queue.value[index];
@@ -826,6 +949,7 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   Future<void> _seekCommand(Future<void> Function() command) async {
+    final previousSongKey = _activeSongKey;
     _seeking = true;
     _syncListening();
     try {
@@ -833,6 +957,9 @@ class PlaybackService extends BaseAudioHandler {
     } finally {
       _seeking = false;
       _publishItem();
+      if (canEditSongSettings && _activeSongKey != previousSongKey) {
+        await _queueSongSettings();
+      }
       _publishState();
       _scheduleCheckpoint();
     }
@@ -1224,6 +1351,7 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> stop() => reset();
 
   Future<void> reset({bool clearSaved = true}) {
+    _selectSongSettings(null);
     _cancelReconnect();
     _retrySnapshot = null;
     _queueClient = null;
@@ -1274,6 +1402,7 @@ class PlaybackService extends BaseAudioHandler {
     await _settingsPending;
     await preferences.flush();
     await reset(clearSaved: false);
+    await songPlaybackStore.flush();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
@@ -1283,6 +1412,8 @@ class PlaybackService extends BaseAudioHandler {
     listeningNotice.dispose();
     sleepTimer.dispose();
     continuityNotice.dispose();
+    songPlaybackSettings.dispose();
+    songPlaybackStore.dispose();
     preferences.dispose();
   }
 }

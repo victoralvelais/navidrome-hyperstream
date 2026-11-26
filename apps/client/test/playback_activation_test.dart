@@ -152,7 +152,7 @@ void main() {
         expect(player.shuffleIndices, [1, 2, 0]);
         expect(player.shuffleModeEnabled, isTrue);
         expect(player.loopMode, LoopMode.all);
-        expect(player.speed, 1.25);
+        expect(player.speed, 1);
         expect(playback.sleepTimer.value?.endOfTrack, isTrue);
         expect(playback.error.value, isNull);
       },
