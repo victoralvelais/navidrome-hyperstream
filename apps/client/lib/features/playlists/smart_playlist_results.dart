@@ -11,6 +11,7 @@ import '../../services/library_catalog.dart';
 import '../../services/playback_service.dart';
 import '../../services/smart_playlist_preview.dart';
 import '../../widgets/library_sync_status.dart';
+import '../library/cover_art.dart';
 
 /// A bounded on-screen sample; Play always uses the full evaluated result.
 class SmartPlaylistResults extends StatelessWidget {
@@ -132,7 +133,17 @@ class SmartPlaylistResults extends StatelessWidget {
           for (final (index, match) in result.matches.take(50).indexed)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Text('${index + 1}'),
+              leading: match.track.source == null
+                  ? Text('${index + 1}')
+                  : SizedBox.square(
+                      dimension: 44,
+                      child: CoverArt(
+                        client: catalog.client,
+                        id: null,
+                        externalUri: match.track.source?.artwork,
+                        sourceId: match.track.source?.sourceId,
+                      ),
+                    ),
               title: Text(
                 match.track.title,
                 maxLines: 2,

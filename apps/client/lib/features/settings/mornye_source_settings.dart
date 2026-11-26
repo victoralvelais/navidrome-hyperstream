@@ -93,7 +93,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Search songs or paste a public playlist link. Play here, then send the songs you want to your remote folder as MP3 320.',
+            'Search songs or paste a public playlist link. Play here, then send songs to your remote folder. Keep lossy audio in its original quality; convert lossless audio to MP3 320.',
           ),
           const SizedBox(height: 16),
           for (final extension in sources.extensions) ...[
@@ -137,7 +137,7 @@ class _MornyeSourceSettingsState extends State<MornyeSourceSettings> {
                       const Padding(
                         padding: EdgeInsets.only(bottom: 8),
                         child: Text(
-                          'Public uploads, remixes and sets. Imports use your saved folder and MP3 320; source quality varies.',
+                          'Public uploads, remixes and sets. Imports keep the source audio quality and use your saved folder.',
                         ),
                       ),
                     if (extension.installed && extension.enabled)

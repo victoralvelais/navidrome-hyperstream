@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -78,6 +79,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
   }
+
+  testWidgets('iOS search keeps the editor focused during text selection', (
+    tester,
+  ) async {
+    await mount(tester, (_) async => results());
+    await query(tester, 'remix');
+    await tester.pumpAndSettle();
+    final editor = tester.state<EditableTextState>(find.byType(EditableText));
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => switch (call.method) {
+        'Clipboard.hasStrings' => {'value': true},
+        'Clipboard.getData' => {'text': 'pasted query'},
+        _ => null,
+      },
+    );
+    final point = editor.renderEditable.localToGlobal(const Offset(16, 8));
+    final gesture = await tester.startGesture(point);
+    await tester.pump();
+    expect(editor.widget.focusNode.hasFocus, isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(point);
+    await tester.pumpAndSettle();
+    expect(editor.widget.controller.selection.isCollapsed, isFalse);
+    await tester.tap(find.text('Paste'));
+    await tester.pumpAndSettle();
+    expect(editor.widget.controller.text, 'pasted query');
+  }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
 
   for (final brightness in Brightness.values) {
     testWidgets(

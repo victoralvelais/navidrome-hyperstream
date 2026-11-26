@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/features/player/player_controls.dart';
 import 'package:hyperstream_client/models/library.dart';
+import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 
@@ -19,6 +20,7 @@ void main() {
       final playback = PlaybackService(
         player: player,
         artworkLoader: (_, _) async => null,
+        sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
       );
       final client = NavidromeClient(
         serverUrl: 'https://example.test',
@@ -41,6 +43,12 @@ void main() {
             artist: 'Artist',
             album: 'Album',
             duration: const Duration(minutes: 3),
+            source: i == 6
+                ? const SourceReference(
+                    sourceId: 'mornye:qobuz-web',
+                    trackId: 'online-song',
+                  )
+                : null,
           ),
         ),
         6,
@@ -57,6 +65,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.byTooltip('Source: Qobuz').hitTestable(), findsOneWidget);
       await tester.tap(find.text('Song 6'));
       await tester.pumpAndSettle();
       await Scrollable.ensureVisible(
@@ -67,11 +76,16 @@ void main() {
       await tester.tap(find.byTooltip('Show queue'));
       await tester.pumpAndSettle();
       final list = find.byKey(const ValueKey('up-next-list'));
+      final currentRow = find.byKey(const ValueKey('queue-current'));
+      expect(
+        find.descendant(
+          of: currentRow,
+          matching: find.byTooltip('Source: Qobuz'),
+        ),
+        findsOneWidget,
+      );
       final current = find
-          .descendant(
-            of: find.byKey(const ValueKey('queue-current')),
-            matching: find.byType(Padding),
-          )
+          .descendant(of: currentRow, matching: find.byType(Padding))
           .first;
       final playerOverlay = find.byKey(const ValueKey('queue-player-overlay'));
       final scroll = tester

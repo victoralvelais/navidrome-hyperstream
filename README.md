@@ -2,7 +2,8 @@
 
 An iPhone-first music app with iPad and Windows support. Navidrome serves the
 permanent library. The app embeds Mornye's extension runtime for external music,
-converts downloads to MP3 at 320 kbps, and sends them to a saved remote folder.
+keeps lossy downloads at their original quality, converts lossless audio to
+MP3 at 320 kbps, and sends them to a saved remote folder.
 Temporary source files are removed after each import attempt.
 
 See [ROADMAP.md](ROADMAP.md) for the product plan. The first client prototype uses

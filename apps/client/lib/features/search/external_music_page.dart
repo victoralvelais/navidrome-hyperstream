@@ -278,40 +278,15 @@ class _ExternalMusicPageState extends State<ExternalMusicPage> {
         : null;
   }
 
-  String _sourceName(String id) =>
-      sources.onlineSources.where((s) => s.id == id).firstOrNull?.name ??
-      (id.startsWith('mornye:') ? id.substring(7) : 'Monochrome');
-
   Widget _artwork(String sourceId, Uri? artwork, double size) =>
       SizedBox.square(
         dimension: size,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CoverArt(
-                client: widget.client,
-                id: null,
-                externalUri: artwork,
-                radius: 10,
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: MusicSourceIcon(
-                  sourceId: sourceId,
-                  name: _sourceName(sourceId),
-                  size: 16,
-                ),
-              ),
-            ),
-          ],
+        child: CoverArt(
+          client: widget.client,
+          id: null,
+          externalUri: artwork,
+          radius: 10,
+          sourceId: sourceId,
         ),
       );
 

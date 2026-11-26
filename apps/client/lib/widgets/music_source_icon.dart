@@ -21,7 +21,16 @@ class MusicSourceIcon extends StatelessWidget {
       'mornye:tidal-web' => 'tidal',
       _ => null,
     };
-    final color = Theme.of(context).colorScheme.onSurface;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final color = switch (sourceId) {
+      'mornye:spotify-web' => Color(dark ? 0xFF1ED760 : 0xFF008A3E),
+      'mornye:soundcloud' => const Color(0xFFFF5500),
+      'mornye:ytmusic-spotiflac' => const Color(0xFFFF0033),
+      'mornye:qobuz-web' => Color(dark ? 0xFF79B4FF : 0xFF2165BA),
+      // TIDAL's identity is monochrome; keep contrast in both themes.
+      'mornye:tidal-web' => Theme.of(context).colorScheme.onSurface,
+      _ => Theme.of(context).colorScheme.primary,
+    };
     return Tooltip(
       message: 'Source: $name',
       excludeFromSemantics: true,

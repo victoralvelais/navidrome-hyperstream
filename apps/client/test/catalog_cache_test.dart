@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:hyperstream_client/models/library.dart';
+import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/catalog_cache.dart';
 import 'package:hyperstream_client/services/recent_radio_service.dart';
 
 import 'recent_radio_service_test.dart' as fixtures;
+import 'external_playback_test.dart' show externalSong;
 
 class MemoryCatalogCache implements CatalogCache {
   CatalogSnapshot? saved;
@@ -123,15 +126,113 @@ void main() {
       ]) {
         expect(raw, isNot(contains(secret)));
       }
+      final legacy = jsonDecode(raw) as Map<String, dynamic>;
+      legacy['schemaVersion'] = 1;
+      legacy.remove('librarySynced');
+      await file.writeAsString(jsonEncode(legacy));
+      final migrated = (await cache.read())!;
+      expect(migrated.librarySynced, isTrue);
+      expect(migrated.tracks.single.id, song.id);
+      expect(migrated.listens['a']!.minimumCount, 9);
       // Replacement of an existing file works on Windows too; readers see the
       // last serialized write even if a prior screen's save is still running.
-      final writing = cache.write(CatalogSnapshot(syncedAt: now, tracks: []));
-      expect((await cache.read())!.tracks, isEmpty);
+      final pendingSnapshot = Completer<CatalogSnapshot>();
+      final writing = cache.writePending(pendingSnapshot.future);
+      final reopened = FileCatalogCache(
+        client,
+        directory: () async => directory,
+      );
+      var readFinished = false;
+      final reading = reopened.read().whenComplete(() => readFinished = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(readFinished, isFalse);
+      pendingSnapshot.complete(CatalogSnapshot(syncedAt: now, tracks: []));
+      expect((await reading)!.tracks, isEmpty);
       await writing;
       await file.writeAsString('{broken');
       expect(await cache.read(), isNull);
       await file.writeAsString('{"schemaVersion": 2}');
       expect(await cache.read(), isNull);
+    },
+  );
+
+  test(
+    'external history survives a cold cache restart and server deletions',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hyperstream-external-history-test-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      var serverAvailable = false;
+      var serverHasSong = true;
+      final client = fixtures.api((request) {
+        if (!serverAvailable) return http.Response('', 503);
+        return fixtures.envelope({
+          'searchResult3': {
+            'song':
+                serverHasSong &&
+                    request.url.queryParameters['songOffset'] == '0'
+                ? [fixtures.song('a')]
+                : [],
+          },
+        });
+      });
+      addTearDown(client.close);
+      final cache = FileCatalogCache(client, directory: () async => directory);
+      final first = RecentRadioService(client, now: () => now, cache: cache);
+      const secondProvider = Track(
+        id: 'external:mornye:qobuz-web:one',
+        title: 'Song',
+        artist: 'Artist',
+        album: 'Album',
+        duration: Duration(minutes: 3),
+        source: SourceReference(sourceId: 'mornye:qobuz-web', trackId: 'one'),
+      );
+      client.recordLocalListen(externalSong, now);
+      client.recordLocalListen(secondProvider, now);
+      await Future<void>.delayed(Duration.zero);
+      await first.flushCache();
+      first.dispose();
+      final ids = {
+        externalSong.source!.identity,
+        secondProvider.source!.identity,
+      };
+      final saved = (await cache.read())!;
+      expect(saved.librarySynced, isFalse);
+      expect(saved.tracks.map((track) => track.source!.identity).toSet(), ids);
+      final raw = await File(
+        '${directory.path}/catalog-v1/${cache.accountKey}.json',
+      ).readAsString();
+      expect(raw, isNot(contains('https://')));
+      final other = fixtures.api((_) => http.Response('', 500), user: 'other');
+      addTearDown(other.close);
+      final otherCache = FileCatalogCache(
+        other,
+        directory: () async => directory,
+      );
+      expect(await otherCache.read(), isNull);
+
+      final restored = RecentRadioService(client, now: () => now, cache: cache);
+      addTearDown(restored.dispose);
+      await restored.ensureLoaded();
+      expect(restored.lastSyncedAt, isNull);
+      expect(
+        restored.tracks.map((track) => track.source!.identity).toSet(),
+        ids,
+      );
+      expect(restored.tracks.map((track) => track.playCount), everyElement(1));
+
+      serverAvailable = true;
+      await restored.refresh();
+      expect(restored.tracks.map((track) => track.id), contains('a'));
+      serverHasSong = false;
+      await restored.refresh();
+      expect(
+        restored.tracks.map((track) => track.source!.identity).toSet(),
+        ids,
+      );
+      await restored.flushCache();
+      expect((await cache.read())!.librarySynced, isTrue);
     },
   );
 
@@ -165,6 +266,45 @@ void main() {
       expect(cache.saved!.tracks, isEmpty);
       service.dispose();
       client.close();
+    },
+  );
+
+  test(
+    'closing during restore still merges early external listens into cache',
+    () async {
+      final client = fixtures.api((_) => http.Response('', 500));
+      addTearDown(client.close);
+      final oldListen = now.subtract(const Duration(days: 1));
+      final cache = MemoryCatalogCache()
+        ..readGate = Completer<CatalogSnapshot?>();
+      final catalog = RecentRadioService(client, now: () => now, cache: cache);
+      client.recordLocalListen(externalSong, now);
+      await Future<void>.delayed(Duration.zero);
+      final flushed = catalog.flushCache();
+      catalog.dispose();
+      expect(cache.writes, 0);
+      cache.readGate!.complete(
+        CatalogSnapshot(
+          syncedAt: oldListen,
+          tracks: [
+            song,
+            externalSong.withActivity(playedAt: oldListen, playCount: 3),
+          ],
+          listens: {externalSong.id: CachedListen(oldListen, 3)},
+        ),
+      );
+      await flushed;
+      final saved = cache.saved!;
+      expect(
+        saved.tracks.map((track) => track.id),
+        unorderedEquals([song.id, externalSong.id]),
+      );
+      final online = saved.tracks.singleWhere(
+        (track) => track.id == externalSong.id,
+      );
+      expect(online.lastPlayedAt, now);
+      expect(online.playCount, 4);
+      expect(saved.listens[externalSong.id]!.minimumCount, 4);
     },
   );
 

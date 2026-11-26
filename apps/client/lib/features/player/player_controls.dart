@@ -116,6 +116,7 @@ class PlayerControls extends StatelessWidget {
                     client: client,
                     id: item?.extras?['coverArtId'] as String?,
                     externalUri: publicArtwork(item?.extras?['sourceArtwork']),
+                    sourceId: item?.extras?['sourceId'] as String?,
                     radius: 12,
                   ),
                 ),

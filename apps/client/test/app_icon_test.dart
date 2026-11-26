@@ -2,13 +2,88 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:hyperstream_client/features/library/cover_art.dart';
 import 'package:hyperstream_client/models/icon_style.dart';
 import 'package:hyperstream_client/services/app_preferences.dart';
+import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/widgets/app_icon.dart';
 import 'package:hyperstream_client/widgets/icon_style_picker.dart';
+import 'package:hyperstream_client/widgets/music_source_icon.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final brightness in Brightness.values) {
+    testWidgets('artwork shows distinct source identities in $brightness', (
+      tester,
+    ) async {
+      final client = NavidromeClient(
+        serverUrl: 'https://library.example',
+        username: 'test',
+        password: 'test',
+      );
+      addTearDown(client.close);
+      const providers = [
+        ('spotify-web', 'spotify'),
+        ('soundcloud', 'soundcloud'),
+        ('ytmusic-spotiflac', 'youtube'),
+        ('tidal-web', 'tidal'),
+      ];
+      final theme = ThemeData(brightness: brightness);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: Row(
+              children: [
+                for (final id in [
+                  ...providers.map((provider) => provider.$1),
+                  'qobuz-web',
+                  null,
+                ])
+                  SizedBox.square(
+                    dimension: 48,
+                    child: CoverArt(
+                      client: client,
+                      id: null,
+                      sourceId: id == null ? null : 'mornye:$id',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(MusicSourceIcon), findsNWidgets(5));
+      final filters = <ColorFilter>{};
+      for (final (id, asset) in providers) {
+        final icon = find.byWidgetPredicate(
+          (widget) =>
+              widget is MusicSourceIcon && widget.sourceId == 'mornye:$id',
+        );
+        final svg = tester.widget<SvgPicture>(
+          find.descendant(of: icon, matching: find.byType(SvgPicture)),
+        );
+        expect(
+          (svg.bytesLoader as SvgAssetLoader).assetName,
+          'assets/icons/sources/$asset.svg',
+        );
+        if (id == 'tidal-web') {
+          expect(
+            svg.colorFilter,
+            ColorFilter.mode(theme.colorScheme.onSurface, BlendMode.srcIn),
+          );
+        }
+        filters.add(svg.colorFilter!);
+      }
+      final qobuz = tester.widget<Text>(find.text('Q'));
+      filters.add(ColorFilter.mode(qobuz.style!.color!, BlendMode.srcIn));
+      expect(filters, hasLength(5));
+      expect(find.byTooltip('Source: Qobuz'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   test(
     'every bundled action and family parses with the actual SVG renderer',

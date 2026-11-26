@@ -30,7 +30,7 @@ class SourceImportStatus {
   String get label => switch (phase) {
     SourceImportPhase.queued => 'Waiting to send',
     SourceImportPhase.downloading => 'Downloading audio',
-    SourceImportPhase.converting => 'Converting to MP3',
+    SourceImportPhase.converting => 'Preparing audio',
     SourceImportPhase.sending => 'Sending to remote folder',
     SourceImportPhase.finishing => 'Confirming remote save',
     SourceImportPhase.saved => 'Previously sent to this folder',

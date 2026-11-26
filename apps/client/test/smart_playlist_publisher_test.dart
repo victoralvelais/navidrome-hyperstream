@@ -9,6 +9,7 @@ import 'package:hyperstream_client/services/library_catalog.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/smart_playlist_publisher.dart';
 
+import 'external_playback_test.dart' show externalSong;
 import 'recent_radio_service_test.dart' show api, envelope;
 
 class PublishFixture {
@@ -17,6 +18,7 @@ class PublishFixture {
   final Map<String, String> names = {};
   String? disk;
   int creates = 0, replaces = 0, writes = 0, reads = 0;
+  int requests = 0;
   int? failWriteAt;
   bool loseCreateResponse = false, loseUpdateResponse = false, truncate = false;
   bool readonly = false, incomplete = false;
@@ -24,6 +26,7 @@ class PublishFixture {
   Completer<void>? createGate;
   void Function()? duringSave;
   late final NavidromeClient client = api((request) async {
+    requests++;
     final parameters = request.method == 'POST'
         ? Uri(query: request.body).queryParametersAll
         : request.url.queryParametersAll;
@@ -115,6 +118,36 @@ class PublishFixture {
 }
 
 void main() {
+  test(
+    'mixed-source results leave server playlists and local links alone',
+    () async {
+      final f = PublishFixture();
+      addTearDown(f.dispose);
+      final libraryResult = f.result(['a']);
+      final result = SmartPlaylistResult(
+        matches: [
+          ...libraryResult.matches,
+          const SmartMatch(externalSong, 'All songs'),
+        ],
+        matchedCount: 2,
+        contributions: [2],
+        scarce: false,
+        evaluatedAt: f.now,
+      );
+      await expectLater(
+        f.publisher.publish(
+          definitionId: 'smart',
+          name: 'Smart copy',
+          result: result,
+          catalog: f.catalog,
+        ),
+        throwsA(isA<PlaylistPublishException>()),
+      );
+      expect(f.requests, 0);
+      expect(f.writes, 0);
+    },
+  );
+
   test('create uses full ordered POST, preserves same-named playlists, reloads and replaces by ID', () async {
     final f = PublishFixture();
     addTearDown(f.dispose);

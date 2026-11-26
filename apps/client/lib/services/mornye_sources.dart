@@ -18,6 +18,7 @@ import 'account_store.dart';
 import 'music_provider.dart';
 import 'remote_transfer_background.dart';
 import 'source_verification.dart';
+import '../models/source_reference.dart';
 
 class MornyeExtension {
   MornyeExtension(Map<String, dynamic> value)
@@ -94,7 +95,8 @@ class MornyeSources extends ChangeNotifier {
   Iterable<MornyeExtension> get enabled => extensions.where((e) => e.enabled);
   bool has(String id) => enabled.any((e) => e.id == id);
   String name(String id) =>
-      extensions.where((e) => e.id == id).firstOrNull?.name ?? id;
+      extensions.where((e) => e.id == id).firstOrNull?.name ??
+      musicSourceName('mornye:$id');
   static String nonce() => base64UrlEncode(
     List<int>.generate(24, (_) => Random.secure().nextInt(256)),
   ).replaceAll('=', '');
@@ -284,10 +286,10 @@ class MornyeSources extends ChangeNotifier {
         notifyListeners();
       }
       return result;
-    } on MornyeHostException {
+    } on MornyeHostException catch (failure) {
       await _checkVerification(request['id'] as String?);
-      throw const SourceException(
-        'The provider could not complete this request. Try again or choose another source.',
+      throw SourceException(
+        _providerFailure(request['id'] as String?, failure.detail),
       );
     } finally {
       finished = true;
@@ -299,9 +301,47 @@ class MornyeSources extends ChangeNotifier {
     }
   }
 
+  String _providerFailure(String? id, String detail) {
+    final provider = id == null ? 'This provider' : name(id);
+    // Classify known extension/runtime errors, but never surface the original
+    // text: it can contain signed URLs, headers, session grants or response data.
+    final message = detail.toLowerCase();
+    if (RegExp(r'\bhttp\s+429\b').hasMatch(message) ||
+        message.contains('rate limit') ||
+        message.contains('too many requests')) {
+      return '$provider is limiting requests. Wait a little before retrying, or choose another source.';
+    }
+    if (message.contains('timeout') ||
+        message.contains('timed out') ||
+        message.contains('deadline exceeded')) {
+      return '$provider took too long to return audio. Try again or choose another source.';
+    }
+    if (RegExp(r'\bhttp\s+5\d\d\b').hasMatch(message)) {
+      return '$provider’s audio service is temporarily unavailable. Try again later or choose another source.';
+    }
+    if (RegExp(r'\bhttp\s+(401|403)\b').hasMatch(message)) {
+      return '$provider rejected access to this request. Try again or choose another source.';
+    }
+    if (RegExp(r'\bhttp\s+404\b').hasMatch(message) ||
+        message.contains('track unavailable') ||
+        message.contains('track not found') ||
+        message.contains('not available for streaming')) {
+      return '$provider could not provide this recording. Choose another source.';
+    }
+    return '$provider could not complete this request. Try again or choose another source.';
+  }
+
   Future<void> _checkVerification(String? id) async {
     if (id == null) return;
-    final pending = await _native({'op': 'pending', 'id': id});
+    final dynamic pending;
+    try {
+      pending = await _native({'op': 'pending', 'id': id})
+          .timeout(const Duration(seconds: 5));
+    } on Object {
+      // Keep the original failure actionable even if the host cannot inspect
+      // its pending challenge. The next explicit attempt can check again.
+      return;
+    }
     if (pending != null) {
       verification.value = id;
       throw ProviderVerificationRequired(id, name: name(id));

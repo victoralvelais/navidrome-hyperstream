@@ -46,7 +46,8 @@
    repeat entries are retained. Each song has its own download control; the
    collection download imports one copy of each distinct recording.
 5. Configure Home > Remote folder and choose a destination. Downloads in search,
-   collection view and Now Playing use that saved folder and MP3 320 conversion.
+   collection view and Now Playing use that saved folder, preserving lossy audio
+   and converting lossless audio to MP3 320.
 
 Monochrome remains available as an optional built-in source. If enabled, it can
 be selected alongside installed extensions in the Online source picker.
@@ -85,8 +86,9 @@ Native playback streams a full progressive M4A/MP3 when available. HLS-only
 uploads are downloaded and remuxed privately before playback; long DJ sets may
 take longer to start and remain subject to execution/transfer time limits. Opus
 fallbacks use the existing temporary AAC playback conversion. The import path
-uses original downloaded audio for MP3 320 conversion. SoundCloud audio is often
-lossy AAC/MP3; output bitrate is not a promise of original 320 kbps quality.
+keeps lossy AAC/MP3/Opus/Vorbis audio packets without re-encoding. Codec detection
+uses the downloaded audio, not its filename: AAC in M4A is preserved, while ALAC
+in M4A is lossless and converts to MP3 320. Bitrate is not increased artificially.
 
 Preview-only, blocked and nonstreamable uploads are marked unavailable when the
 provider exposes that status and rechecked at acquisition. A set with missing
@@ -101,9 +103,12 @@ missing records, playback resolution, unavailable uploads and import routing.
 Verify iPhone playback/seek/lock-screen behavior and an actual Send to folder on
 your device; the automated checks do not access personal remote destinations.
 
-Songs download into a private temporary directory, convert with LAME to stereo
-44.1 kHz MP3 at 320 kbps, and undergo codec, bitrate and duration validation.
-Title, artist, album, track/disc number, ISRC and available artwork are retained.
+Songs download into a private temporary directory. Lossless audio converts with
+LAME to stereo 44.1 kHz MP3 at 320 kbps. Supported lossy audio is remuxed with
+stream copy, preserving codec, sample rate and channels. Every output undergoes
+duration and audio validation before publication; MP3 conversions also verify
+320 kbps. Title, artist, album, track/disc number and ISRC are written as tags.
+Artwork is included where supported; failed artwork retries with audio only.
 Publication uses the existing SMB temporary-file, size-check and rename flow.
 Existing filenames get numbered alternatives. Temporary source and conversion
 files are cleaned after each attempt. Navidrome indexes delivered files through
@@ -178,8 +183,8 @@ thumbnail/duration. Native playback prefers M4A and forwards only the resolver's
 public User-Agent, Origin and Referer headers. If a direct link remains blocked,
 the package downloader tries its supported paths. Opus/WebM/Ogg playback copies
 are converted to AAC for the native players, so fallback playback may take longer
-to start. Imports convert the original downloaded audio directly to MP3 320;
-that conversion does not improve the source's original fidelity. There is no
+to start. Imports keep the original lossy audio without another lossy encode,
+using the acquired source file rather than the temporary playback copy. There is no
 signed-session Verify button for YouTube; optional token settings use Configure.
 
 YouTube collection pagination retains repeated uploads and fails if a page is

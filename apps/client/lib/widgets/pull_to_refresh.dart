@@ -17,6 +17,13 @@ class PullToRefresh extends StatefulWidget {
 
 class _PullToRefreshState extends State<PullToRefresh> {
   final _focus = FocusNode();
+
+  void _focusForShortcuts() {
+    // A focused descendant already routes shortcuts through this node. Taking
+    // focus from it on touch-down dismisses iOS text selection/Paste controls.
+    if (!_focus.hasFocus) _focus.requestFocus();
+  }
+
   @override
   void dispose() {
     _focus.dispose();
@@ -29,8 +36,8 @@ class _PullToRefreshState extends State<PullToRefresh> {
     child: Focus(
       focusNode: _focus,
       child: Listener(
-        onPointerDown: (_) => _focus.requestFocus(),
-        onPointerSignal: (_) => _focus.requestFocus(),
+        onPointerDown: (_) => _focusForShortcuts(),
+        onPointerSignal: (_) => _focusForShortcuts(),
         child: RefreshIndicator.adaptive(
           onRefresh: widget.onRefresh,
           child: widget.child,

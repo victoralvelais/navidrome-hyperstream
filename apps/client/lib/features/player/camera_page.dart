@@ -294,6 +294,7 @@ class _CameraPageState extends State<CameraPage> {
                               child: CoverArt(
                                 client: widget.client,
                                 id: item?.extras?['coverArtId'] as String?,
+                                sourceId: item?.extras?['sourceId'] as String?,
                                 externalUri: publicArtwork(
                                   item?.extras?['sourceArtwork'],
                                 ),

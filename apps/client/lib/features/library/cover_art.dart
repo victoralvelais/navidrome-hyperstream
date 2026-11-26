@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/navidrome_client.dart';
 import '../../services/source_artwork.dart';
+import '../../models/source_reference.dart';
+import '../../widgets/music_source_icon.dart';
 
 class CoverArt extends StatefulWidget {
   const CoverArt({
@@ -14,11 +16,13 @@ class CoverArt extends StatefulWidget {
     required this.id,
     this.radius = 16,
     this.externalUri,
+    this.sourceId,
   });
   final NavidromeClient client;
   final String? id;
   final double radius;
   final Uri? externalUri;
+  final String? sourceId;
 
   @override
   State<CoverArt> createState() => _CoverArtState();
@@ -65,15 +69,37 @@ class _CoverArtState extends State<CoverArt> {
     borderRadius: BorderRadius.circular(widget.radius),
     child: AspectRatio(
       aspectRatio: 1,
-      child: FutureBuilder<Uint8List>(
-        future: _bytes,
-        builder: (context, snapshot) => snapshot.hasData
-            ? Image.memory(
-                snapshot.data!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(context),
-              )
-            : _placeholder(context),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          FutureBuilder<Uint8List>(
+            future: _bytes,
+            builder: (context, snapshot) => snapshot.hasData
+                ? Image.memory(
+                    snapshot.data!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _placeholder(context),
+                  )
+                : _placeholder(context),
+          ),
+          if (widget.sourceId case final sourceId?)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: MusicSourceIcon(
+                  sourceId: sourceId,
+                  name: musicSourceName(sourceId),
+                  size: 16,
+                ),
+              ),
+            ),
+        ],
       ),
     ),
   );

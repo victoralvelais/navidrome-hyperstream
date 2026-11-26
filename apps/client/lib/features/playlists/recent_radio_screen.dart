@@ -119,7 +119,7 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
                         Text('Library synced ${_updated(syncedAt)}')
                       else
                         const Text(
-                          'Showing listens from this session until the library sync succeeds.',
+                          'Showing saved listening history until the library sync succeeds.',
                         ),
                       if (!preview.hasPlayDates && preview.libraryCount > 0)
                         const Text(
@@ -162,6 +162,8 @@ class _RecentRadioScreenState extends State<RecentRadioScreen> {
                       child: CoverArt(
                         client: radio.client,
                         id: match.track.coverArt,
+                        externalUri: match.track.source?.artwork,
+                        sourceId: match.track.source?.sourceId,
                       ),
                     ),
                     title: Text(

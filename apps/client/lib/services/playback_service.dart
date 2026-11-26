@@ -43,6 +43,7 @@ class PlaybackService extends BaseAudioHandler {
     Future<bool> Function(SourceReference)? verifySource,
     Future<void> Function()? resetSourcePlayback,
     ValueListenable<Map<String, SourcePlaybackInfo>>? sourcePlaybackInfo,
+    this.sourceLoadTimeout = const Duration(seconds: 90),
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        songPlaybackStore = songPlaybackStore ?? SongPlaybackStore(),
@@ -107,6 +108,7 @@ class PlaybackService extends BaseAudioHandler {
   }
 
   final AudioPlayer _player;
+  final Duration sourceLoadTimeout;
   late final Uri Function(SourceReference) _sourceStreamUri;
   late final Future<bool> Function(SourceReference) _verifySource;
   late final Future<void> Function() _resetSourcePlayback;
@@ -196,7 +198,7 @@ class PlaybackService extends BaseAudioHandler {
   int? _probeEpoch;
   int _reconnectAttempt = 0;
   int _healthyReloads = 0;
-  DateTime? _lastPlaybackFailure;
+  DateTime? _healthyPlaybackSince;
   bool _reconnectWanted = false;
   bool get reconnecting => _reconnectWanted;
   bool get canRetryPlayback =>
@@ -624,7 +626,9 @@ class PlaybackService extends BaseAudioHandler {
       return Future.value();
     }
     if (shuffle) index = _random.nextInt(tracks.length);
+    _abandonLoad();
     _cancelReconnect(resetBudget: !automaticRecovery);
+    _healthyPlaybackSince = null;
     final revision = ++_revision;
     _verificationRecoveryRevision = verificationRecovery ? revision : null;
     _queueClient = client;
@@ -704,6 +708,7 @@ class PlaybackService extends BaseAudioHandler {
                   'starred': entry.$2.starred,
                   'audioDetails': _audioDetails(entry.$2),
                   'sourceArtwork': ?entry.$2.source?.artwork?.toString(),
+                  'sourceId': ?entry.$2.source?.sourceId,
                   'external': entry.$2.source != null,
                 },
               ),
@@ -713,6 +718,16 @@ class PlaybackService extends BaseAudioHandler {
         mediaItem.add(items[index]);
         final loadFailure = Completer<Duration?>();
         _loadFailure = loadFailure;
+        final loadTimeout =
+            tracks[index].source != null && (restored == null || autoplay)
+            ? Timer(sourceLoadTimeout, () {
+                if (!loadFailure.isCompleted) {
+                  loadFailure.completeError(
+                    TimeoutException('Source load timed out'),
+                  );
+                }
+              })
+            : null;
         try {
           await Future.any<Duration?>([
             loadFailure.future,
@@ -737,6 +752,7 @@ class PlaybackService extends BaseAudioHandler {
             ),
           ]);
         } finally {
+          loadTimeout?.cancel();
           if (identical(_loadFailure, loadFailure)) _loadFailure = null;
         }
         if (revision != _revision) return;
@@ -790,6 +806,14 @@ class PlaybackService extends BaseAudioHandler {
         if (revision == _revision) {
           _loading = false;
           _reportFailure();
+          if (failure is TimeoutException && tracks[index].source != null) {
+            // A native load can remain pending without emitting an error. End
+            // this attempt so Play/new selections can reach stop and reset.
+            _cancelReconnect();
+            error.value =
+                '${musicSourceName(tracks[index].source!.sourceId)} took too long to start playing. Press Play to retry or choose another source.';
+            _publishState();
+          }
           if (failure is SourceException) {
             _cancelReconnect();
             error.value = failure.message;
@@ -832,6 +856,11 @@ class PlaybackService extends BaseAudioHandler {
         error.value == null &&
         (_loading ? _playWhenReady : _player.playing) &&
         processing != AudioProcessingState.completed;
+    if (playing && processing == AudioProcessingState.ready) {
+      _healthyPlaybackSince ??= _timerClock();
+    } else {
+      _healthyPlaybackSince = null;
+    }
     playbackState.add(
       PlaybackState(
         controls: [
@@ -944,7 +973,6 @@ class PlaybackService extends BaseAudioHandler {
     }
     final active =
         !_seeking &&
-        _listeningTracks[index].source == null &&
         error.value == null &&
         _player.playing &&
         _player.processingState == ProcessingState.ready;
@@ -970,8 +998,9 @@ class PlaybackService extends BaseAudioHandler {
     // The tracker can finish the previous item during a native transition.
     // Look up its ID instead of using the player's already advanced index.
     final track = _listeningTracks.firstWhere((track) => track.id == trackId);
-    if (track.source != null) return;
     client.recordLocalListen(track, startedAt);
+    // Online IDs belong to their provider, never to Navidrome's scrobble API.
+    if (track.source != null) return;
     unawaited(() async {
       try {
         await client.scrobble(trackId, startedAt);
@@ -997,6 +1026,14 @@ class PlaybackService extends BaseAudioHandler {
       }
       _publishState();
       _scheduleCheckpoint();
+    }
+  }
+
+  void _abandonLoad() {
+    final loading = _loadFailure;
+    if (loading != null && !loading.isCompleted) {
+      _needsPlaybackReset = true;
+      loading.completeError(StateError('Playback load superseded'));
     }
   }
 
@@ -1026,11 +1063,13 @@ class PlaybackService extends BaseAudioHandler {
         MusicSources.instance.needsPlaybackVerification(failedTrack!.source!);
     final wantedPlayback = _playWhenReady || _reconnectWanted;
     final now = _timerClock();
-    if (_lastPlaybackFailure == null ||
-        now.difference(_lastPlaybackFailure!) > const Duration(minutes: 1)) {
+    if (_healthyPlaybackSince != null &&
+        now.difference(_healthyPlaybackSince!) > const Duration(minutes: 1)) {
       _healthyReloads = 0;
     }
-    _lastPlaybackFailure = now;
+    // Slow failed resolutions are not healthy playback. Counting their elapsed
+    // time used to renew the retry budget indefinitely for minute-long errors.
+    _healthyPlaybackSince = null;
     _reconnectWanted =
         (_reconnectWanted || _playWhenReady) &&
         canRetryPlayback &&
@@ -1100,7 +1139,7 @@ class PlaybackService extends BaseAudioHandler {
     if (resetBudget) {
       _reconnectAttempt = 0;
       _healthyReloads = 0;
-      _lastPlaybackFailure = null;
+      _healthyPlaybackSince = null;
     }
   }
 
@@ -1176,7 +1215,7 @@ class PlaybackService extends BaseAudioHandler {
     if (_healthyReloads >= 2) {
       _cancelReconnect();
       error.value = snapshot.tracks[snapshot.index].source != null
-          ? 'This music source could not play the song. Press Play to retry or select another audio source.'
+          ? '${error.value ?? 'This music source could not play the song.'} Automatic retries stopped. Press Play to retry or select another audio source.'
           : 'The server is reachable, but this song could not play. Press Play to retry or select another track.';
       _publishState();
       return;
@@ -1386,6 +1425,7 @@ class PlaybackService extends BaseAudioHandler {
   Future<void> stop() => reset();
 
   Future<void> reset({bool clearSaved = true}) {
+    _abandonLoad();
     _selectSongSettings(null);
     _cancelReconnect();
     _retrySnapshot = null;

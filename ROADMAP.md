@@ -1,5 +1,23 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 26: online reliability, original lossy audio and listening history, 0.64.0
+
+- Bound external playback startup and automatic recovery. A slow failed request
+  no longer renews the retry allowance, and a new selection releases a stalled
+  load. Explain known provider failures without exposing native URLs or tokens.
+- Keep the search editor focused on touch-down so iOS selection and Paste can
+  work normally. Retain desktop refresh shortcuts and pull-to-refresh.
+- Color source badges consistently across search, the player, queue and history.
+- Inspect downloaded audio before importing. Keep AAC/M4A, MP3, Opus and Vorbis
+  audio packets with stream copy; convert lossless codecs (including ALAC in M4A)
+  to MP3 320. Validate output and retry without optional artwork if it fails.
+- Add Library > History and include qualified external listens in Recent Radio
+  and local smart-playlist evaluation. Keep exact provider IDs and public metadata
+  in the account's device cache, including before its first successful sync.
+- Preserve online history across server refreshes, while respecting server
+  deletions for library tracks. Never scrobble online IDs to Navidrome or publish
+  them in its playlists. The listening-history preference applies to both sources.
+
 ## November 26: camera soundtrack compatibility and player delivery status, 0.63.0
 
 - Put recording controls over the camera preview and hide the song bar behind a

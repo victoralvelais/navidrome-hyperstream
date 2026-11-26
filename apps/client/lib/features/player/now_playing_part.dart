@@ -500,6 +500,7 @@ class _QueuePageState extends State<_QueuePage> {
                             child: CoverArt(
                               client: widget.client,
                               id: entry.extras?['coverArtId'] as String?,
+                              sourceId: entry.extras?['sourceId'] as String?,
                               externalUri: publicArtwork(
                                 entry.extras?['sourceArtwork'],
                               ),
@@ -533,6 +534,7 @@ class _QueuePageState extends State<_QueuePage> {
                               child: CoverArt(
                                 client: widget.client,
                                 id: item?.extras?['coverArtId'] as String?,
+                                sourceId: item?.extras?['sourceId'] as String?,
                                 externalUri: publicArtwork(
                                   item?.extras?['sourceArtwork'],
                                 ),
@@ -706,6 +708,7 @@ class _QueuePageState extends State<_QueuePage> {
                             child: CoverArt(
                               client: widget.client,
                               id: next.extras?['coverArtId'] as String?,
+                              sourceId: next.extras?['sourceId'] as String?,
                               externalUri: publicArtwork(
                                 next.extras?['sourceArtwork'],
                               ),

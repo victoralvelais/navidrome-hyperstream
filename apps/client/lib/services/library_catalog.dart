@@ -30,6 +30,8 @@ class LibraryCatalog extends ChangeNotifier {
   final DateTime Function() _now;
   final CatalogCache? _cache;
   Future<void>? _restoring;
+  bool _restored = false;
+  final _earlyListenCounts = <String, int>{};
   Timer? _saveTimer;
   late final StreamSubscription<LocalListen> _subscription;
   late final StreamSubscription<(String, bool)> _favoritesSubscription;
@@ -77,6 +79,9 @@ class LibraryCatalog extends ChangeNotifier {
     }
     final track = _tracks[listen.track.id] ?? listen.track;
     final minimumCount = track.playCount + 1;
+    if (!_restored) {
+      _earlyListenCounts[track.id] = (_earlyListenCounts[track.id] ?? 0) + 1;
+    }
     _local[listen.track.id] = (listen, ++_revision, minimumCount);
     _tracks[track.id] = _overlay(track, listen, minimumCount);
     _evaluate();
@@ -148,14 +153,31 @@ class LibraryCatalog extends ChangeNotifier {
   }
 
   Future<void> _restoreOnce() =>
-      _restoring ??= _restore().catchError((Object _) {});
+      _restoring ??= _restore().catchError((Object _) {}).whenComplete(() {
+        _restored = true;
+        _earlyListenCounts.clear();
+      });
 
   Future<void> _restore() async {
     final saved = await _cache?.read();
-    if (_disposed || saved == null || saved.syncedAt.isAfter(_now())) return;
+    if (saved == null || saved.syncedAt.isAfter(_now())) return;
     final changedWhileRestoring =
         _local.isNotEmpty || _favorites.isNotEmpty || _ratings.isNotEmpty;
+    if (_disposed && !changedWhileRestoring) return;
     final incoming = {for (final track in saved.tracks) track.id: track};
+    for (final entry in _earlyListenCounts.entries) {
+      final local = _local[entry.key];
+      final prior = incoming[entry.key];
+      if (local != null &&
+          prior != null &&
+          (prior.lastPlayedAt == null ||
+              local.$1.startedAt.isAfter(prior.lastPlayedAt!))) {
+        final mergedCount = prior.playCount + entry.value;
+        if (mergedCount > local.$3) {
+          _local[entry.key] = (local.$1, local.$2, mergedCount);
+        }
+      }
+    }
     for (final entry in saved.listens.entries) {
       final track = incoming[entry.key];
       if (track == null || _local.containsKey(entry.key)) continue;
@@ -192,10 +214,10 @@ class LibraryCatalog extends ChangeNotifier {
       }
     }
     _tracks = incoming;
-    _started = true;
-    lastSyncedAt = saved.syncedAt;
-    lastSyncTrackCount = saved.syncedTrackCount;
-    _nextSyncAt = saved.syncedAt.add(syncInterval);
+    _started = saved.librarySynced;
+    lastSyncedAt = saved.librarySynced ? saved.syncedAt : null;
+    lastSyncTrackCount = saved.librarySynced ? saved.syncedTrackCount : null;
+    _nextSyncAt = saved.librarySynced ? saved.syncedAt.add(syncInterval) : null;
     _evaluate();
     if (changedWhileRestoring) _saveSoon();
     _schedule();
@@ -203,7 +225,7 @@ class LibraryCatalog extends ChangeNotifier {
   }
 
   void _saveSoon() {
-    if (_cache == null || lastSyncedAt == null) return;
+    if (_cache == null || _disposed) return;
     _saveTimer?.cancel();
     _saveTimer = Timer(
       const Duration(seconds: 1),
@@ -212,24 +234,37 @@ class LibraryCatalog extends ChangeNotifier {
   }
 
   Future<void> flushCache() async {
+    // A slow cache read must merge older history before a new listen can save.
+    // Finish that merge on disposal too, so an account switch cannot replace a
+    // full saved history with the few listens recorded during startup.
+    final restored = _restoreOnce();
     _saveTimer?.cancel();
     _saveTimer = null;
     final cache = _cache;
-    final syncedAt = lastSyncedAt;
-    if (cache == null || syncedAt == null) return;
-    final snapshot = CatalogSnapshot(
-      syncedAt: syncedAt,
-      syncedTrackCount: lastSyncTrackCount,
-      tracks: tracks,
-      listens: {
-        for (final entry in _local.entries)
-          entry.key: CachedListen(entry.value.$1.startedAt, entry.value.$3),
-      },
-      favorites: _favorites,
-      ratings: _ratings,
-    );
+    if (cache == null) return;
+    final snapshot = restored.then((_) {
+      _saveTimer?.cancel();
+      _saveTimer = null;
+      final syncedAt = lastSyncedAt;
+      return CatalogSnapshot(
+        syncedAt: syncedAt ?? _now(),
+        librarySynced: syncedAt != null,
+        syncedTrackCount: lastSyncTrackCount ?? 0,
+        tracks: tracks,
+        listens: {
+          for (final entry in _local.entries)
+            entry.key: CachedListen(entry.value.$1.startedAt, entry.value.$3),
+        },
+        favorites: _favorites,
+        ratings: _ratings,
+      );
+    });
     try {
-      await cache.write(snapshot);
+      if (cache is FileCatalogCache) {
+        await cache.writePending(snapshot);
+      } else {
+        await cache.write(await snapshot);
+      }
     } on Object {
       if (!_disposed) {
         error = 'The library is available, but its on-device cache could not be saved.';
@@ -305,7 +340,9 @@ class LibraryCatalog extends ChangeNotifier {
         final remote = incoming[entry.key];
         // A complete later scan owns membership (including server deletions).
         // A listen during this scan may describe a song its pages missed.
-        if (remote == null && changedAt <= revision) {
+        if (remote == null &&
+            changedAt <= revision &&
+            listen.track.source == null) {
           _local.remove(entry.key);
           continue;
         }

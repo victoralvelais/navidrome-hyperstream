@@ -374,7 +374,7 @@ class SettingsPageState extends State<SettingsPage> {
               SwitchListTile.adaptive(
                 title: const Text('Report listening history'),
                 subtitle: const Text(
-                  'Count qualified listens in Navidrome for Recent Radio and play history. Your server may also send them to its connected scrobbling services.',
+                  'Save qualified listens for History and Recent Radio. Online songs stay on this device. Library listens also go to Navidrome and its connected scrobbling services.',
                 ),
                 value: preferences.reportListens,
                 onChanged: preferences.setReportListens,

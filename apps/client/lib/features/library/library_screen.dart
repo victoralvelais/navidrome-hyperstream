@@ -33,6 +33,7 @@ import '../settings/settings_sheet.dart';
 import 'album_tracks.dart';
 import 'artwork_backdrop.dart';
 import 'catalog_widgets.dart';
+import 'listening_history_screen.dart';
 
 enum _Section { home, library, search }
 
@@ -341,6 +342,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                     ('Songs', Icons.music_note_rounded),
                     ('Playlists', Icons.queue_music_rounded),
                     ('Favorites', Icons.favorite_border_rounded),
+                    ('History', Icons.restart_alt_rounded),
                   ])
                     ListTile(
                       leading: AppIcon(
@@ -380,6 +382,10 @@ class _LibraryScreenState extends State<LibraryScreen>
   );
 
   Widget _library() => switch (_libraryPage) {
+    'History' => ListeningHistoryScreen(
+      catalog: _radio,
+      playback: widget.playback,
+    ),
     'Recent Radio' => RecentRadioScreen(
       radio: _radio,
       playback: widget.playback,
@@ -594,7 +600,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         MediaQuery.sizeOf(context).width - 80 >= 760 &&
         _hasSelection &&
         _section != _Section.home &&
-        !['Recent Radio', 'Playlists'].contains(_libraryPage);
+        !['Recent Radio', 'Playlists', 'History'].contains(_libraryPage);
     return PopScope(
       canPop: !_canBack,
       onPopInvokedWithResult: (didPop, _) {
@@ -710,6 +716,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                               ![
                                                 'Recent Radio',
                                                 'Playlists',
+                                                'History',
                                               ].contains(_libraryPage)) {
                                             return Row(
                                               children: [

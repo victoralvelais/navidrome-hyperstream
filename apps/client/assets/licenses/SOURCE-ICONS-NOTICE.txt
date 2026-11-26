@@ -1,6 +1,6 @@
 Simple Icons 16.0.0: Spotify, SoundCloud, YouTube and TIDAL brand marks.
 Source: https://github.com/simple-icons/simple-icons/tree/16.0.0
-Unmodified SVGs rendered with theme colors; source identification does not imply endorsement.
+Unmodified SVGs rendered with source colors and theme contrast; source identification does not imply endorsement.
 Qobuz and Monochrome use Hyperstream text monograms.
 
 # CC0 1.0 Universal

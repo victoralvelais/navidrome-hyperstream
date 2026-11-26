@@ -87,7 +87,7 @@ class _MusicSourceSettingsState extends State<MusicSourceSettings> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Downloads convert to MP3 320 and go to the destination in Remote folder.',
+                  'Downloads go to Remote folder. Lossy audio keeps its original quality; lossless audio converts to MP3 320.',
                 ),
                 const SizedBox(height: 16),
                 FilledButton(

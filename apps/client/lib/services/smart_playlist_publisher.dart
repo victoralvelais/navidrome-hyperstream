@@ -215,6 +215,11 @@ class SmartPlaylistPublisher {
         'Finish a successful library sync before publishing. The current server copy has been left unchanged.',
       );
     }
+    if (result.matches.any((match) => match.track.source != null)) {
+      throw const PlaylistPublishException(
+        'This mix includes online songs. It can play in Hyperstream, but a Navidrome playlist can contain only songs already in its library.',
+      );
+    }
     final ids = result.matches.map((match) => match.track.id).toList();
     if (ids.isEmpty ||
         ids.length > 100000 ||

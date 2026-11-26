@@ -11,6 +11,7 @@ import 'package:hyperstream_client/models/source_reference.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
 import 'package:hyperstream_client/services/playback_service.dart';
 import 'package:hyperstream_client/services/playback_store.dart';
+import 'package:hyperstream_client/services/recent_radio_service.dart';
 import 'package:hyperstream_client/services/music_sources.dart';
 
 import 'support/fake_player.dart';
@@ -24,8 +25,120 @@ const externalSong = Track(
   source: SourceReference(sourceId: 'mornye:tidal-web', trackId: 'one'),
 );
 
+const librarySong = Track(
+  id: 'library-song',
+  title: 'Library',
+  artist: 'Artist',
+  album: 'Album',
+  duration: Duration(minutes: 3),
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  PlaybackService stalledPlayback(
+    WidgetTester tester,
+    NavidromeClient client,
+    AudioPlayer player, {
+    Duration sourceLoadTimeout = const Duration(seconds: 90),
+  }) {
+    final playback = PlaybackService(
+      player: player,
+      configureSession: (_) async {},
+      sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+      timerClock: tester.binding.clock.now,
+      sourceLoadTimeout: sourceLoadTimeout,
+    );
+    addTearDown(() async {
+      client.close();
+      final disposing = playback.dispose();
+      await tester.pump();
+      await disposing;
+    });
+    return playback;
+  }
+
+  for (final replaceSong in [false, true]) {
+    testWidgets(
+      replaceSong
+          ? 'selecting a new song supersedes a stuck external load'
+          : 'external load timeout re-enables manual Play',
+      (tester) async {
+        final client = NavidromeClient(
+          serverUrl: 'https://library.example',
+          username: 'test',
+          password: 'test',
+        );
+        final nativeLoad = Completer<Duration?>();
+        final player = _DelayedLoadsPlayer([nativeLoad.future]);
+        final playback = stalledPlayback(
+          tester,
+          client,
+          player,
+          sourceLoadTimeout: const Duration(seconds: 1),
+        );
+        final original = playback.playAlbum(client, [externalSong], 0);
+        await tester.pump();
+        expect(player.delayedLoads, 1);
+        if (replaceSong) {
+          final replacement = playback.playAlbum(client, [librarySong], 0);
+          await tester.pump();
+          expect(player.playCalls, 1);
+          await replacement;
+        } else {
+          await tester.pump(const Duration(seconds: 1));
+          expect(
+            playback.error.value,
+            allOf(contains('Tidal'), contains('Play')),
+          );
+          await playback.play();
+        }
+        await original;
+        expect(player.playCalls, 1);
+        nativeLoad.complete(null);
+        await tester.pump();
+        expect(player.playCalls, 1);
+        expect(
+          playback.mediaItem.value?.id,
+          replaceSong ? librarySong.id : externalSong.id,
+        );
+        expect(playback.error.value, isNull);
+        await playback.pause();
+      },
+    );
+  }
+
+  testWidgets('slow external load failures exhaust automatic retries', (
+    tester,
+  ) async {
+    final client = NavidromeClient(
+      serverUrl: 'https://library.example',
+      username: 'test',
+      password: 'test',
+    );
+    final failures = List.generate(3, (_) => Completer<Duration?>());
+    final player = _DelayedLoadsPlayer([
+      for (final failure in failures) failure.future,
+    ]);
+    final playback = stalledPlayback(tester, client, player);
+    final original = playback.playAlbum(client, [externalSong], 0);
+    await tester.pump();
+    for (final (index, failure) in failures.indexed) {
+      expect(player.delayedLoads, index + 1);
+      await tester.pump(const Duration(seconds: 61));
+      failure.completeError(PlayerException(1, 'synthetic failure', 0));
+      await tester.pump();
+      await tester.pump(Duration(seconds: [2, 5, 10][index]));
+    }
+    await original;
+    expect(player.loaded, isEmpty);
+    expect(player.playCalls, 0);
+    expect(playback.reconnecting, isFalse);
+    expect(playback.error.value, contains('Play'));
+    await playback.play();
+    expect(player.playCalls, 1);
+    await playback.pause();
+  });
+
   testWidgets(
     'current track label follows provider updates during and after load',
     (tester) async {
@@ -72,6 +185,10 @@ void main() {
         playback.queue.value.single.extras?['audioDetails'],
         'Qobuz · FLAC',
       );
+      expect(
+        playback.queue.value.single.extras?['sourceId'],
+        song.source!.sourceId,
+      );
       expect(playback.mediaItem.value?.extras?['audioDetails'], 'Qobuz · FLAC');
 
       info.value = {
@@ -84,6 +201,7 @@ void main() {
         playback.queue.value.single.extras?['audioDetails'],
         'Tidal · AAC',
       );
+      await playback.pause();
       expect(playback.mediaItem.value?.extras?['audioDetails'], 'Tidal · AAC');
     },
   );
@@ -134,6 +252,7 @@ void main() {
     expect(playback.error.value, isNull);
     expect(prompts, 0);
     expect(sources.verification.value, 'qobuz-web');
+    await playback.pause();
   });
   testWidgets(
     'initial stream failure starts verification and resumes playback automatically',
@@ -182,6 +301,7 @@ void main() {
       expect(prompts, 1);
       expect(player.playing, true);
       expect(playback.error.value, isNull);
+      await playback.pause();
     },
   );
 
@@ -249,7 +369,7 @@ void main() {
     });
   }
   testWidgets(
-    'external playback uses the shared player and never scrobbles to Navidrome',
+    'qualified external playback enters local history without a Navidrome scrobble',
     (tester) async {
       final calls = <String>[];
       final client = NavidromeClient(
@@ -263,10 +383,14 @@ void main() {
       );
       final player = FakePlayer();
       var elapsed = Duration.zero;
+      final start = DateTime.utc(2026, 11, 12);
+      final radio = RecentRadioService(client, now: () => start.add(elapsed));
+      addTearDown(radio.dispose);
       final playback = PlaybackService(
         player: player,
         configureSession: (_) async {},
         listeningClock: () => elapsed,
+        listeningTime: () => start.add(elapsed),
         sourceStreamUri: (source) =>
             Uri.parse('https://source.example/track/${source.trackId}'),
       );
@@ -283,25 +407,36 @@ void main() {
         'source.example',
       );
       expect(playback.trackAt(0)!.source!.sourceId, 'mornye:tidal-web');
-      for (var i = 0; i < 30; i++) {
-        elapsed += const Duration(seconds: 4);
-        player.emit();
-        await tester.pump(const Duration(seconds: 4));
+      Future<void> listen(int seconds) async {
+        for (var i = 0; i < seconds; i++) {
+          elapsed += const Duration(seconds: 1);
+          player.emit();
+        }
+        await tester.pump();
       }
+
+      await listen(89);
+      expect(radio.tracks, isEmpty);
+      await listen(1);
+      expect(
+        radio.tracks.single.source!.identity,
+        externalSong.source!.identity,
+      );
+      expect(radio.tracks.single.lastPlayedAt, start);
+      expect(radio.tracks.single.playCount, 1);
+      expect(radio.preview!.matches.single.track.id, externalSong.id);
+      await listen(90);
+      expect(radio.tracks.single.playCount, 1);
+      await playback.preferences.setReportListens(false);
+      await playback.playAlbum(client, [externalSong], 0);
+      await listen(100);
+      expect(radio.tracks.single.playCount, 1);
       expect(calls, isEmpty);
       await playback.setSpeed(.75);
       await playback.pause();
       expect(player.speed, .75);
       expect(player.playing, isFalse);
-      await playback.playAlbum(client, const [
-        Track(
-          id: 'library-song',
-          title: 'Library',
-          artist: 'Artist',
-          album: 'Album',
-          duration: Duration(minutes: 3),
-        ),
-      ], 0);
+      await playback.playAlbum(client, const [librarySong], 0);
       expect(
         (player.loaded.last.single as UriAudioSource).uri.host,
         'library.example',
@@ -349,6 +484,30 @@ void main() {
       }
     },
   );
+}
+
+class _DelayedLoadsPlayer extends FakePlayer {
+  _DelayedLoadsPlayer(this.results);
+  final List<Future<Duration?>> results;
+  int delayedLoads = 0;
+
+  @override
+  Future<Duration?> setAudioSources(
+    List<AudioSource> audioSources, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+    ShuffleOrder? shuffleOrder,
+  }) {
+    if (delayedLoads < results.length) return results[delayedLoads++];
+    return super.setAudioSources(
+      audioSources,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+      shuffleOrder: shuffleOrder,
+    );
+  }
 }
 
 class _VerificationPlayer extends FakePlayer {

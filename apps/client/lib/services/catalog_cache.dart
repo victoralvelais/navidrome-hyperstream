@@ -20,15 +20,18 @@ class CatalogSnapshot {
     required this.syncedAt,
     required List<Track> tracks,
     int? syncedTrackCount,
+    this.librarySynced = true,
     Map<String, CachedListen> listens = const {},
     Map<String, bool> favorites = const {},
     Map<String, int> ratings = const {},
-  }) : syncedTrackCount = syncedTrackCount ?? tracks.length,
+  }) : syncedTrackCount =
+           syncedTrackCount ?? tracks.where((t) => t.source == null).length,
        tracks = List.unmodifiable(tracks),
        listens = Map.unmodifiable(listens),
        favorites = Map.unmodifiable(favorites),
        ratings = Map.unmodifiable(ratings);
   final DateTime syncedAt;
+  final bool librarySynced;
   final int syncedTrackCount;
   final List<Track> tracks;
   final Map<String, CachedListen> listens;
@@ -83,10 +86,15 @@ class FileCatalogCache implements CatalogCache {
   }
 
   @override
-  Future<void> write(CatalogSnapshot snapshot) {
+  Future<void> write(CatalogSnapshot snapshot) =>
+      writePending(Future.value(snapshot));
+
+  /// Reserve this account's save before an earlier restore has finished. A new
+  /// screen must wait for the merged history, not read the pre-listen snapshot.
+  Future<void> writePending(Future<CatalogSnapshot> snapshot) {
     final previous = _pending[accountKey] ?? Future<void>.value();
     final writing = previous.then((_) async {
-      final encoded = await compute(_encode, snapshot);
+      final encoded = await compute(_encode, await snapshot);
       final file = await _file();
       await file.parent.create(recursive: true);
       final temporary = File('${file.path}.tmp');
@@ -109,13 +117,15 @@ class FileCatalogCache implements CatalogCache {
 }
 
 String _encode(CatalogSnapshot value) => jsonEncode({
-  'schemaVersion': 1,
+  'schemaVersion': 2,
+  'librarySynced': value.librarySynced,
   'syncedAt': value.syncedAt.toUtc().toIso8601String(),
   'syncedTrackCount': value.syncedTrackCount,
   'tracks': [
     for (final track in value.tracks)
       {
         'id': track.id,
+        if (track.source != null) 'source': track.source!.toJson(),
         'title': track.title,
         'artist': track.artist,
         'album': track.album,
@@ -152,14 +162,15 @@ String _encode(CatalogSnapshot value) => jsonEncode({
 
 CatalogSnapshot _decode(String raw) {
   final data = jsonDecode(raw) as Map<String, dynamic>;
-  if (data['schemaVersion'] != 1) throw const FormatException();
+  if (![1, 2].contains(data['schemaVersion'])) throw const FormatException();
   final syncedAt = activityDate(data['syncedAt']);
   if (syncedAt == null) throw const FormatException();
   final tracks = (data['tracks'] as List).map((entry) {
     final json = entry as Map<String, dynamic>;
-    final track = Track.fromJson(json);
+    final track = Track.fromJson(json, saved: true);
     return Track(
       id: track.id,
+      source: track.source,
       title: track.title,
       artist: track.artist,
       album: track.album,
@@ -192,6 +203,7 @@ CatalogSnapshot _decode(String raw) {
   });
   return CatalogSnapshot(
     syncedAt: syncedAt,
+    librarySynced: data['librarySynced'] as bool? ?? true,
     syncedTrackCount: data['syncedTrackCount'] as int?,
     tracks: tracks,
     listens: listens,

@@ -233,7 +233,7 @@ class SourceImports extends ChangeNotifier {
       return RemoteTransferResult(
         success: true,
         message:
-            'Sent $completed ${completed == 1 ? 'song' : 'songs'} to your remote folder as MP3 320.',
+            'Sent $completed ${completed == 1 ? 'song' : 'songs'} to your remote folder.',
         notified: notified,
       );
     } on Object catch (error) {
@@ -303,12 +303,8 @@ class SourceImports extends ChangeNotifier {
         },
         processFile: (file) {
           progress(const SourceImportStatus(SourceImportPhase.converting));
-          background.update(
-            completed: 0,
-            total: -1,
-            stage: 'Converting to MP3',
-          );
-          return converter.convert(file, metadata);
+          background.update(completed: 0, total: -1, stage: 'Preparing audio');
+          return converter.prepare(file, metadata);
         },
         cancelProcessing: converter.cancel,
       ),

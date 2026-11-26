@@ -134,7 +134,16 @@ Future<void> main() async {
             matching: find.text('Library'),
           ),
         );
-        await tap(find.text('Test album').first);
+        final recentAlbum = find.text('Test album');
+        await tester.scrollUntilVisible(
+          recentAlbum,
+          150,
+          scrollable: find.descendant(
+            of: find.byKey(const PageStorageKey('library-hub')),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        await tap(recentAlbum.first);
         await tap(find.byTooltip('Add to favorites'));
         expect(server.favoriteAlbums, {'album'});
         await menuIn(
