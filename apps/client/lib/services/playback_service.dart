@@ -42,6 +42,7 @@ class PlaybackService extends BaseAudioHandler {
     Uri Function(SourceReference)? sourceStreamUri,
     Future<bool> Function(SourceReference)? verifySource,
     Future<void> Function()? resetSourcePlayback,
+    ValueListenable<Map<String, SourcePlaybackInfo>>? sourcePlaybackInfo,
   }) : _player = player ?? AudioPlayer(),
        preferences = preferences ?? AppPreferences(),
        songPlaybackStore = songPlaybackStore ?? SongPlaybackStore(),
@@ -53,6 +54,9 @@ class PlaybackService extends BaseAudioHandler {
     _verifySource = verifySource ?? MusicSources.instance.verifyPlayback;
     _resetSourcePlayback =
         resetSourcePlayback ?? MusicSources.instance.resetPlayback;
+    _sourcePlaybackInfo =
+        sourcePlaybackInfo ?? MusicSources.instance.playbackInfo;
+    _sourcePlaybackInfo.addListener(_publishSourceInfo);
     _storeFactory = playbackStore;
     _listenTracker = ListenTracker(
       elapsed: listeningClock ?? () => _listeningClock.elapsed,
@@ -106,6 +110,32 @@ class PlaybackService extends BaseAudioHandler {
   late final Uri Function(SourceReference) _sourceStreamUri;
   late final Future<bool> Function(SourceReference) _verifySource;
   late final Future<void> Function() _resetSourcePlayback;
+  late final ValueListenable<Map<String, SourcePlaybackInfo>>
+  _sourcePlaybackInfo;
+
+  String _audioDetails(Track track) {
+    final source = track.source;
+    if (source == null) return track.audioDetails;
+    return _sourcePlaybackInfo.value[source.identity]?.label ??
+        [
+          musicSourceName(source.sourceId),
+          if (track.audioDetails.isNotEmpty) track.audioDetails,
+        ].join(' · ');
+  }
+
+  void _publishSourceInfo() {
+    if (_disposed || queue.value.isEmpty) return;
+    final items = queue.value.indexed.map((entry) {
+      final track = trackAt(entry.$1);
+      if (track?.source == null) return entry.$2;
+      return entry.$2.copyWith(
+        extras: {...?entry.$2.extras, 'audioDetails': _audioDetails(track!)},
+      );
+    }).toList();
+    queue.add(items);
+    _publishItem();
+  }
+
   bool _needsPlaybackReset = false;
   bool _resettingPlayback = false;
   Completer<Duration?>? _loadFailure;
@@ -672,9 +702,7 @@ class PlaybackService extends BaseAudioHandler {
                 extras: {
                   'coverArtId': ?_queueCovers[entry.$1],
                   'starred': entry.$2.starred,
-                  'audioDetails': entry.$2.source == null
-                      ? entry.$2.audioDetails
-                      : 'External source',
+                  'audioDetails': _audioDetails(entry.$2),
                   'sourceArtwork': ?entry.$2.source?.artwork?.toString(),
                   'external': entry.$2.source != null,
                 },
@@ -1395,6 +1423,7 @@ class PlaybackService extends BaseAudioHandler {
     final saving = savePlayback();
     _checkpointTimer?.cancel();
     _disposed = true;
+    _sourcePlaybackInfo.removeListener(_publishSourceInfo);
     ++_revision; // A late native load must not autoplay while storage drains.
     await saving;
     _clearListening();

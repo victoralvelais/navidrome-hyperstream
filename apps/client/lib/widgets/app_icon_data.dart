@@ -18,6 +18,10 @@ final _iconBindings = <IconData, _IconBinding>{
     CupertinoIcons.music_albums,
   ),
   Icons.album_rounded: const _IconBinding('album', CupertinoIcons.music_albums),
+  Icons.inventory_2_outlined: const _IconBinding(
+    'archive',
+    CupertinoIcons.archivebox,
+  ),
   Icons.arrow_back_ios_new_rounded: const _IconBinding(
     'back',
     CupertinoIcons.chevron_left,

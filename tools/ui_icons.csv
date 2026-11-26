@@ -3,6 +3,7 @@ add,add add_rounded,add,plus,plus-light,plus,add
 add_circle,add_circle_outline_rounded,add_circled,plus-circle,plus-circle-light,circle-plus,add-circle
 airplay,airplay_rounded,antenna_radiowaves_left_right,airplay,airplay-light,airplay,screencast
 album,album_outlined album_rounded,music_albums,album,vinyl-record-light,disc-3,vinyl-record
+archive,inventory_2_outlined,archivebox,archive,archive-light,archive,archive
 back,arrow_back_ios_new_rounded chevron_left chevron_left_rounded,chevron_left,nav-arrow-left,caret-left-light,chevron-left,alt-arrow-left
 arrow_back,arrow_back_rounded,arrow_left,arrow-left,arrow-left-light,arrow-left,arrow-left
 arrow_down,arrow_downward_rounded,arrow_down,arrow-down,arrow-down-light,arrow-down,arrow-down

@@ -116,7 +116,11 @@ enum CameraExport {
                         throw CameraExportError("A song needed for this take is unavailable. Keep the take and retry.")
                     }
                     stage = "reading a source song"
-                    let asset = AVURLAsset(url: url)
+                    // Playback accepts more formats than AVAsset composition.
+                    // Cached takes deliberately have opaque .audio filenames;
+                    // recover the container from its bytes, including old takes.
+                    let prepared = try await readableSource(url, in: working)
+                    let asset = AVURLAsset(url: prepared)
                     sourceAssets[key] = asset
                     guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
                         throw CameraExportError("A song needed for this take has no audio track. Keep the take and retry.")
@@ -159,6 +163,64 @@ enum CameraExport {
             stage = "encoding the AAC soundtrack"
             try await encodeAudio(composition, mix: mix, duration: duration, to: destination)
         } catch { throw failure(stage, error: error) }
+    }
+
+    private static func readableSource(_ url: URL, in working: URL) async throws -> URL {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let bytes = [UInt8](try handle.read(upToCount: 16) ?? Data())
+        func starts(_ text: String) -> Bool { bytes.starts(with: Array(text.utf8)) }
+        let type: String?
+        if starts("fLaC") { type = "flac" }
+        else if starts("caff") { type = "caf" }
+        else if starts("RIFF") { type = "wav" }
+        else if starts("FORM") { type = "aiff" }
+        else if bytes.count >= 8, String(bytes: bytes[4..<8], encoding: .ascii) == "ftyp" { type = "m4a" }
+        else if starts("ID3") { type = "mp3" }
+        else if bytes.count >= 2, bytes[0] == 0xff, bytes[1] & 0xf6 == 0xf0 { type = "aac" }
+        else if bytes.count >= 2, bytes[0] == 0xff, bytes[1] & 0xe0 == 0xe0 { type = "mp3" }
+        else { type = nil }
+        var input = url
+        if let type, url.pathExtension.lowercased() != type {
+            input = working.appendingPathComponent(UUID().uuidString + "." + type)
+            // Link within the app's container where possible; copying is safe on
+            // filesystems that cannot link. Never modify the retained original.
+            do { try FileManager.default.linkItem(at: url, to: input) }
+            catch { try FileManager.default.copyItem(at: url, to: input) }
+        }
+        if type != "flac" {
+            let asset = AVURLAsset(url: input)
+            if let tracks = try? await asset.loadTracks(withMediaType: .audio), !tracks.isEmpty {
+                return input
+            }
+        }
+        // Core Audio can decode FLAC that AVURLAsset cannot compose. A temporary
+        // PCM CAF preserves sample rate, channels and timing without a lossy
+        // intermediate encode. Chunked decoding keeps long mixes out of RAM.
+        let file = try AVAudioFile(forReading: input)
+        let format = file.processingFormat
+        guard file.length > 0, format.sampleRate.isFinite, format.sampleRate > 0,
+              format.channelCount > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8192) else {
+            throw CameraExportError("The source song could not be decoded. Your original take is kept.")
+        }
+        let output = working.appendingPathComponent(UUID().uuidString + ".caf")
+        var settings = format.settings
+        settings[AVLinearPCMIsNonInterleaved] = false
+        // This scope releases the writer (and finalizes its header) before load.
+        do {
+            let writer = try AVAudioFile(forWriting: output, settings: settings,
+                                         commonFormat: format.commonFormat, interleaved: format.isInterleaved)
+            while file.framePosition < file.length {
+                try Task.checkCancellation()
+                try file.read(into: buffer)
+                guard buffer.frameLength > 0 else {
+                    throw CameraExportError("The source song ended before it could be decoded. Your original take is kept.")
+                }
+                try writer.write(from: buffer)
+            }
+        }
+        return output
     }
 
     private static func writeSilence(duration: Double, to url: URL) throws {

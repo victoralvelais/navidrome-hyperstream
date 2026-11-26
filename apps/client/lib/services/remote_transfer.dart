@@ -7,6 +7,7 @@ import 'music_provider.dart';
 import 'mornye_sources.dart';
 import 'remote_folder.dart';
 import 'remote_transfer_background.dart';
+import 'source_import_status.dart';
 
 class RemoteTransferResult {
   const RemoteTransferResult({
@@ -35,6 +36,7 @@ class RemoteTransfer with WidgetsBindingObserver {
     RemoteTransferBackground? background,
     this.useActivity = false,
     this.notifySuccess = true,
+    this.onProgress,
   }) : background = background ?? RemoteTransferBackground() {
     this.export =
         export ??
@@ -51,6 +53,7 @@ class RemoteTransfer with WidgetsBindingObserver {
   final RemoteTransferBackground background;
   final bool useActivity;
   final bool notifySuccess;
+  final void Function(SourceImportStatus)? onProgress;
   late final AudioFileShare export;
   RemoteBackgroundMode? _mode;
   bool _started = false;
@@ -63,6 +66,14 @@ class RemoteTransfer with WidgetsBindingObserver {
 
   void _downloadProgress() {
     final total = export.total;
+    onProgress?.call(
+      SourceImportStatus(
+        SourceImportPhase.downloading,
+        progress: total != null && total > 0
+            ? (export.received / total).clamp(0, 1) * .4
+            : null,
+      ),
+    );
     background.update(
       completed: export.received,
       total: total == null ? -1 : total * 2 + 1,
@@ -112,6 +123,7 @@ class RemoteTransfer with WidgetsBindingObserver {
     var uncertain = false;
     String? verificationProviderId;
     var message = 'The transfer could not finish.';
+    onProgress?.call(const SourceImportStatus(SourceImportPhase.downloading));
     try {
       _mode = await background.begin(_backgroundEnded, continued: useActivity);
       if (_mode == RemoteBackgroundMode.foreground &&
@@ -124,6 +136,9 @@ class RemoteTransfer with WidgetsBindingObserver {
       final file = await export.prepare();
       if (_shouldCancel) throw const RemoteSendCancelled();
       final length = await file.length();
+      onProgress?.call(
+        const SourceImportStatus(SourceImportPhase.sending, progress: .5),
+      );
       background.update(
         completed: length,
         total: length * 2 + 1,
@@ -134,13 +149,29 @@ class RemoteTransfer with WidgetsBindingObserver {
         destination: destination,
         file: file,
         cancelled: () => _shouldCancel,
-        onProgress: (sent, total) => background.update(
-          completed: total + sent,
-          total: total * 2 + 1,
-          stage: 'Sending audio',
-        ),
+        onProgress: (sent, total) {
+          onProgress?.call(
+            SourceImportStatus(
+              SourceImportPhase.sending,
+              progress: total > 0
+                  ? .5 + (sent / total).clamp(0, 1) * .45
+                  : null,
+            ),
+          );
+          background.update(
+            completed: total + sent,
+            total: total * 2 + 1,
+            stage: 'Sending audio',
+          );
+        },
         onFinishing: () {
           _finishing = true;
+          onProgress?.call(
+            const SourceImportStatus(
+              SourceImportPhase.finishing,
+              progress: .98,
+            ),
+          );
           background.update(
             completed: length * 2,
             total: length * 2 + 1,

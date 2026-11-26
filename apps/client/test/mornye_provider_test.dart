@@ -212,7 +212,7 @@ void main() {
       };
       expect(
         await MornyeAcquisition(sources).resolve(ref, Completer<void>().future),
-        {'prepare': true},
+        {'prepare': true, 'sourceId': 'mornye:soundcloud'},
       );
       final response = await MornyeProvider(
         sources,
@@ -341,6 +341,7 @@ void main() {
       final acquisition = MornyeAcquisition(sources);
       expect(await acquisition.resolve(recording, Completer<void>().future), {
         'prepare': true,
+        'sourceId': 'mornye:ytmusic-spotiflac',
       });
       final response = await MornyeProvider(
         sources,

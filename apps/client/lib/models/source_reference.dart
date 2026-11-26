@@ -18,6 +18,8 @@ class SourceReference {
   final int disc;
   final bool available;
 
+  String get identity => '$sourceId/$trackId';
+
   Map<String, Object?> toJson() => {
     'sourceId': sourceId,
     'trackId': trackId,
@@ -42,6 +44,42 @@ class SourceReference {
       available: data['available'] as bool? ?? true,
     );
   }
+}
+
+String musicSourceName(String id) => switch (id) {
+  'mornye:spotify-web' => 'Spotify',
+  'mornye:ytmusic-spotiflac' => 'YouTube',
+  'mornye:soundcloud' => 'SoundCloud',
+  'mornye:qobuz-web' => 'Qobuz',
+  'mornye:tidal-web' => 'Tidal',
+  _ when id.startsWith('monochrome-') => 'Monochrome',
+  _ => 'Online',
+};
+
+/// Public media facts only. Resolved URLs and authorization never reach the UI.
+class SourcePlaybackInfo {
+  const SourcePlaybackInfo({required this.sourceId, this.format, this.bitRate});
+  final String sourceId;
+  final String? format;
+  final int? bitRate;
+
+  String get label => [
+    musicSourceName(sourceId),
+    if (format != null &&
+        const [
+          'flac',
+          'mp3',
+          'm4a',
+          'mp4',
+          'aac',
+          'opus',
+          'ogg',
+          'wav',
+          'caf',
+        ].contains(format!.toLowerCase()))
+      format!.toUpperCase(),
+    if (bitRate != null && bitRate! > 0 && bitRate! <= 10000) '$bitRate kbps',
+  ].join(' · ');
 }
 
 Uri? publicArtwork(Object? value) {

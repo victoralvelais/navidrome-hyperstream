@@ -65,6 +65,10 @@ void main() {
     testWidgets(
       'camera preserves the current queue and tempo when paused=$paused',
       (tester) async {
+        tester.view.physicalSize = const Size(393, 852);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
         final player = FakePlayer()..supportsPitchControl = true;
         final playback = PlaybackService(
           player: player,
@@ -118,7 +122,7 @@ void main() {
         expect(player.playCalls, calls);
         expect(player.playing, !paused);
         expect(playback.queue.value.map((track) => track.id), ['one', 'two']);
-        expect(find.byTooltip('Previous track'), findsOneWidget);
+        expect(find.byTooltip('Previous track'), findsNothing);
         await tester.tap(find.text('Stream'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Full Screen'));
@@ -143,12 +147,22 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Record'));
         await tester.pumpAndSettle();
+        expect(find.byTooltip('Previous track'), findsNothing);
+        if (const bool.fromEnvironment('CAPTURE_PREVIEWS') && !paused) {
+          await expectLater(
+            find.byType(MaterialApp),
+            matchesGoldenFile('../../../.tools/camera-record.png'),
+          );
+        }
         camera.pending = 2;
         await tester.tap(find.byTooltip('Start recording'));
         await tester.pump();
         expect(camera.starts, 1);
         expect(camera.restoredTempo, false);
         expect(player.playing, !paused);
+        await tester.tap(find.byTooltip('Show camera player'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Previous track'), findsOneWidget);
         await tester.tap(find.byTooltip('Show playback controls'));
         await tester.pumpAndSettle();
         expect(find.byTooltip('Music volume'), findsOneWidget);
@@ -248,7 +262,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Show playback controls'));
+      expect(
+        tester
+            .getRect(find.byType(Texture))
+            .contains(tester.getCenter(find.byTooltip('Start recording'))),
+        isTrue,
+      );
+      await tester.tap(find.byTooltip('Show camera player'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Stream'));

@@ -9,11 +9,16 @@ import 'music_provider.dart';
 /// Lazy, range-preserving URLs for the native queue. Only the loopback listener
 /// knows these per-launch tokens; resolved provider URLs never enter queue JSON.
 class SourceStreamProxy {
-  SourceStreamProxy(this.sources, {this.resolve, HttpClient Function()? client})
-    : _client = client ?? HttpClient.new;
+  SourceStreamProxy(
+    this.sources, {
+    this.resolve,
+    this.onMedia,
+    HttpClient Function()? client,
+  }) : _client = client ?? HttpClient.new;
   final HttpClient Function() _client;
   final Future<SourceStreamMedia> Function(SourceReference)? resolve;
   final MornyeSources sources;
+  final void Function(SourceReference, SourcePlaybackInfo)? onMedia;
   HttpServer? _server;
   var _token = MornyeSources.nonce();
   final _tracks = <String, SourceReference>{};
@@ -90,6 +95,8 @@ class SourceStreamProxy {
       }
       return SourceStreamMedia(
         uri: uri,
+        sourceId: result['sourceId'] as String?,
+        format: result['format'] as String?,
         headers: result['headers'] is Map
             ? Map<String, dynamic>.from(result['headers'] as Map)
             : const {},
@@ -118,7 +125,21 @@ class SourceStreamProxy {
     var servingAudio = false;
     void ready() {
       servingAudio = true;
-      if (!closed.isCompleted) sources.issue.value = null;
+      if (!closed.isCompleted) {
+        sources.issue.value = null;
+        final track = _tracks[request.uri.pathSegments[1]];
+        final media = usedMedia;
+        if (track != null && media != null) {
+          onMedia?.call(
+            track,
+            SourcePlaybackInfo(
+              sourceId:
+                  media.file?.sourceId ?? media.sourceId ?? track.sourceId,
+              format: media.file?.file.path.split('.').last ?? media.format,
+            ),
+          );
+        }
+      }
     }
 
     try {
@@ -406,8 +427,12 @@ class SourceStreamMedia {
     this.file,
     this.headers = const {},
     this.prepare,
+    this.sourceId,
+    this.format,
   });
   final Uri? uri;
+  final String? sourceId;
+  final String? format;
   final PreparedSourceAudio? file;
   final Map<String, dynamic> headers;
   final Future<PreparedSourceAudio> Function()? prepare;

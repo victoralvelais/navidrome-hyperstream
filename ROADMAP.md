@@ -1,5 +1,24 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 26: camera soundtrack compatibility and player delivery status, 0.63.0
+
+- Put recording controls over the camera preview and hide the song bar behind a
+  player toggle. Keep the main player and tempo controls accessible while filming.
+- Detect the format of cached camera audio, including existing `.audio` files.
+  Decode FLAC through Core Audio into temporary PCM before video composition;
+  retain source timing, pitch choices and the original take on export failure.
+- Spread Now Playing vertically across the available screen, with scrolling for
+  compact windows and larger text. Replace “External source” with the provider
+  and known audio format, including the audio provider used for Spotify matches.
+- Show remote-save progress in every matching download button, then a brief
+  checkmark and an archive icon. Keep progress alive across navigation and show
+  failures without claiming success before remote publication is confirmed.
+- Remember successful deliveries on this device, scoped to destination/account
+  and provider/track. Persist only hashes and timestamps. Archived means
+  previously sent, not a live check that a file still exists on the server.
+- Skip already-sent songs in partial batches and require an explicit resend for
+  completed or uncertain saves. Keep MP3 320 conversion and quiet transfers.
+
 ## November 26: per-song tempo and pitch, 0.62.0
 
 - Save tempo and Keep pitch for each exact song on this device. New songs start

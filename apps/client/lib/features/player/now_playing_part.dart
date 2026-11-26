@@ -77,190 +77,207 @@ class _NowPlayingState extends State<_NowPlaying> {
                   client: widget.client,
                   coverArt: item?.extras?['coverArtId'] as String?,
                   externalUri: publicArtwork(item?.extras?['sourceArtwork']),
-                  child: Builder(
-                    builder: (context) => SingleChildScrollView(
+                  child: LayoutBuilder(
+                    builder: (context, bounds) => SingleChildScrollView(
                       padding: EdgeInsets.fromLTRB(
                         24,
-                        MediaQuery.paddingOf(context).top + 28,
+                        MediaQuery.paddingOf(context).top + 40,
                         24,
                         MediaQuery.paddingOf(context).bottom + 28,
                       ),
-                      child: Column(
-                        children: [
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: coverSize),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: .24,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight:
+                              (bounds.maxHeight -
+                                      MediaQuery.paddingOf(context).vertical -
+                                      68)
+                                  .clamp(0, double.infinity),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: coverSize,
+                                ),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: .24,
+                                        ),
+                                        blurRadius: 32,
+                                        offset: const Offset(0, 12),
                                       ),
-                                      blurRadius: 32,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
-                                ),
-                                child: CoverArt(
-                                  client: widget.client,
-                                  id: item?.extras?['coverArtId'] as String?,
-                                  externalUri: publicArtwork(
-                                    item?.extras?['sourceArtwork'],
+                                    ],
                                   ),
-                                  radius: 20,
+                                  child: CoverArt(
+                                    client: widget.client,
+                                    id: item?.extras?['coverArtId'] as String?,
+                                    externalUri: publicArtwork(
+                                      item?.extras?['sourceArtwork'],
+                                    ),
+                                    radius: 20,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 28),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _TrackLabels(item: item, large: true),
-                              ),
-                              if (track != null &&
-                                  track.source == null &&
-                                  widget.collections != null) ...[
-                                const SizedBox(width: 8),
-                                FavoriteButton(
-                                  collections: widget.collections!,
-                                  song: track,
-                                ),
-                                _actions(track),
-                              ],
-                              if (track?.source != null)
-                                SourceDownloadButton(
-                                  client: widget.client,
-                                  tracks: [track!],
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _volumeSpace(
-                            SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                activeTrackColor: scheme.onSurface,
-                                inactiveTrackColor: scheme.onSurface.withValues(
-                                  alpha: .20,
-                                ),
-                                thumbColor: scheme.onSurface,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 4,
-                                ),
-                                overlayShape: const RoundSliderOverlayShape(
-                                  overlayRadius: 14,
-                                ),
-                              ),
-                              child: _SeekBar(
-                                key: ValueKey(item?.id),
-                                playback: playback,
-                                item: item,
-                                state: state,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _volumeSpace(
+                            const SizedBox(height: 28),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                _Previous(
-                                  playback: playback,
-                                  state: state,
-                                  large: true,
+                                Expanded(
+                                  child: _TrackLabels(item: item, large: true),
                                 ),
-                                _PlayButton(
+                                if (track != null &&
+                                    track.source == null &&
+                                    widget.collections != null) ...[
+                                  const SizedBox(width: 8),
+                                  FavoriteButton(
+                                    collections: widget.collections!,
+                                    song: track,
+                                  ),
+                                  _actions(track),
+                                ],
+                                if (track?.source != null)
+                                  SourceDownloadButton(
+                                    client: widget.client,
+                                    tracks: [track!],
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _volumeSpace(
+                              SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  activeTrackColor: scheme.onSurface,
+                                  inactiveTrackColor: scheme.onSurface
+                                      .withValues(alpha: .20),
+                                  thumbColor: scheme.onSurface,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 4,
+                                  ),
+                                  overlayShape: const RoundSliderOverlayShape(
+                                    overlayRadius: 14,
+                                  ),
+                                ),
+                                child: _SeekBar(
+                                  key: ValueKey(item?.id),
                                   playback: playback,
                                   item: item,
                                   state: state,
-                                  large: true,
                                 ),
-                                _Next(
-                                  playback: playback,
-                                  state: state,
-                                  large: true,
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 28),
-                          SizedBox(
-                            width: double.infinity,
-                            child: Wrap(
-                              alignment: WrapAlignment.spaceBetween,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 4,
-                              runSpacing: 8,
-                              children: [
-                                GlassSurface(
-                                  child: IconButton(
-                                    tooltip: 'Show queue',
-                                    icon: const AppIcon(
-                                      Icons.queue_music_rounded,
-                                    ),
-                                    onPressed: () => showGlassSheet<void>(
-                                      context: context,
-                                      pullFromList: true,
-                                      padBottomSafeArea: false,
-                                      builder: (_) => _QueuePage(
-                                        playback: playback,
-                                        client: widget.client,
-                                        collections: widget.collections,
-                                        trackActions: _actions,
-                                      ),
-                                    ),
+                            const SizedBox(height: 16),
+                            _volumeSpace(
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _Previous(
+                                    playback: playback,
+                                    state: state,
+                                    large: true,
                                   ),
-                                ),
-                                ValueListenableBuilder<SleepTimerState?>(
-                                  valueListenable: playback.sleepTimer,
-                                  builder: (context, timer, _) => IconButton(
-                                    tooltip: timer == null
-                                        ? 'Sleep timer'
-                                        : 'Sleep timer active',
-                                    isSelected: timer != null,
-                                    color: timer == null
-                                        ? null
-                                        : scheme.primary,
-                                    icon: const AppIcon(Icons.bedtime_outlined),
-                                    onPressed: item == null
-                                        ? null
-                                        : () =>
-                                              showSleepTimer(context, playback),
+                                  _PlayButton(
+                                    playback: playback,
+                                    item: item,
+                                    state: state,
+                                    large: true,
                                   ),
-                                ),
-                                if (widget.showCamera &&
-                                    CameraService.supported)
+                                  _Next(
+                                    playback: playback,
+                                    state: state,
+                                    large: true,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 4,
+                                runSpacing: 8,
+                                children: [
                                   GlassSurface(
                                     child: IconButton(
-                                      tooltip: 'Camera',
+                                      tooltip: 'Show queue',
                                       icon: const AppIcon(
-                                        Icons.photo_camera_outlined,
+                                        Icons.queue_music_rounded,
                                       ),
-                                      onPressed: () =>
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) => CameraPage(
-                                                playback: playback,
-                                                client: widget.client,
-                                                collections: widget.collections,
-                                              ),
-                                            ),
-                                          ),
+                                      onPressed: () => showGlassSheet<void>(
+                                        context: context,
+                                        pullFromList: true,
+                                        padBottomSafeArea: false,
+                                        builder: (_) => _QueuePage(
+                                          playback: playback,
+                                          client: widget.client,
+                                          collections: widget.collections,
+                                          trackActions: _actions,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                PlaybackSettingsGroup(
-                                  playback: playback,
-                                  onVolumeExpandedChanged: (open) =>
-                                      setState(() => _volumeOpen = open),
-                                ),
-                              ],
+                                  ValueListenableBuilder<SleepTimerState?>(
+                                    valueListenable: playback.sleepTimer,
+                                    builder: (context, timer, _) => IconButton(
+                                      tooltip: timer == null
+                                          ? 'Sleep timer'
+                                          : 'Sleep timer active',
+                                      isSelected: timer != null,
+                                      color: timer == null
+                                          ? null
+                                          : scheme.primary,
+                                      icon: const AppIcon(
+                                        Icons.bedtime_outlined,
+                                      ),
+                                      onPressed: item == null
+                                          ? null
+                                          : () => showSleepTimer(
+                                              context,
+                                              playback,
+                                            ),
+                                    ),
+                                  ),
+                                  if (widget.showCamera &&
+                                      CameraService.supported)
+                                    GlassSurface(
+                                      child: IconButton(
+                                        tooltip: 'Camera',
+                                        icon: const AppIcon(
+                                          Icons.photo_camera_outlined,
+                                        ),
+                                        onPressed: () => Navigator.of(context)
+                                            .push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) => CameraPage(
+                                                  playback: playback,
+                                                  client: widget.client,
+                                                  collections:
+                                                      widget.collections,
+                                                ),
+                                              ),
+                                            ),
+                                      ),
+                                    ),
+                                  PlaybackSettingsGroup(
+                                    playback: playback,
+                                    onVolumeExpandedChanged: (open) =>
+                                        setState(() => _volumeOpen = open),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          _SleepStatus(playback: playback),
-                          _PlayerErrors(playback: playback, state: state),
-                        ],
+                            _SleepStatus(playback: playback),
+                            _PlayerErrors(playback: playback, state: state),
+                          ],
+                        ),
                       ),
                     ),
                   ),

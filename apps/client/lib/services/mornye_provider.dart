@@ -396,9 +396,10 @@ String audioMime(String file) => switch (file.toLowerCase().split('.').last) {
 };
 
 class PreparedSourceAudio {
-  PreparedSourceAudio(this.file, this.directory);
+  PreparedSourceAudio(this.file, this.directory, {this.sourceId});
   final File file;
   final Directory directory;
+  final String? sourceId;
   Future<void> dispose() async {
     if (await directory.exists()) await directory.delete(recursive: true);
   }
@@ -485,7 +486,7 @@ class MornyeAcquisition {
     if (result is! Map) {
       throw const SourceException('This source did not return playable audio.');
     }
-    return Map<String, dynamic>.from(result);
+    return {...Map<String, dynamic>.from(result), 'sourceId': 'mornye:$id'};
   }
 
   Future<PreparedSourceAudio> download(
@@ -537,7 +538,7 @@ class MornyeAcquisition {
           ? await SourceAudioPreparation.prepare(file, abort)
           : file;
       if (cancelled) throw const SourceException('Playback cancelled.');
-      return PreparedSourceAudio(playable, directory);
+      return PreparedSourceAudio(playable, directory, sourceId: 'mornye:$id');
     } on Object {
       if (await directory.exists()) await directory.delete(recursive: true);
       rethrow;

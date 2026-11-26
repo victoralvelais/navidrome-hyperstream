@@ -72,14 +72,18 @@ void main() {
       await r.response.close();
     });
     var resolves = 0;
+    final published = <SourcePlaybackInfo>[];
     final proxy = SourceStreamProxy(
       sources,
+      onMedia: (_, info) => published.add(info),
       resolve: (_) async {
         resolves++;
         return SourceStreamMedia(
           uri: Uri.parse(
             'http://127.0.0.1:${upstream.port}/${resolves == 1 ? 'stale' : 'fresh'}',
           ),
+          sourceId: 'mornye:qobuz-web',
+          format: 'flac',
         );
       },
     );
@@ -90,10 +94,12 @@ void main() {
     });
     final url = proxy.uri(track);
     expect((await http.get(url)).statusCode, 502);
+    expect(published, isEmpty);
     final retry = await http.get(url);
     expect(retry.statusCode, 200);
     expect(retry.bodyBytes, [1, 2, 3]);
     expect(resolves, 2);
+    expect(published.single.label, 'Qobuz · FLAC');
     expect(sources.issue.value, isNull);
   });
   test(

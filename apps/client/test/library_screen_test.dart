@@ -582,6 +582,11 @@ Future<void> main() async {
       expect(find.text('Now playing'), findsNothing);
       expect(find.byTooltip('Close player'), findsNothing);
       expect(tester.takeException(), isNull);
+      if (viewport.name == 'phone-dark' || viewport.name == 'tablet-light') {
+        final queueButton = tester.getRect(find.byTooltip('Show queue').last);
+        expect(queueButton.bottom, greaterThan(viewport.size.height * .85));
+        expect(queueButton.bottom, lessThan(viewport.size.height));
+      }
       await _capturePreview(tester, '${viewport.name}-player');
       await Scrollable.ensureVisible(
         tester.element(find.byTooltip('Music volume').last),

@@ -9,16 +9,56 @@ import 'navidrome_client.dart';
 import 'remote_folder.dart';
 import 'remote_transfer.dart';
 import 'remote_transfer_background.dart';
+import 'source_import_status.dart';
 
 /// Serial album delivery retains confirmed progress for an explicit retry.
 /// A failed or uncertain publication stops the batch before the next recording.
 class SourceImports extends ChangeNotifier {
-  SourceImports({MusicSources? sources, RemoteFolders? remote, this.transfer})
-    : sources = sources ?? MusicSources.instance,
-      remote = remote ?? RemoteFolders.instance;
-  static final instance = SourceImports();
+  SourceImports({
+    MusicSources? sources,
+    RemoteFolders? remote,
+    this.transfer,
+    SourceImportReceipts? receipts,
+  }) : sources = sources ?? MusicSources.instance,
+       receipts = receipts ?? SourceImportReceipts(),
+       remote = remote ?? RemoteFolders.instance;
+  static final instance = SourceImports(
+    receipts: SourceImportReceipts.persistent(),
+  );
   final MusicSources sources;
   final RemoteFolders remote;
+  final SourceImportReceipts receipts;
+  final _statuses = <String, SourceImportStatus>{};
+  bool _disposed = false;
+  Future<void>? _restoring;
+  Future<void> restore() => _restoring ??= receipts.load().then((_) {
+    if (!_disposed) notifyListeners();
+  });
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  SourceImportStatus? statusFor(Track track) {
+    final destination = remote.destination;
+    if (track.source == null || destination == null) return null;
+    final key = SourceImportReceipts.key(track, destination);
+    return _statuses[key] ??
+        (receipts.values[key] == null
+            ? null
+            : SourceImportStatus(
+                SourceImportPhase.saved,
+                savedAt: receipts.values[key],
+              ));
+  }
+
+  void _update(String key, SourceImportStatus status) {
+    _statuses[key] = status;
+    if (!_disposed) notifyListeners();
+  }
+
   final Future<RemoteTransferResult> Function(
     NavidromeClient,
     Track,
@@ -110,6 +150,13 @@ class SourceImports extends ChangeNotifier {
           'Choose a remote destination before retrying.',
         );
       }
+      for (final track in remaining) {
+        _update(
+          SourceImportReceipts.key(track, destination),
+          const SourceImportStatus(SourceImportPhase.queued),
+        );
+      }
+      await restore();
       provider = sources.provider(remaining.first.source);
       while (remaining.isNotEmpty) {
         if (_client!.isClosed) {
@@ -124,6 +171,9 @@ class SourceImports extends ChangeNotifier {
           );
         }
         final track = remaining.first;
+        final key = SourceImportReceipts.key(track, destination);
+        void progress(SourceImportStatus status) => _update(key, status);
+        progress(const SourceImportStatus(SourceImportPhase.downloading));
         final result = transfer != null
             ? await transfer!(_client!, track, provider, useActivity)
             : await _sendTrack(
@@ -132,6 +182,7 @@ class SourceImports extends ChangeNotifier {
                 provider,
                 useActivity,
                 background,
+                progress,
               );
         if (!result.success) {
           if (result.verificationProviderId case final String providerId) {
@@ -156,8 +207,24 @@ class SourceImports extends ChangeNotifier {
             uncertain: result.uncertain,
             notified: result.notified,
           );
+          progress(
+            SourceImportStatus(
+              result.uncertain
+                  ? SourceImportPhase.uncertain
+                  : SourceImportPhase.failed,
+            ),
+          );
           return issue!;
         }
+        final savedAt = DateTime.now();
+        progress(
+          SourceImportStatus(
+            SourceImportPhase.saved,
+            progress: 1,
+            savedAt: savedAt,
+          ),
+        );
+        await receipts.record(key, savedAt);
         completed++;
         notified = result.notified;
         remaining = List.unmodifiable(remaining.skip(1));
@@ -178,6 +245,14 @@ class SourceImports extends ChangeNotifier {
       );
       return issue!;
     } finally {
+      if (destination != null) {
+        for (final track in remaining) {
+          final key = SourceImportReceipts.key(track, destination);
+          if (_statuses[key]?.busy == true) {
+            _statuses[key] = const SourceImportStatus(SourceImportPhase.failed);
+          }
+        }
+      }
       await background.finishAlbum(success: remaining.isEmpty && issue == null);
       provider?.close();
       active = false;
@@ -191,6 +266,7 @@ class SourceImports extends ChangeNotifier {
     MusicProvider source,
     bool useActivity,
     RemoteTransferBackground background,
+    void Function(SourceImportStatus) progress,
   ) async {
     var metadata = track;
     final converter = Mp3Converter();
@@ -201,6 +277,7 @@ class SourceImports extends ChangeNotifier {
       background: background,
       notifySuccess: remaining.length == 1,
       useActivity: useActivity,
+      onProgress: progress,
       export: AudioFileShare(
         client: client,
         track: track,
@@ -225,6 +302,7 @@ class SourceImports extends ChangeNotifier {
           return source.download(track.source!, abort);
         },
         processFile: (file) {
+          progress(const SourceImportStatus(SourceImportPhase.converting));
           background.update(
             completed: 0,
             total: -1,

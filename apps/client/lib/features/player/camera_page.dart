@@ -27,6 +27,7 @@ class _CameraPageState extends State<CameraPage> {
   bool _originalTempo = false;
   bool _leaving = false;
   bool _playbackExpanded = false;
+  bool _showPlayer = false;
   Timer? _hideControls;
 
   @override
@@ -415,7 +416,64 @@ class _CameraPageState extends State<CameraPage> {
     },
   );
 
+  Widget _recordButton() => SizedBox(
+    height: 84,
+    child: Center(
+      child: camera.saving
+          ? const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(height: 8),
+                Text('Saving take…'),
+              ],
+            )
+          : Semantics(
+              button: true,
+              label: camera.recording
+                  ? 'Stop and save take'
+                  : 'Start recording',
+              child: Tooltip(
+                message: camera.recording
+                    ? 'Stop and save take'
+                    : 'Start recording',
+                child: InkResponse(
+                  onTap: !camera.ready
+                      ? null
+                      : camera.recording
+                      ? camera.stop
+                      : () => camera.start(originalTempo: _originalTempo),
+                  radius: 44,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    padding: EdgeInsets.all(camera.recording ? 19 : 4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      decoration: BoxDecoration(
+                        color: camera.ready ? Colors.redAccent : Colors.white24,
+                        borderRadius: BorderRadius.circular(
+                          camera.recording ? 5 : 36,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    ),
+  );
+
   Widget _studio() => SafeArea(
+    bottom: false,
     child: Column(
       children: [
         Padding(
@@ -429,116 +487,77 @@ class _CameraPageState extends State<CameraPage> {
               fit: StackFit.expand,
               children: [
                 _preview(),
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 8,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: 560,
-                        maxHeight: (bounds.maxHeight - 16).clamp(
-                          0,
-                          double.infinity,
+                if (_showPlayer)
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: MediaQuery.paddingOf(context).bottom + 112,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: 560,
+                          maxHeight:
+                              (bounds.maxHeight -
+                                      136 -
+                                      MediaQuery.paddingOf(context).bottom)
+                                  .clamp(0, double.infinity),
                         ),
+                        child: SingleChildScrollView(child: _transport()),
                       ),
-                      child: SingleChildScrollView(child: _transport()),
                     ),
                   ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: MediaQuery.paddingOf(context).bottom + 16,
+                  child: Row(
+                    children: [
+                      GlassSurface(
+                        child: IconButton(
+                          tooltip: _showPlayer
+                              ? 'Hide camera player'
+                              : 'Show camera player',
+                          isSelected: _showPlayer,
+                          onPressed: () =>
+                              setState(() => _showPlayer = !_showPlayer),
+                          icon: const AppIcon(Icons.music_note_rounded),
+                        ),
+                      ),
+                      Expanded(
+                        child: _stream
+                            ? Center(
+                                child: FilledButton.tonalIcon(
+                                  onPressed: camera.ready
+                                      ? _enterFullscreen
+                                      : null,
+                                  icon: const AppIcon(Icons.fullscreen),
+                                  label: const Text('Full Screen'),
+                                ),
+                              )
+                            : _recordButton(),
+                      ),
+                      if (_stream)
+                        GlassSurface(
+                          child: IconButton(
+                            tooltip: 'TikTok setup',
+                            onPressed: _broadcast,
+                            icon: const AppIcon(Icons.ios_share_rounded),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 48),
+                    ],
+                  ),
                 ),
+                if (_stream && camera.captured)
+                  const Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Text('Screen sharing active'),
+                  ),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-          child: _stream
-              ? Column(
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 12,
-                      children: [
-                        FilledButton.tonalIcon(
-                          onPressed: camera.ready ? _enterFullscreen : null,
-                          icon: const AppIcon(Icons.fullscreen),
-                          label: const Text('Full Screen'),
-                        ),
-                        TextButton(
-                          onPressed: _broadcast,
-                          child: const Text('TikTok setup'),
-                        ),
-                      ],
-                    ),
-                    if (camera.captured) const Text('Screen sharing active'),
-                  ],
-                )
-              : SizedBox(
-                  height: 84,
-                  child: Center(
-                    child: camera.saving
-                        ? const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text('Saving take…'),
-                            ],
-                          )
-                        : Semantics(
-                            button: true,
-                            label: camera.recording
-                                ? 'Stop and save take'
-                                : 'Start recording',
-                            child: Tooltip(
-                              message: camera.recording
-                                  ? 'Stop and save take'
-                                  : 'Start recording',
-                              child: InkResponse(
-                                onTap: !camera.ready
-                                    ? null
-                                    : camera.recording
-                                    ? camera.stop
-                                    : () => camera.start(
-                                        originalTempo: _originalTempo,
-                                      ),
-                                radius: 44,
-                                child: Container(
-                                  width: 76,
-                                  height: 76,
-                                  padding: EdgeInsets.all(
-                                    camera.recording ? 19 : 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    decoration: BoxDecoration(
-                                      color: camera.ready
-                                          ? Colors.redAccent
-                                          : Colors.white24,
-                                      borderRadius: BorderRadius.circular(
-                                        camera.recording ? 5 : 36,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
         ),
       ],
     ),

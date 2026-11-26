@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -25,6 +26,46 @@ const externalSong = Track(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('current track label follows the resolved playback provider', (
+    tester,
+  ) async {
+    const song = Track(
+      id: 'external:spotify',
+      title: 'Song',
+      artist: 'Artist',
+      album: 'Album',
+      duration: Duration(minutes: 2),
+      source: SourceReference(sourceId: 'mornye:spotify-web', trackId: 'one'),
+    );
+    final info = ValueNotifier<Map<String, SourcePlaybackInfo>>({});
+    final client = NavidromeClient(
+      serverUrl: 'https://library.example',
+      username: 'test',
+      password: 'test',
+    );
+    final playback = PlaybackService(
+      player: FakePlayer(),
+      sourceStreamUri: (_) => Uri.parse('http://127.0.0.1/synthetic'),
+      sourcePlaybackInfo: info,
+    );
+    addTearDown(() async {
+      final disposing = playback.dispose();
+      await tester.pump();
+      await disposing;
+      info.dispose();
+      client.close();
+    });
+    await playback.playAlbum(client, const [song], 0);
+    expect(playback.queue.value.single.extras?['audioDetails'], 'Spotify');
+    info.value = {
+      song.source!.identity: const SourcePlaybackInfo(
+        sourceId: 'mornye:qobuz-web',
+        format: 'flac',
+      ),
+    };
+    expect(playback.queue.value.single.extras?['audioDetails'], 'Qobuz · FLAC');
+    expect(playback.mediaItem.value?.extras?['audioDetails'], 'Qobuz · FLAC');
+  });
   testWidgets('a pending Qobuz challenge does not block SoundCloud recovery', (
     tester,
   ) async {

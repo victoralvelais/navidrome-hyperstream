@@ -17,6 +17,10 @@ struct CameraExportCheck {
         try tone(to: songA, base: 220, step: 110)
         try tone(to: songB, base: 300, step: 100)
         try await video(to: raw)
+        let cachedFLAC = try cachedAudio(songA, container: "flac", codec: "flac", fileExtension: "flac")
+        let cachedAAC = try cachedAudio(songB, container: "m4af", codec: "aac@44100", fileExtension: "m4a")
+        let flacBytes = try Data(contentsOf: cachedFLAC)
+        let aacBytes = try Data(contentsOf: cachedAAC)
         let segments = [
             CameraAudioSegment(hostStart: 99.5, hostEnd: 102, sourceKey: "a", sourceStart: 1, rate: 0.75),
             CameraAudioSegment(hostStart: 102.5, hostEnd: 104, sourceKey: "a", sourceStart: 5,
@@ -40,9 +44,10 @@ struct CameraExportCheck {
         try timelineFailures()
 
         for original in [false, true] {
-            progress(original ? "Exporting original-tempo fixture" : "Exporting performance-tempo fixture")
+            progress(original ? "Exporting cached FLAC and AAC at original tempo" : "Exporting cached FLAC and AAC at performance tempo")
             let target = root.appendingPathComponent(original ? "original.mp4" : "performance.mp4")
-            let result = try await CameraExport.save(video: raw, segments: segments, sources: ["a": songA, "b": songB],
+            let result = try await CameraExport.save(video: raw, segments: segments,
+                                                     sources: ["a": cachedFLAC, "b": cachedAAC],
                                                      videoStart: 100, restoreTempo: original, to: target)
             let expected = original ? 6.25 : 6.0
             precondition(abs(result.duration - expected) < 0.001 && result.audioSegments == 3)
@@ -61,6 +66,26 @@ struct CameraExportCheck {
             precondition(rms(samples, at: original ? 1.65 : 2.15) < 0.002, "Paused audio must stay silent")
             precondition(rms(samples, at: original ? 5.9 : 5.65) < 0.002, "Trailing pause must stay silent")
         }
+        let retainedFLAC = try Data(contentsOf: cachedFLAC)
+        let retainedAAC = try Data(contentsOf: cachedAAC)
+        precondition(retainedFLAC == flacBytes && retainedAAC == aacBytes, "Cached sources must survive repeated exports")
+        progress("Checking malformed cached-source recovery")
+        let invalidSource = root.appendingPathComponent("truncated.audio")
+        let invalidTarget = root.appendingPathComponent("truncated.mp4")
+        let truncated = Data(flacBytes.prefix(12))
+        try truncated.write(to: invalidSource)
+        let originalVideo = try Data(contentsOf: raw)
+        do {
+            _ = try await CameraExport.save(video: raw, segments: segments,
+                                            sources: ["a": invalidSource, "b": cachedAAC], videoStart: 100,
+                                            restoreTempo: false, to: invalidTarget)
+            preconditionFailure("A truncated FLAC must remain a recoverable export failure")
+        } catch is CameraExportError {}
+        let retainedVideo = try Data(contentsOf: raw)
+        let retainedInvalidSource = try Data(contentsOf: invalidSource)
+        precondition(retainedVideo == originalVideo && retainedInvalidSource == truncated,
+                     "A failed export must keep the original take and cached source")
+        precondition(!FileManager.default.fileExists(atPath: invalidTarget.path), "Invalid music must not publish a video")
         let shiftedSlow = root.appendingPathComponent("shifted-slow.mp4")
         progress("Exporting slowed music with pitch shifting")
         let shiftedSegments = [
@@ -104,7 +129,7 @@ struct CameraExportCheck {
                                             restoreTempo: false, to: root.appendingPathComponent("missing.mp4"))
             preconditionFailure("An unavailable source must remain a recoverable export failure")
         } catch is CameraExportError {}
-        print("Camera export passed clipping, Codable retry, overlap rejection, 0.75×/1.5× source timing, seek, queue change, pauses, source-tail rounding, pitch, portrait orientation, 48 kHz AAC and both tempo modes.")
+        print("Camera export passed cached FLAC and AAC, malformed-source recovery, clipping, Codable retry, overlap rejection, 0.75×/1.5× source timing, seek, queue change, pauses, source-tail rounding, pitch, portrait orientation, 48 kHz AAC and both tempo modes.")
     }
 
     private static func playbackClock() async throws {
@@ -166,6 +191,8 @@ struct CameraExportCheck {
     private static func tone(to url: URL, base: Double, step: Double) throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
         var settings = format.settings
+        settings[AVLinearPCMBitDepthKey] = 16
+        settings[AVLinearPCMIsFloatKey] = false
         settings[AVLinearPCMIsNonInterleaved] = false
         let file = try AVAudioFile(forWriting: url, settings: settings)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480_000)!
@@ -178,6 +205,19 @@ struct CameraExportCheck {
             buffer.floatChannelData![1][frame] = sample
         }
         try file.write(from: buffer)
+    }
+
+    private static func cachedAudio(_ source: URL, container: String, codec: String, fileExtension: String) throws -> URL {
+        let encoded = source.deletingPathExtension().appendingPathExtension(fileExtension)
+        let cached = source.deletingPathExtension().appendingPathExtension("audio")
+        let converter = Process()
+        converter.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
+        converter.arguments = ["-f", container, "-d", codec, source.path, encoded.path]
+        try converter.run()
+        converter.waitUntilExit()
+        precondition(converter.terminationStatus == 0, "Could not encode \(fileExtension) fixture")
+        try FileManager.default.moveItem(at: encoded, to: cached)
+        return cached
     }
 
     private static func video(to url: URL) async throws {

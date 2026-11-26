@@ -31,7 +31,20 @@ class MusicSources extends ChangeNotifier {
              value: value,
            )) {
     extensions?.addListener(notifyListeners);
-    if (extensions != null) _proxy = SourceStreamProxy(extensions!);
+    if (extensions != null) {
+      _proxy = SourceStreamProxy(
+        extensions!,
+        onMedia: (track, info) {
+          final updated = Map<String, SourcePlaybackInfo>.of(
+            playbackInfo.value,
+          );
+          if (updated[track.identity]?.label == info.label) return;
+          updated[track.identity] = info;
+          if (updated.length > 512) updated.remove(updated.keys.first);
+          playbackInfo.value = Map.unmodifiable(updated);
+        },
+      );
+    }
   }
 
   static final instance = MusicSources(extensions: MornyeSources.instance);
@@ -42,6 +55,7 @@ class MusicSources extends ChangeNotifier {
   final http.Client Function()? httpClient;
   final MornyeSources? extensions;
   SourceStreamProxy? _proxy;
+  final playbackInfo = ValueNotifier<Map<String, SourcePlaybackInfo>>({});
   bool _playbackInitialized = false;
   bool get hasProviders => enabled || extensions?.enabled.isNotEmpty == true;
   String? get selectedProvider =>
@@ -199,6 +213,7 @@ class MusicSources extends ChangeNotifier {
   void dispose() {
     extensions?.removeListener(notifyListeners);
     _proxy?.close();
+    playbackInfo.dispose();
     super.dispose();
   }
 
