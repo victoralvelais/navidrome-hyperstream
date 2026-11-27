@@ -577,47 +577,38 @@ Future<void> main() async {
       expect(player.volume, closeTo(.4, .01));
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
+      await playback.pause();
       await tester.tap(find.text('A quiet place to start again'));
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsNothing);
-      expect(find.byTooltip('Close player'), findsNothing);
+      expect(find.byTooltip('Close player').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
-      if (viewport.name == 'phone-dark' || viewport.name == 'tablet-light') {
-        final queueButton = tester.getRect(find.byTooltip('Show queue').last);
-        expect(queueButton.bottom, greaterThan(viewport.size.height * .85));
-        expect(queueButton.bottom, lessThan(viewport.size.height));
-      }
+      expect(find.byTooltip('Show queue').hitTestable(), findsOneWidget);
       await _capturePreview(tester, '${viewport.name}-player');
-      await Scrollable.ensureVisible(
-        tester.element(find.byTooltip('Music volume').last),
-        alignment: .35,
-      );
-      await tester.tap(find.byTooltip('Music volume').last);
+      final inlineVolume = find.byKey(const ValueKey('now-playing-volume'));
+      await Scrollable.ensureVisible(tester.element(inlineVolume));
       await tester.pumpAndSettle();
-      expect(
-        tester.getRect(find.byTooltip('Next track').last).right,
-        lessThanOrEqualTo(
-          tester
-              .getRect(find.byKey(const ValueKey('vertical-volume-track')))
-              .left,
-        ),
-      );
-      await _capturePreview(tester, '${viewport.name}-volume');
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
+      expect(inlineVolume.hitTestable(), findsOneWidget);
+      if (const bool.fromEnvironment('CAPTURE_PREVIEWS')) {
+        await tester.tap(find.byTooltip('More playback options'));
+        await tester.pumpAndSettle();
+        await _capturePreview(tester, '${viewport.name}-player-more');
+        await tester.ensureVisible(find.text('Playback details').last);
+        await tester.pumpAndSettle();
+        await _capturePreview(tester, '${viewport.name}-player-more-actions');
+        await tester.ensureVisible(find.byTooltip('Close more'));
+        await tester.tap(find.byTooltip('Close more'));
+        await tester.pumpAndSettle();
+      }
       // A drag previews position; only releasing it asks the native player to seek.
       final seekSlider = tester.widget<Slider>(find.byType(Slider).first);
-      seekSlider.onChanged!(45000);
+      seekSlider.onChanged!(.25);
       await tester.pump();
       expect(player.seekCalls, 0);
-      seekSlider.onChangeEnd!(45000);
+      seekSlider.onChangeEnd!(.25);
       await tester.pumpAndSettle();
       expect(player.seekCalls, 1);
       expect(player.position, const Duration(seconds: 45));
-      await Scrollable.ensureVisible(
-        tester.element(find.byTooltip('Show queue')),
-        alignment: .35,
-      );
       await tester.tap(find.byTooltip('Show queue'));
       await tester.pumpAndSettle();
       expect(find.text('Up next'), findsOneWidget);
@@ -702,6 +693,7 @@ Future<void> main() async {
       expect(find.text('Up next'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
+      await playback.play();
 
       await tester.scrollUntilVisible(
         find.text('Soft Focus').hitTestable(),

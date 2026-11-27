@@ -1,5 +1,21 @@
 # Navidrome Hyperstream: draft roadmap
 
+## November 27: E3 Now Playing, 0.66.0
+
+- Adopt the supplied E3 title-on-cover design: full-width square artwork, a
+  mirrored blurred continuation, album-color aurora and a floating source/queue
+  header. Keep actual source icons, codec and known bitrate in the header.
+- Put shuffle, previous, play, next and repeat in one row, with visible app
+  volume, native output selection and More below. Preserve the selected icon
+  family and use the app font. Support scrolling and a wide two-column layout.
+- Move per-song tempo/pitch, sleep timer, remote saving, camera and song actions
+  into More. Keep real save progress, receipts and playback diagnostics.
+- Share an artwork/title PNG through the existing iOS share sheet; on Windows,
+  save the PNG in Downloads. Capture only the public cover card, excluding
+  native controls and diagnostic/account information.
+- Pause ambient animation with playback and honor Reduce Motion, disabled glass
+  effects and high contrast. Keep all playback in the existing service.
+
 ## November 26: provider failure recovery and diagnostic context, 0.65.1
 
 - Stop automatic player retries when the extension has exhausted its audio

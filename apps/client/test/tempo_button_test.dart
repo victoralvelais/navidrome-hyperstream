@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hyperstream_client/app_theme.dart';
 import 'package:hyperstream_client/features/player/playback_settings_group.dart';
-import 'package:hyperstream_client/features/player/player_controls.dart';
 import 'package:hyperstream_client/features/player/tempo_button.dart';
 import 'package:hyperstream_client/models/library.dart';
 import 'package:hyperstream_client/services/navidrome_client.dart';
@@ -84,13 +83,11 @@ void main() {
             home: Scaffold(
               body: Align(
                 alignment: Alignment.bottomCenter,
-                child: PlayerControls(playback: playback, client: client),
+                child: PlaybackSettingsGroup(playback: playback),
               ),
             ),
           ),
         );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Coastline'));
         await tester.pumpAndSettle();
         final group = find.byType(PlaybackSettingsGroup);
         await tester.ensureVisible(group);

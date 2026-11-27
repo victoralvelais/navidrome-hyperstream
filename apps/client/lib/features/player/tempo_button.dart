@@ -25,7 +25,7 @@ class TempoButton extends StatelessWidget {
       onOpened: () => onExpandedChanged?.call(true),
       onCanceled: () => onExpandedChanged?.call(false),
       itemBuilder: (_) => [
-        GlassMenuContent<void>(child: _TempoControls(playback: playback)),
+        GlassMenuContent<void>(child: TempoControls(playback: playback)),
       ],
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
@@ -44,8 +44,9 @@ class TempoButton extends StatelessWidget {
   );
 }
 
-class _TempoControls extends StatelessWidget {
-  const _TempoControls({required this.playback});
+/// Shared by the compact tempo popover and Now Playing's More sheet.
+class TempoControls extends StatelessWidget {
+  const TempoControls({super.key, required this.playback});
   final PlaybackService playback;
 
   @override

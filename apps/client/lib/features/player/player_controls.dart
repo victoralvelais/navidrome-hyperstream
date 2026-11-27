@@ -1,11 +1,14 @@
 import 'package:hyperstream_client/widgets/app_icon.dart';
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_theme.dart';
 import '../../models/library.dart';
 import '../../models/source_reference.dart';
 import '../../services/library_collections.dart';
@@ -14,7 +17,6 @@ import '../../services/playback_service.dart';
 import '../../services/camera_service.dart';
 import '../../widgets/glass_surface.dart';
 import '../../widgets/music_source_icon.dart';
-import '../library/artwork_backdrop.dart';
 import '../library/collection_actions.dart';
 import '../library/cover_art.dart';
 import 'volume_button.dart';
@@ -24,8 +26,17 @@ import '../../widgets/glass_overlays.dart';
 import '../../widgets/edge_back_gesture.dart';
 import '../playlists/playlist_dialogs.dart';
 import '../search/source_import_action.dart';
+import '../../services/player_snapshot.dart';
+import 'output_button.dart';
+import 'tempo_button.dart';
+import 'remote_send_action.dart';
+import 'e3/album_palette.dart';
+import 'e3/aurora_background.dart';
+import 'e3/controls.dart';
+import 'e3/player_artwork.dart';
 
 part 'now_playing_part.dart';
+part 'e3_now_playing_part.dart';
 part 'camera_page.dart';
 
 Future<void> _showPlaybackDiagnostics(
@@ -98,16 +109,23 @@ Future<void> _showNowPlaying(
   ValueChanged<Artist>? onArtist,
   bool showCamera = true,
 }) {
-  final media = MediaQuery.of(context);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
     backgroundColor: Colors.transparent,
     showDragHandle: false,
-    constraints: const BoxConstraints(maxWidth: 560),
-    builder: (_) => MediaQuery(
-      data: media,
+    constraints: const BoxConstraints(maxWidth: 1100),
+    builder: (sheetContext) => MediaQuery(
+      // The modal removes top padding; restore that inset from the live view,
+      // while keeping accessibility and rotation updates from its MediaQuery.
+      data: MediaQuery.of(sheetContext).copyWith(
+        padding: MediaQuery.paddingOf(sheetContext).copyWith(
+          top:
+              View.of(sheetContext).padding.top /
+              View.of(sheetContext).devicePixelRatio,
+        ),
+      ),
       child: _NowPlaying(
         playback: playback,
         client: client,
@@ -271,22 +289,17 @@ class PlayerControls extends StatelessWidget {
 }
 
 class _TrackLabels extends StatelessWidget {
-  const _TrackLabels({required this.item, this.large = false});
+  const _TrackLabels({required this.item});
   final MediaItem? item;
-  final bool large;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
         item?.title ?? 'Nothing playing',
-        maxLines: large
-            ? (MediaQuery.textScalerOf(context).scale(1) > 1.2 ? 3 : 2)
-            : 1,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: large
-            ? Theme.of(context).textTheme.headlineSmall
-            : Theme.of(context).textTheme.titleSmall,
+        style: Theme.of(context).textTheme.titleSmall,
       ),
       Text(
         item?.artist ?? '',
@@ -349,17 +362,15 @@ class _PlayButton extends StatelessWidget {
     required this.playback,
     required this.item,
     required this.state,
-    this.large = false,
   });
   final PlaybackService playback;
   final MediaItem? item;
   final PlaybackState state;
-  final bool large;
   @override
   Widget build(BuildContext context) => IconButton(
     tooltip: state.playing ? 'Pause' : 'Play',
     color: Theme.of(context).colorScheme.onSurface,
-    iconSize: large ? 64 : 28,
+    iconSize: 28,
     onPressed: item == null && !playback.canRetryPlayback
         ? null
         : state.playing
@@ -412,7 +423,6 @@ class _PlayerErrors extends StatelessWidget {
 
 class _SeekBar extends StatefulWidget {
   const _SeekBar({
-    super.key,
     required this.playback,
     required this.item,
     required this.state,

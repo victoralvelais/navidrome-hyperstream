@@ -181,11 +181,12 @@ void main() {
         await tester.tapAt(const Offset(2, 2));
         await tester.pumpAndSettle();
         await tester.tap(find.text('First song'));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
         expect(
           find.descendant(
             of: find.byType(BottomSheet),
-            matching: find.byTooltip('Playback tempo'),
+            matching: find.byTooltip('More playback options'),
           ),
           findsOneWidget,
         );
